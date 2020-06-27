@@ -4,7 +4,7 @@ A peephole-efficient pretty printer library in Rust.
 
 ------
 
-This is a pretty printer library. You say how a document should be printed---including newlines
+This is a pretty printer library. You say how a document should be printed---including newline
 options, indentation, and coloring---and it prints it for you.
 
 The Partial Pretty Printer is:
@@ -18,8 +18,8 @@ The Partial Pretty Printer is:
   proportional to the size of the document. However, after that, it never has to traverse the entire
   document again (unless you ask it to print the whole thing). For example, if you make an edit to
   the document, PPP will (more or less) only do work proportional to the size of the portion of the
-  document being rendered. It does _not_ need to do work proportional to the size of the document
-  whose rendering is effected by the edit.
+  document being rendered. It does _not_ need to do work proportional to the size of the portion of
+  the document whose rendering is effected by the edit.
 
 It is made for [Synless](https://github.com/justinpombrio/synless), though it aims to be reasonably
 general-purpose.
