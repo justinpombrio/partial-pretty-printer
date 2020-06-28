@@ -20,7 +20,6 @@ fn pp(notation: &Notation) -> Doc {
         Indent(indent, notation) => pp(notation).indent(*indent),
         Flat(notation) => pp(notation).flat(),
         Concat(left, right) => Doc::concat(pp(left), pp(right)),
-        Align(notation) => Doc::align(pp(notation)),
         Choice(opt1, opt2) => Doc::choice(pp(opt1), pp(opt2)),
     }
 }
@@ -30,26 +29,18 @@ fn pp(notation: &Notation) -> Doc {
 /// # Normalization
 ///
 /// To simplify the Oracle's pretty-printing, `Doc`s are normalized in the
-/// following ways:
+/// following way:
 ///
-/// 1. A `Doc::Impossible` is only ever at the root of a `Doc`. This makes it easy
-///    to tell whether a `Doc` is impossible or not. For example, `Concat(x,
-///    Impossible)` is normalized to `Impossible`, and `Choice(x, Impossible)`
-///    is normalized to `x`. (See Choosiness Rule #1 in `validate`.)
-/// 2. A `Doc::Align` must always have at least one multi-line layout option. If
-///    it doesn't, then it is omitted. This is safe because it would have no
-///    effect. (See Choosiness Rule #2 in `validate`.)
-/// 3. One `Doc::Align` is never inside of another. If it would be, it is
-///    removed. This is safe because it would have no effect. Doing this
-///    simplifies the `prepend` function. (Consider `Align(Align(Nest(_, _)))`.)
+/// * A `Doc::Impossible` is only ever at the root of a `Doc`. This makes it easy
+///   to tell whether a `Doc` is impossible or not. For example, `Concat(x,
+///   Impossible)` is normalized to `Impossible`, and `Choice(x, Impossible)`
+///   is normalized to `x`. (See Choosiness Rule #1 in `validate`.)
 #[derive(Debug, Clone)]
 enum Doc {
     /// Attempted to flatten a document containing a required newline.
     Impossible,
     /// A line of text: `String` indented to the right by `usize` spaces.
     Line(usize, String),
-    /// An aligned set of lines. When indented, they move as a group.
-    Align(Box<Doc>),
     /// Vertical concatentation: left + newline + right.
     Vert(Box<Doc>, Box<Doc>),
     /// Choice: use left if it fits, otherwise use right.
@@ -66,16 +57,6 @@ impl Doc {
             Doc::Impossible => true,
             _ => false,
         }
-    }
-
-    fn align(doc: Doc) -> Doc {
-        if doc.is_impossible() {
-            return Doc::Impossible;
-        }
-        if !doc.may_be_multiline() {
-            return doc;
-        }
-        Doc::Align(Box::new(doc.remove_aligns()))
     }
 
     fn newline() -> Doc {
@@ -112,8 +93,8 @@ impl Doc {
             }
             (Doc::Vert(top, bottom), right) => Doc::vert(*top, Doc::concat(*bottom, right)),
             (left, Doc::Vert(top, bottom)) => Doc::vert(Doc::concat(left, *top), *bottom),
-            // Remaining cases involve (align|choice)+(align|choice)
-            (_, _) => panic!("oracular_pp: too choosy"),
+            // Remaining cases involve choice+choice
+            (Doc::Choice(..), Doc::Choice(..)) => panic!("oracular_pp: too choosy"),
         }
     }
 
@@ -122,28 +103,8 @@ impl Doc {
         match self {
             Doc::Impossible => false,
             Doc::Line(_, _) => false,
-            Doc::Align(doc) => {
-                assert!(doc.may_be_multiline());
-                true
-            }
             Doc::Vert(_, _) => true,
             Doc::Choice(opt1, opt2) => opt1.may_be_multiline() || opt2.may_be_multiline(),
-        }
-    }
-
-    /// Delete all `Align`s inside this Doc.
-    fn remove_aligns(self) -> Doc {
-        match self {
-            Doc::Impossible | Doc::Line(_, _) => self,
-            Doc::Align(doc) => doc.remove_aligns(),
-            Doc::Vert(top, bottom) => Doc::Vert(
-                Box::new(top.remove_aligns()),
-                Box::new(bottom.remove_aligns()),
-            ),
-            Doc::Choice(opt1, opt2) => Doc::Choice(
-                Box::new(opt1.remove_aligns()),
-                Box::new(opt2.remove_aligns()),
-            ),
         }
     }
 
@@ -156,10 +117,6 @@ impl Doc {
             Doc::Line(i, line) => {
                 *i = indent;
                 *line = format!("{}{}", text, line);
-            }
-            Doc::Align(doc) => {
-                doc.shift_right_all_but_first(indent + text.chars().count());
-                doc.prepend(indent, text);
             }
             Doc::Vert(top, _) => top.prepend(indent, text),
             Doc::Choice(opt1, opt2) => {
@@ -174,7 +131,6 @@ impl Doc {
         match self {
             Doc::Impossible => (),
             Doc::Line(_, line) => line.push_str(text),
-            Doc::Align(doc) => doc.postpend(text),
             Doc::Vert(_, bottom) => bottom.postpend(text),
             Doc::Choice(opt1, opt2) => {
                 opt1.postpend(text);
@@ -188,7 +144,6 @@ impl Doc {
         match self {
             Doc::Impossible => (),
             Doc::Line(_, _) => (),
-            Doc::Align(doc) => doc.shift_right_all_but_first(indent),
             Doc::Vert(top, bottom) => {
                 top.shift_right_all_but_first(indent);
                 bottom.shift_right(indent);
@@ -205,7 +160,6 @@ impl Doc {
         match self {
             Doc::Impossible => (),
             Doc::Line(i, _) => *i += indent,
-            Doc::Align(doc) => doc.shift_right(indent),
             Doc::Vert(top, bottom) => {
                 top.shift_right(indent);
                 bottom.shift_right(indent);
@@ -221,7 +175,6 @@ impl Doc {
         match self {
             Doc::Impossible => Doc::Impossible,
             Doc::Line(i, doc) => Doc::Line(i, doc),
-            Doc::Align(doc) => Doc::Align(doc),
             Doc::Vert(top, mut bottom) => {
                 bottom.shift_right(indent);
                 Doc::vert(top.indent(indent), *bottom)
@@ -235,7 +188,6 @@ impl Doc {
         match self {
             Doc::Impossible => Doc::Impossible,
             Doc::Line(_, _) => self,
-            Doc::Align(doc) => doc.flat(),
             Doc::Vert(_, _) => Doc::Impossible,
             Doc::Choice(opt1, opt2) => Doc::choice(opt1.flat(), opt2.flat()),
         }
@@ -253,7 +205,6 @@ impl Doc {
         match self {
             Doc::Impossible => vec![],
             Doc::Line(i, s) => vec![vec![(i, s)]],
-            Doc::Align(doc) => doc.render(width),
             Doc::Vert(top, bottom) => {
                 let mut options = vec![];
                 let top_opts = top.render(width);

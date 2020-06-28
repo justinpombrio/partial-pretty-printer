@@ -45,7 +45,6 @@ enum Variant {
     Newline,
     Literal,
     Flat,
-    Align,
     Indent,
     Concat,
     Choice,
@@ -56,7 +55,7 @@ impl Variant {
         use Variant::*;
         match self {
             Newline | Literal => 0,
-            Flat | Align | Indent => 1,
+            Flat | Indent => 1,
             Concat | Choice => 2,
         }
     }
@@ -64,7 +63,6 @@ impl Variant {
     fn weight(self) -> usize {
         use Variant::*;
         match self {
-            Align => 0, // Disable Align testing!
             Newline | Literal | Flat | Indent | Choice => 1,
             Concat => 2,
         }
@@ -75,7 +73,6 @@ const VARIANTS: &[Variant] = &[
     Variant::Newline,
     Variant::Literal,
     Variant::Flat,
-    Variant::Align,
     Variant::Indent,
     Variant::Concat,
     Variant::Choice,
@@ -131,7 +128,6 @@ impl Builder {
             Variant::Literal => self.literal(),
             Variant::Newline => self.newline(),
             Variant::Flat => self.flat(size),
-            Variant::Align => self.align(size),
             Variant::Indent => self.indent(size),
             Variant::Concat => self.concat(size),
             Variant::Choice => self.choice(size),
@@ -153,10 +149,6 @@ impl Builder {
 
     fn flat(&mut self, size: usize) -> Notation {
         Flat(Box::new(self.notation(size - 1)))
-    }
-
-    fn align(&mut self, size: usize) -> Notation {
-        Align(Box::new(self.notation(size - 1)))
     }
 
     fn indent(&mut self, size: usize) -> Notation {

@@ -116,7 +116,6 @@ impl<'n> PrettyPrinter<'n> {
             Flat(_, inner_notation) => {
                 self.seek(sought, inner_notation, None);
             }
-            Align(_, _inner_notation) => unimplemented!(),
             Concat(_, left, right, _) => {
                 if sought <= right.span().start {
                     self.next_chunks.push(Chunk::Notation {
@@ -235,7 +234,6 @@ impl<'b, 'n> NextLinePrinter<'b, 'n> {
             Flat(_, inner_notation) => {
                 self.push_chunk(None, inner_notation);
             }
-            Align(_, _) => unimplemented!(),
             Concat(_, left, right, _) => {
                 self.push_chunk(indent, right);
                 self.push_chunk(indent, left);
@@ -323,7 +321,6 @@ impl<'b, 'n> PrevLinePrinter<'b, 'n> {
             Flat(_, inner_notation) => {
                 self.push_chunk(None, inner_notation);
             }
-            Align(_, _) => unimplemented!(),
             Concat(_, left, right, _) => {
                 self.push_chunk(indent, left);
                 self.push_chunk(indent, right);

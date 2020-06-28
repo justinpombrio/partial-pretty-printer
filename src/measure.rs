@@ -22,7 +22,6 @@ pub enum MeasuredNotation {
     Newline(Pos),
     Indent(Span, usize, Box<MeasuredNotation>),
     Flat(Span, Box<MeasuredNotation>),
-    Align(Span, Box<MeasuredNotation>),
     Concat(
         Span,
         Box<MeasuredNotation>,
@@ -42,8 +41,8 @@ pub struct ChoiceInner {
 
 /// A set of shapes that a Notation fits inside. Since a Notation may be
 /// embedded inside other Notations, and does not know beforehand what those may
-/// be, it must keep track of a few categories of shapes: those on a single
-/// line, those that use multiple lines, and those that are aligned.
+/// be, it must keep track of 2 categories of shapes: those on a single
+/// line and those that use multiple lines.
 ///
 /// For efficiency, within each category, only the smallest shapes are stored:
 /// if one shape fits inside another, only the former is stored.
@@ -54,29 +53,16 @@ pub struct Shapes {
     /// single line.
     pub single_line: Option<usize>,
     /// The set of minimal amounts of space required for displaying the
-    /// Notation, when it is displayed across multiple lines and is not aligned.
+    /// Notation, when it is displayed across multiple lines.
     pub multi_line: Staircase<MultiLineShape>,
-    /// The set of minimal amounts of space required for displaying the
-    /// Notation, when it is displayed across multiple lines and is aligned.
-    pub aligned: Staircase<AlignedShape>,
 }
 
-/// The space required for one way of laying out a Notation, across multiple
-/// lines, while not being aligned.
+/// The space required for one way of laying out a Notation across multiple
+/// lines
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MultiLineShape {
     /// The number of characters required for the first line.
     pub first: usize,
-    /// The number of characters required for the last line.
-    pub last: usize,
-}
-
-/// The space required for one way of laying out a Notation, across multiple
-/// lines, while being aligned.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct AlignedShape {
-    /// The maximum number of characters required for any line except the last.
-    pub non_last: usize,
     /// The number of characters required for the last line.
     pub last: usize,
 }
@@ -118,30 +104,10 @@ impl Stair for MultiLineShape {
     }
 }
 
-/// AlignedShapes have two dimensions of variation; we store the tradeoff between the
-/// two in a Staircase.
-impl Stair for AlignedShape {
-    fn x(&self) -> usize {
-        self.non_last
-    }
-    fn y(&self) -> usize {
-        self.last
-    }
-}
-
 impl MultiLineShape {
     /// Insert `indent` spaces to the left of all of the lines but the first.
     pub fn indent(mut self, indent: usize) -> Self {
         self.last += indent;
-        self
-    }
-}
-
-impl AlignedShape {
-    /// Insert `indent` spaces to the left of all of the lines but the first.
-    pub fn indent(self, _indent: usize) -> Self {
-        // Everything is aligned based on the _first_ line.
-        // First line doesn't move -> nothing moves.
         self
     }
 }
@@ -177,18 +143,6 @@ impl Notation {
                 let span = Span::new(pos, new_pos);
                 let note = MeasuredNotation::Flat(span, Box::new(note));
                 let shapes = shapes.flat();
-                (note, shapes, new_pos)
-            }
-            Notation::Align(note) => {
-                let (note, mut shapes, new_pos) = note.measure_rec(pos + 1);
-                let span = Span::new(pos, new_pos);
-                let note = MeasuredNotation::Align(span, Box::new(note));
-                for ml in shapes.multi_line.drain() {
-                    shapes.aligned.insert(AlignedShape {
-                        non_last: ml.first,
-                        last: ml.last,
-                    })
-                }
                 (note, shapes, new_pos)
             }
             Notation::Indent(indent, note) => {
@@ -243,7 +197,6 @@ impl MeasuredNotation {
             Literal(pos, _) => Span::new(*pos, *pos + 1),
             Newline(pos) => Span::new(*pos, *pos + 1),
             Flat(span, _) => *span,
-            Align(span, _) => *span,
             Indent(span, _, _) => *span,
             Concat(span, _, _, _) => *span,
             Choice(span, _) => *span,
@@ -258,7 +211,6 @@ impl Shapes {
         Shapes {
             single_line: None,
             multi_line: Staircase::new(),
-            aligned: Staircase::new(),
         }
     }
 
@@ -268,7 +220,6 @@ impl Shapes {
         Shapes {
             single_line: Some(len),
             multi_line: Staircase::new(),
-            aligned: Staircase::new(),
         }
     }
 
@@ -280,7 +231,6 @@ impl Shapes {
         Shapes {
             single_line: None,
             multi_line,
-            aligned: Staircase::new(),
         }
     }
 
@@ -300,12 +250,6 @@ impl Shapes {
         self
     }
 
-    #[cfg(test)]
-    pub fn with_aligned(mut self, aligned: AlignedShape) -> Shapes {
-        self.aligned.insert(aligned);
-        self
-    }
-
     /// Do _any_ of the shapes fit within this width?
     pub fn fits(&self, width: usize) -> bool {
         if let Some(sl) = self.single_line {
@@ -319,24 +263,18 @@ impl Shapes {
                 return true;
             }
         }
-        for al in &self.aligned {
-            if al.non_last <= width && al.last <= width {
-                return true;
-            }
-        }
         false
     }
 
     /// Does the Notation have at least one possible layout?
     pub fn is_possible(&self) -> bool {
-        self.single_line.is_some() || !self.multi_line.is_empty() || !self.aligned.is_empty()
+        self.single_line.is_some() || !self.multi_line.is_empty()
     }
 
     /// Returns the Shapes for `Flat(n)`,
     /// where `self` is the Shapes for a Notation `n`.
     pub fn flat(mut self) -> Self {
         self.multi_line = Staircase::new();
-        self.aligned = Staircase::new();
         self
     }
 
@@ -349,14 +287,6 @@ impl Shapes {
             // TODO: unchecked insert?
             self.multi_line.insert(ml.indent(indent));
         }
-
-        let aligneds = self.aligned.into_iter();
-        self.aligned = Staircase::new();
-        for al in aligneds {
-            // TODO: unchecked insert?
-            self.aligned.insert(al.indent(indent));
-        }
-
         self
     }
 
@@ -401,52 +331,6 @@ impl Shapes {
                 });
             }
         }
-
-        if let Some(ls) = self.single_line {
-            for ra in &other.aligned {
-                shapes.aligned.insert(AlignedShape {
-                    non_last: ls + ra.non_last,
-                    last: ls + ra.last,
-                });
-            }
-        }
-
-        if let Some(rs) = other.single_line {
-            for la in &self.aligned {
-                shapes.aligned.insert(AlignedShape {
-                    non_last: la.non_last,
-                    last: la.last + rs,
-                });
-            }
-        }
-
-        for la in &self.aligned {
-            for ra in &other.aligned {
-                shapes.aligned.insert(AlignedShape {
-                    non_last: la.non_last.max(la.last + ra.non_last),
-                    last: la.last + ra.last,
-                });
-            }
-        }
-
-        for lm in &self.multi_line {
-            for ra in &other.aligned {
-                shapes.multi_line.insert(MultiLineShape {
-                    first: lm.first,
-                    last: lm.last + ra.last,
-                });
-            }
-        }
-
-        for la in &self.aligned {
-            for rm in &other.multi_line {
-                shapes.multi_line.insert(MultiLineShape {
-                    // Eh, this is _basically_ true
-                    first: la.non_last,
-                    last: rm.last,
-                });
-            }
-        }
         shapes
     }
 
@@ -463,17 +347,11 @@ impl Shapes {
         for ml in other.multi_line {
             self.multi_line.insert(ml);
         }
-        for al in other.aligned {
-            self.aligned.insert(al);
-        }
         self
     }
 
     /// The length of the first line, if it is not choosy.
     fn known_first_line_len(&self) -> Option<LineLength> {
-        if !self.aligned.is_empty() {
-            return None;
-        }
         if let Some(sl) = self.single_line {
             if !self.multi_line.is_empty() {
                 None
@@ -487,9 +365,6 @@ impl Shapes {
 
     /// The length of the last line, if it is not choosy.
     fn known_last_line_len(&self) -> Option<LineLength> {
-        if !self.aligned.is_empty() {
-            return None;
-        }
         if let Some(sl) = self.single_line {
             if !self.multi_line.is_empty() {
                 None
@@ -586,26 +461,12 @@ mod tests {
         assert!(Shapes::new()
             .with_multi_line(MultiLineShape { first: 1, last: 3 })
             .is_possible());
-        assert!(Shapes::new()
-            .with_aligned(AlignedShape {
-                non_last: 2,
-                last: 3
-            })
-            .is_possible());
     }
 
     fn example_shapes() -> Shapes {
         Shapes::new_single_line(10)
             .with_multi_line(MultiLineShape { first: 2, last: 3 })
             .with_multi_line(MultiLineShape { first: 3, last: 4 })
-            .with_aligned(AlignedShape {
-                non_last: 3,
-                last: 4,
-            })
-            .with_aligned(AlignedShape {
-                non_last: 4,
-                last: 3,
-            })
     }
 
     #[test]
@@ -619,14 +480,6 @@ mod tests {
             .with_multi_line(MultiLineShape {
                 first: 3,
                 last: 104,
-            })
-            .with_aligned(AlignedShape {
-                non_last: 3,
-                last: 4,
-            })
-            .with_aligned(AlignedShape {
-                non_last: 4,
-                last: 3,
             });
 
         assert_eq!(shapes.indent(100), expected);
@@ -664,35 +517,6 @@ mod tests {
                 .with_multi_line(MultiLineShape {
                     first: 10,
                     last: 10,
-                }),
-        );
-
-        assert_fits_exactly(
-            6,
-            Shapes::new().with_aligned(AlignedShape {
-                non_last: 6,
-                last: 5,
-            }),
-        );
-
-        assert_fits_exactly(
-            6,
-            Shapes::new().with_aligned(AlignedShape {
-                non_last: 5,
-                last: 6,
-            }),
-        );
-
-        assert_fits_exactly(
-            6,
-            Shapes::new()
-                .with_aligned(AlignedShape {
-                    non_last: 10,
-                    last: 1,
-                })
-                .with_aligned(AlignedShape {
-                    non_last: 5,
-                    last: 6,
                 }),
         );
     }
