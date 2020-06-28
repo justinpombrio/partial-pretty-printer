@@ -11,9 +11,6 @@ pub enum Notation {
     Newline,
     /// Only consider single-line options of the contained notation.
     Flat(Box<Notation>),
-    /// Start all lines in the contained notation from the column of the
-    /// leftmost character of the first line.
-    Align(Box<Notation>),
     /// Indent all lines of the contained notation except the first to the right
     /// by the given number of spaces.
     Indent(usize, Box<Notation>),

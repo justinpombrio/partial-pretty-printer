@@ -25,7 +25,3 @@ pub fn nest(i: usize, notation: Notation) -> Notation {
         )),
     )
 }
-
-pub fn align(notation: Notation) -> Notation {
-    Notation::Align(Box::new(notation))
-}

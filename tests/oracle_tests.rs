@@ -3,8 +3,7 @@ mod common;
 
 use common::{oracular_pretty_print, NotationGenerator, NotationGeneratorConfig};
 use partial_pretty_printer::{
-    partial_pretty_print, partial_pretty_print_first, partial_pretty_print_last, pretty_print,
-    Notation, Pos,
+    pretty_print, pretty_print_at, pretty_print_first, pretty_print_last, Notation, Pos,
 };
 
 // Tests passed with:
@@ -57,7 +56,7 @@ fn try_pretty_print(notation: Notation) -> PPResult {
     for width in WIDTH_RANGE.0..WIDTH_RANGE.1 {
         let oracle_lines = expand_lines(oracular_pretty_print(&notation, width));
         // Test the regular printer
-        let actual_lines = expand_lines(pretty_print(&measured_notation, width));
+        let actual_lines = expand_lines(pretty_print(&measured_notation, width).collect());
         if actual_lines != oracle_lines {
             return PPResult::Error(PPError {
                 notation,
@@ -70,7 +69,7 @@ fn try_pretty_print(notation: Notation) -> PPResult {
         // Test the partial pretty printer, printing the first lines
         let range = NUM_PARTIAL_LINES_RANGE.clone();
         for num_partial_lines in range.0..range.1 {
-            let actual_lines_iter = partial_pretty_print_first(&measured_notation, width);
+            let actual_lines_iter = pretty_print_first(&measured_notation, width);
             let actual_lines = expand_lines(actual_lines_iter.take(num_partial_lines).collect());
             let oracle_lines = oracle_lines
                 .iter()
@@ -90,7 +89,7 @@ fn try_pretty_print(notation: Notation) -> PPResult {
         // Test the partial pretty pritner, printing the last lines
         let range = NUM_PARTIAL_LINES_RANGE.clone();
         for num_partial_lines in range.0..range.1 {
-            let actual_lines_iter = partial_pretty_print_last(&measured_notation, width);
+            let actual_lines_iter = pretty_print_last(&measured_notation, width);
             let mut actual_lines =
                 expand_lines(actual_lines_iter.take(num_partial_lines).collect());
             actual_lines.reverse();
@@ -114,7 +113,7 @@ fn try_pretty_print(notation: Notation) -> PPResult {
         // Test the seeking partial pretty printer
         let span = measured_notation.span();
         for sought_pos in span.start..span.end {
-            let (bw_iter, fw_iter) = partial_pretty_print(&measured_notation, width, sought_pos);
+            let (bw_iter, fw_iter) = pretty_print_at(&measured_notation, width, sought_pos);
             let lines_iter = bw_iter.collect::<Vec<_>>().into_iter().rev().chain(fw_iter);
             let actual_lines = expand_lines(lines_iter.collect());
             let oracle_lines = expand_lines(oracular_pretty_print(&notation, width));

@@ -4,8 +4,7 @@ mod common;
 use common::combinators::*;
 use common::oracular_pretty_print;
 use partial_pretty_printer::{
-    partial_pretty_print, partial_pretty_print_first, partial_pretty_print_last, pretty_print,
-    Notation, Pos,
+    pretty_print, pretty_print_at, pretty_print_first, pretty_print_last, Notation, Pos,
 };
 
 /********************************************************************************/
@@ -16,7 +15,8 @@ fn assert_pp(notation: Notation, width: usize, expected_lines: &[&str]) {
     notation.validate().expect("failed to validate");
     let measured_notation = notation.measure();
     let oracle_lines: Vec<String> = expand_lines(oracular_pretty_print(&notation, width)).collect();
-    let actual_lines: Vec<String> = expand_lines(pretty_print(&measured_notation, width)).collect();
+    let actual_lines: Vec<String> =
+        expand_lines(pretty_print(&measured_notation, width).collect()).collect();
     if oracle_lines != expected_lines {
         eprintln!(
             "BAD TEST CASE!\n\nTEST CASE EXPECTS:\n{}\nBUT ORACLE SAYS:\n{}",
@@ -46,7 +46,7 @@ fn assert_ppp_first(
     let oracle_lines: Vec<String> = expand_lines(oracular_pretty_print(&notation, width))
         .take(num_first_lines)
         .collect();
-    let actual_lines_iter = partial_pretty_print_first(&measured_notation, width);
+    let actual_lines_iter = pretty_print_first(&measured_notation, width);
     let actual_lines: Vec<String> =
         expand_lines(actual_lines_iter.take(num_first_lines).collect()).collect();
     if oracle_lines != expected_lines {
@@ -84,7 +84,7 @@ fn assert_ppp_last(
         .take(num_last_lines)
         .rev()
         .collect();
-    let actual_lines_iter = partial_pretty_print_last(&measured_notation, width);
+    let actual_lines_iter = pretty_print_last(&measured_notation, width);
     let mut actual_lines: Vec<String> =
         expand_lines(actual_lines_iter.take(num_last_lines).collect()).collect();
     actual_lines.reverse();
@@ -112,7 +112,7 @@ fn assert_ppp_seek(notation: Notation, width: usize, sought_pos: Pos, expected_l
     notation.validate().expect("failed to validate");
     let measured_notation = notation.measure();
     let oracle_lines: Vec<String> = expand_lines(oracular_pretty_print(&notation, width)).collect();
-    let (bw_iter, fw_iter) = partial_pretty_print(&measured_notation, width, sought_pos);
+    let (bw_iter, fw_iter) = pretty_print_at(&measured_notation, width, sought_pos);
     let lines_iter = bw_iter.collect::<Vec<_>>().into_iter().rev().chain(fw_iter);
     let actual_lines: Vec<String> = expand_lines(lines_iter.collect()).collect();
     if oracle_lines != expected_lines {
@@ -149,19 +149,19 @@ fn goodbye() -> Notation {
 
 fn list_one(element: Notation) -> Notation {
     let option1 = lit("[") + element.clone() + lit("]");
-    let option2 = lit("[") + align(nest(0, element)) + nest(0, lit("]"));
+    let option2 = lit("[") + nest(3, element) + nest(0, lit("]"));
     option1 | option2
 }
 
-fn list_align(elements: Vec<Notation>) -> Notation {
+fn list_indent(i: usize, elements: Vec<Notation>) -> Notation {
     let empty = lit("[]");
     let lone = |elem| lit("[") + elem + lit("]");
     let join = |elem: Notation, accum: Notation| {
-        (elem.clone() + lit(", ") + accum.clone()) | (elem.clone() + lit(",") + nest(0, accum))
+        (elem.clone() + lit(", ") + accum.clone()) | (elem.clone() + lit(",") + newline() + accum)
     };
     let surround = |accum: Notation| {
         let single = lit("[") + flat(accum.clone()) + lit("]");
-        let multi = align(lit("[") + nest(1, accum) + nest(0, lit("]")));
+        let multi = lit("[") + indent(i, newline() + accum) + newline() + lit("]");
         single | multi
     };
     Notation::repeat(elements, empty, lone, join, surround)
@@ -249,30 +249,30 @@ fn test_pp_list_one() {
 
 #[test]
 fn test_pp_list() {
-    let n = list_align(vec![]);
+    let n = list_indent(1, vec![]);
     assert_pp(n, 80, &["[]"]);
 
-    let n = list_align(vec![hello()]);
+    let n = list_indent(1, vec![hello()]);
     assert_pp(n, 80, &["[Hello]"]);
 
-    let n = list_align(vec![hello(), hello()]);
+    let n = list_indent(1, vec![hello(), hello()]);
     assert_pp(n, 80, &["[Hello, Hello]"]);
 
-    let n = list_align(vec![hello(), hello()]);
+    let n = list_indent(1, vec![hello(), hello()]);
     assert_pp(n, 13, &["[", " Hello, Hello", "]"]);
 
-    let n = list_align(vec![hello(), hello()]);
+    let n = list_indent(1, vec![hello(), hello()]);
     assert_pp(n, 10, &["[", " Hello,", " Hello", "]"]);
-    let n = list_align(vec![goodbye()]);
+    let n = list_indent(1, vec![goodbye()]);
     assert_pp(n, 80, &["[Good", "Bye]"]);
 
-    let n = list_align(vec![hello(), hello(), hello(), hello()]);
+    let n = list_indent(1, vec![hello(), hello(), hello(), hello()]);
     assert_pp(n, 15, &["[", " Hello, Hello,", " Hello, Hello", "]"]);
 
-    let n = list_align(vec![goodbye(), hello(), hello()]);
+    let n = list_indent(1, vec![goodbye(), hello(), hello()]);
     assert_pp(n, 80, &["[", " Good", " Bye, Hello, Hello", "]"]);
 
-    let n = list_align(vec![goodbye(), hello(), hello(), goodbye()]);
+    let n = list_indent(1, vec![goodbye(), hello(), hello(), goodbye()]);
     assert_pp(
         n,
         80,
@@ -284,11 +284,14 @@ fn test_pp_list() {
 fn test_pp_dict() {
     let e1 = json_entry("Name", json_string("Alice"));
     let e2 = json_entry("Age", lit("42"));
-    let favorites_list = list_align(vec![
-        json_string("chocolate"),
-        json_string("lemon"),
-        json_string("almond"),
-    ]);
+    let favorites_list = list_indent(
+        6,
+        vec![
+            json_string("chocolate"),
+            json_string("lemon"),
+            json_string("almond"),
+        ],
+    );
     let e3 = json_entry("Favorites", favorites_list.clone());
 
     let n = json_dict(vec![e1.clone()]);
@@ -309,52 +312,40 @@ fn test_pp_dict() {
 
     assert_pp(
         favorites_list.clone(),
-        20,
-        &["[", " 'chocolate',", " 'lemon', 'almond'", "]"],
-    );
-
-    //This can fit in 34, but the pretty printer puts them all on separate lines!
-    assert_pp(
-        e3.clone(),
-        34,
+        24,
         &[
-            "'Favorites': [",
-            "              'chocolate',",
-            "              'lemon', 'almond'",
-            "             ]",
+            // force rustfmt
+            "[",
+            "      'chocolate',",
+            "      'lemon', 'almond'",
+            "]",
         ],
     );
 
-    // This looks totally broken
+    assert_pp(
+        e3.clone(),
+        27,
+        &[
+            "'Favorites': [",
+            "      'chocolate', 'lemon',",
+            "      'almond'",
+            "]",
+        ],
+    );
+
     let n = json_dict(vec![e1, e2, e3]);
     assert_pp(
         n,
-        38,
+        27,
         &[
             "{",
             "    'Name': 'Alice',",
             "    'Age': 42,",
             "    'Favorites': [",
-            "                  'chocolate',",
-            "                  'lemon', 'almond'",
-            "                 ]",
-            "}",
-        ],
-    );
-}
-
-#[test]
-fn test_pp_align() {
-    let n = lit("four") + list_align(vec![hello(), hello()]);
-    assert_pp(
-        n,
-        10,
-        &[
-            // make rustfmt split lines
-            "four[",
-            "     Hello,",
-            "     Hello",
+            "          'chocolate',",
+            "          'lemon', 'almond'",
             "    ]",
+            "}",
         ],
     );
 }
@@ -392,42 +383,6 @@ fn oracle_failure_4() {
 
 #[test]
 fn oracle_failure_5() {
-    let n = align(nest(6, lit("aaaaaaaa"))) + align(lit("bbbbbbbbb"));
-    assert_pp(n, 10, &["", "      aaaaaaaabbbbbbbbb"]);
-}
-
-#[test]
-fn oracle_failure_6() {
-    let n = nest(7, lit("aaaa")) + align(nest(3, lit("bbb")));
-    assert_pp(n, 5, &["", "       aaaa", "              bbb"]);
-}
-
-#[test]
-fn oracle_failure_7() {
-    let n = flat(align(nest(2, lit("aaaa")) | lit("bbbbb")));
-    assert_pp(n, 6, &["bbbbb"]);
-}
-
-#[test]
-fn oracle_failure_8() {
-    let n = lit("a") + align(align(nest(7, lit("bbbbbbbb"))));
-    assert_pp(n, 5, &["a", "        bbbbbbbb"]);
-}
-
-#[test]
-fn oracle_failure_9() {
-    let n = (align(nest(6, lit("aaaaaaaaa"))) + nest(3, lit("bb"))) | lit("ccc");
-    assert_pp(n, 5, &["", "      aaaaaaaaa", "   bb"]);
-}
-
-#[test]
-fn oracle_failure_10() {
-    let n = (flat(nest(3, lit("aaaaaa"))) + align(nest(3, lit("bb")))) | lit("c");
-    assert_pp(n, 1, &["c"]);
-}
-
-#[test]
-fn oracle_failure_11() {
     let n = (nest(8, lit("aaaaa")) + (nest(0, lit("bbbb")) | lit("ccc"))) | lit("ddddd");
     assert_pp(n, 4, &["", "        aaaaaccc"]);
 }
