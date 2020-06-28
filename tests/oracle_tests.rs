@@ -56,7 +56,7 @@ fn try_pretty_print(notation: Notation) -> PPResult {
     for width in WIDTH_RANGE.0..WIDTH_RANGE.1 {
         let oracle_lines = expand_lines(oracular_pretty_print(&notation, width));
         // Test the regular printer
-        let actual_lines = expand_lines(pretty_print(&measured_notation, width));
+        let actual_lines = expand_lines(pretty_print(&measured_notation, width).collect());
         if actual_lines != oracle_lines {
             return PPResult::Error(PPError {
                 notation,

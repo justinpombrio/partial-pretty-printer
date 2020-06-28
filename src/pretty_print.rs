@@ -60,15 +60,10 @@ pub struct PrettyPrinter<'n> {
 /// Display the notation, using at most `width` columns if possible.
 /// Returns a list of `(indent, line)` pairs, where `indent` is the number of
 /// spaces that should precede `line`.
-pub fn pretty_print(notation: &MeasuredNotation, width: usize) -> Vec<(usize, String)> {
+pub fn pretty_print<'n>(notation: &'n MeasuredNotation, width: usize) -> ForwardPrinter<'n> {
     let sought_pos: Pos = 0; // first node in the document
-    let (bw_iter, fw_iter) = pretty_print_at(&notation, width, sought_pos);
-    bw_iter
-        .collect::<Vec<_>>()
-        .into_iter()
-        .rev()
-        .chain(fw_iter)
-        .collect()
+    let (_bw_iter, fw_iter) = pretty_print_at(&notation, width, sought_pos);
+    fw_iter
 }
 
 pub fn pretty_print_at<'n>(

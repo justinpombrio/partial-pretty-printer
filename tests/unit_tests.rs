@@ -15,7 +15,8 @@ fn assert_pp(notation: Notation, width: usize, expected_lines: &[&str]) {
     notation.validate().expect("failed to validate");
     let measured_notation = notation.measure();
     let oracle_lines: Vec<String> = expand_lines(oracular_pretty_print(&notation, width)).collect();
-    let actual_lines: Vec<String> = expand_lines(pretty_print(&measured_notation, width)).collect();
+    let actual_lines: Vec<String> =
+        expand_lines(pretty_print(&measured_notation, width).collect()).collect();
     if oracle_lines != expected_lines {
         eprintln!(
             "BAD TEST CASE!\n\nTEST CASE EXPECTS:\n{}\nBUT ORACLE SAYS:\n{}",
