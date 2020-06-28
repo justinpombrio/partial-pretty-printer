@@ -58,7 +58,7 @@ pub struct PrettyPrinter<'n> {
 }
 
 /// Display the notation, using at most `width` columns if possible.
-/// Returns a list of `(indent, line)` pairs, where `indent` is the number of
+/// Returns an iterator over `(indent, line)` pairs, where `indent` is the number of
 /// spaces that should precede `line`.
 pub fn pretty_print<'n>(notation: &'n MeasuredNotation, width: usize) -> ForwardPrinter<'n> {
     let sought_pos: Pos = 0; // first node in the document
