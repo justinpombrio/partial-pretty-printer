@@ -1,5 +1,6 @@
-use super::notation::Notation;
+use crate::notation::Notation;
 use crate::staircase::{Stair, Staircase};
+use crate::validate::CompiledNotation;
 
 pub type Pos = u64;
 
@@ -14,6 +15,9 @@ impl Span {
         Span { start, end }
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct NotationCache(pub(crate) MeasuredNotation);
 
 #[derive(Debug, Clone)]
 pub enum MeasuredNotation {
@@ -112,15 +116,19 @@ impl MultiLineShape {
     }
 }
 
-impl Notation {
-    /// "Measure" a Notation, computing information such as the set of smallest
-    /// shapes it fits inside and some of its line lengths. This information is
-    /// stored in the [`MeasuredNotation`](MeasuredNotation) for later use by
-    /// pretty printing.
-    pub fn measure(&self) -> MeasuredNotation {
-        self.measure_rec(0).0
+impl NotationCache {
+    /// Compute cached information about a notation, such as the set of smallest
+    /// shapes it fits inside and some of its line lengths.
+    pub fn compute(notation: &CompiledNotation) -> NotationCache {
+        NotationCache(notation.0.measure_rec(0).0)
     }
 
+    pub fn span(&self) -> Span {
+        self.0.span()
+    }
+}
+
+impl Notation {
     fn measure_rec(&self, pos: Pos) -> (MeasuredNotation, Shapes, Pos) {
         match self {
             Notation::Empty => (
@@ -524,7 +532,7 @@ mod tests {
     #[test]
     fn test_literal() {
         let lit = Notation::Literal("foobar".into());
-        lit.validate().unwrap();
+        let lit = lit.compile().unwrap().0;
         let shapes = lit.measure_rec(0).1;
         assert_eq!(shapes, Shapes::new_single_line(6));
     }
@@ -535,7 +543,7 @@ mod tests {
             Box::new(Notation::Literal("fooo".to_string())),
             Box::new(Notation::Literal("bar".to_string())),
         );
-        note.validate().unwrap();
+        let note = note.compile().unwrap().0;
         let (note, shapes, _pos) = note.measure_rec(0);
 
         assert_eq!(shapes, Shapes::new_single_line(7));
@@ -559,7 +567,7 @@ mod tests {
             Box::new(Notation::Literal("fooo".to_string())),
             Box::new(Notation::Literal("bar".to_string())),
         );
-        note.validate().unwrap();
+        let note = note.compile().unwrap().0;
         let (note, _shapes, pos) = note.measure_rec(0);
         assert_eq!(pos, 3);
         assert_eq!(note.span(), Span::new(0, 3));

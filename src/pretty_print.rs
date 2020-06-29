@@ -1,4 +1,4 @@
-use super::measure::{MeasuredNotation, Pos};
+use super::measure::{MeasuredNotation, NotationCache, Pos};
 use std::iter::Iterator;
 use std::mem;
 
@@ -60,14 +60,14 @@ pub struct PrettyPrinter<'n> {
 /// Display the notation, using at most `width` columns if possible.
 /// Returns an iterator over `(indent, line)` pairs, where `indent` is the number of
 /// spaces that should precede `line`.
-pub fn pretty_print<'n>(notation: &'n MeasuredNotation, width: usize) -> ForwardPrinter<'n> {
+pub fn pretty_print<'n>(notation: &'n NotationCache, width: usize) -> ForwardPrinter<'n> {
     let sought_pos: Pos = 0; // first node in the document
     let (_bw_iter, fw_iter) = pretty_print_at(&notation, width, sought_pos);
     fw_iter
 }
 
 pub fn pretty_print_at<'n>(
-    notation: &'n MeasuredNotation,
+    notation: &'n NotationCache,
     width: usize,
     pos: Pos,
 ) -> (BackwardPrinter<'n>, ForwardPrinter<'n>) {
@@ -79,17 +79,17 @@ pub fn pretty_print_at<'n>(
         prev_chunks: vec![],
         next_chunks: vec![],
     };
-    ppp.seek(pos, notation, Some(0));
+    ppp.seek(pos, &notation.0, Some(0));
     ppp.print()
 }
 
-pub fn pretty_print_first<'n>(notation: &'n MeasuredNotation, width: usize) -> ForwardPrinter<'n> {
-    let blocks = vec![Block::new(notation)];
+pub fn pretty_print_first<'n>(notation: &'n NotationCache, width: usize) -> ForwardPrinter<'n> {
+    let blocks = vec![Block::new(&notation.0)];
     ForwardPrinter { width, blocks }
 }
 
-pub fn pretty_print_last<'n>(notation: &'n MeasuredNotation, width: usize) -> BackwardPrinter<'n> {
-    let blocks = vec![Block::new(notation)];
+pub fn pretty_print_last<'n>(notation: &'n NotationCache, width: usize) -> BackwardPrinter<'n> {
+    let blocks = vec![Block::new(&notation.0)];
     BackwardPrinter { width, blocks }
 }
 

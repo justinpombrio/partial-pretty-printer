@@ -4,7 +4,8 @@ mod common;
 use common::combinators::*;
 use common::oracular_pretty_print;
 use partial_pretty_printer::{
-    pretty_print, pretty_print_at, pretty_print_first, pretty_print_last, Notation, Pos,
+    pretty_print, pretty_print_at, pretty_print_first, pretty_print_last, Notation, NotationCache,
+    Pos,
 };
 
 /********************************************************************************/
@@ -12,11 +13,11 @@ use partial_pretty_printer::{
 /********************************************************************************/
 
 fn assert_pp(notation: Notation, width: usize, expected_lines: &[&str]) {
-    notation.validate().expect("failed to validate");
-    let measured_notation = notation.measure();
+    let compiled_notation = notation.clone().compile().expect("failed to validate");
+    let notation_cache = NotationCache::compute(&compiled_notation);
     let oracle_lines: Vec<String> = expand_lines(oracular_pretty_print(&notation, width)).collect();
     let actual_lines: Vec<String> =
-        expand_lines(pretty_print(&measured_notation, width).collect()).collect();
+        expand_lines(pretty_print(&notation_cache, width).collect()).collect();
     if oracle_lines != expected_lines {
         eprintln!(
             "BAD TEST CASE!\n\nTEST CASE EXPECTS:\n{}\nBUT ORACLE SAYS:\n{}",
@@ -41,12 +42,12 @@ fn assert_ppp_first(
     num_first_lines: usize,
     expected_lines: &[&str],
 ) {
-    notation.validate().expect("failed to validate");
-    let measured_notation = notation.measure();
+    let compiled_notation = notation.clone().compile().expect("failed to validate");
+    let notation_cache = NotationCache::compute(&compiled_notation);
     let oracle_lines: Vec<String> = expand_lines(oracular_pretty_print(&notation, width))
         .take(num_first_lines)
         .collect();
-    let actual_lines_iter = pretty_print_first(&measured_notation, width);
+    let actual_lines_iter = pretty_print_first(&notation_cache, width);
     let actual_lines: Vec<String> =
         expand_lines(actual_lines_iter.take(num_first_lines).collect()).collect();
     if oracle_lines != expected_lines {
@@ -75,8 +76,8 @@ fn assert_ppp_last(
     num_last_lines: usize,
     expected_lines: &[&str],
 ) {
-    notation.validate().expect("failed to validate");
-    let measured_notation = notation.measure();
+    let compiled_notation = notation.clone().compile().expect("failed to validate");
+    let notation_cache = NotationCache::compute(&compiled_notation);
     let oracle_lines: Vec<String> = expand_lines(oracular_pretty_print(&notation, width))
         .collect::<Vec<_>>()
         .into_iter()
@@ -84,7 +85,7 @@ fn assert_ppp_last(
         .take(num_last_lines)
         .rev()
         .collect();
-    let actual_lines_iter = pretty_print_last(&measured_notation, width);
+    let actual_lines_iter = pretty_print_last(&notation_cache, width);
     let mut actual_lines: Vec<String> =
         expand_lines(actual_lines_iter.take(num_last_lines).collect()).collect();
     actual_lines.reverse();
@@ -109,10 +110,10 @@ fn assert_ppp_last(
 }
 
 fn assert_ppp_seek(notation: Notation, width: usize, sought_pos: Pos, expected_lines: &[&str]) {
-    notation.validate().expect("failed to validate");
-    let measured_notation = notation.measure();
+    let compiled_notation = notation.clone().compile().expect("failed to validate");
+    let notation_cache = NotationCache::compute(&compiled_notation);
     let oracle_lines: Vec<String> = expand_lines(oracular_pretty_print(&notation, width)).collect();
-    let (bw_iter, fw_iter) = pretty_print_at(&measured_notation, width, sought_pos);
+    let (bw_iter, fw_iter) = pretty_print_at(&notation_cache, width, sought_pos);
     let lines_iter = bw_iter.collect::<Vec<_>>().into_iter().rev().chain(fw_iter);
     let actual_lines: Vec<String> = expand_lines(lines_iter.collect()).collect();
     if oracle_lines != expected_lines {

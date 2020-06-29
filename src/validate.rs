@@ -1,5 +1,8 @@
 use super::Notation;
 
+#[derive(Clone, Debug)]
+pub struct CompiledNotation(pub(crate) Notation);
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ValidationError {
     Impossible,
@@ -93,37 +96,37 @@ impl Possibilities {
 }
 
 impl Notation {
-    /// Validate a notation. This consists of:
+    /// Compile a notation, while checking that it's valid. This consists of:
     ///
     /// - Ensuring there is at least one layout option for displaying it.
     /// - Ensuring that no two _choosy_ nodes share a line.
     ///
     /// A node is _choosy_ iff it is a `Choice`, and both of its options are possible. (A notation
     /// can only be _impossible_ if it contains `Flat` of a `Vert`.)
-    pub fn validate(&self) -> Result<(), ValidationError> {
-        let poss = self.validate_rec()?;
+    pub fn compile(self) -> Result<CompiledNotation, ValidationError> {
+        let poss = self.compile_rec()?;
         if poss.is_possible() {
-            Ok(())
+            Ok(CompiledNotation(self))
         } else {
             Err(ValidationError::Impossible)
         }
     }
 
-    fn validate_rec(&self) -> Result<Possibilities, ValidationError> {
+    fn compile_rec(&self) -> Result<Possibilities, ValidationError> {
         use Notation::*;
 
         match self {
             Empty | Literal(_) => Ok(Possibilities::new_single(false)),
             Newline => Ok(Possibilities::new_multi(false, false)),
             Flat(note) => {
-                let mut poss = note.validate_rec()?;
+                let mut poss = note.compile_rec()?;
                 poss.multi_line = None;
                 Ok(poss)
             }
-            Indent(_indent, note) => note.validate_rec(),
+            Indent(_indent, note) => note.compile_rec(),
             Concat(left, right) => {
-                let left_poss = left.validate_rec()?;
-                let right_poss = right.validate_rec()?;
+                let left_poss = left.compile_rec()?;
+                let right_poss = right.compile_rec()?;
 
                 if left_poss.choosy_last() == Some(true) && right_poss.choosy_first() == Some(true)
                 {
@@ -147,8 +150,8 @@ impl Notation {
                 Ok(poss)
             }
             Choice(left, right) => {
-                let left_poss = left.validate_rec()?;
-                let right_poss = right.validate_rec()?;
+                let left_poss = left.compile_rec()?;
+                let right_poss = right.compile_rec()?;
                 Ok(left_poss.choice(right_poss))
             }
         }
@@ -196,33 +199,33 @@ mod tests {
     #[test]
     fn test_impossible_flat() {
         let note = lit("foo") + lit("bar");
-        note.validate().unwrap();
+        note.compile().unwrap();
 
         let note = lit("foo") + nest(4, lit("bar"));
-        note.validate().unwrap();
+        note.compile().unwrap();
 
         let note = flat(lit("foo") + nest(4, lit("bar")));
-        assert_eq!(note.validate(), Err(ValidationError::Impossible));
+        assert_eq!(note.compile().err(), Some(ValidationError::Impossible));
     }
 
     #[test]
     fn test_choosy() {
         let note = lit("foo") | lit("bar");
-        note.validate().unwrap();
+        note.compile().unwrap();
 
         let note = (lit("foo") | lit("bar")) + lit("red");
-        note.validate().unwrap();
+        note.compile().unwrap();
 
         let note = lit("foo") + (lit("red") | lit("blue"));
-        note.validate().unwrap();
+        note.compile().unwrap();
 
         let note = (lit("foo") | lit("bar")) + (lit("red") | lit("blue"));
-        assert_eq!(note.validate(), Err(ValidationError::TooChoosy));
+        assert_eq!(note.compile().err(), Some(ValidationError::TooChoosy));
 
         let note = flat(lit("foo") + newline() + lit("bar") | lit("baz"));
-        note.validate().unwrap();
+        note.compile().unwrap();
 
         let note = flat(lit("first") + newline() + lit("second") | lit("1") + newline() + lit("2"));
-        assert_eq!(note.validate(), Err(ValidationError::Impossible));
+        assert_eq!(note.compile().err(), Some(ValidationError::Impossible));
     }
 }
