@@ -1,11 +1,13 @@
+use crate::style::Style;
 use std::ops::{Add, BitOr};
 
+/// Describes how to display a syntactic construct.
 #[derive(Clone, Debug)]
 pub enum Notation {
-    /// Display nothing. Identical to `Literal("")`.
+    /// Display nothing. The same as `Literal("")`.
     Empty,
-    /// Literal text. Cannot contain a newline.
-    Literal(String),
+    /// Display a literal string. Cannot contain a newline.
+    Literal(String, Style),
     /// Display a newline. If this is inside an `Indent`, the new line will be
     /// indented.
     Newline,
@@ -14,50 +16,50 @@ pub enum Notation {
     /// Indent all lines of the contained notation except the first to the right
     /// by the given number of spaces.
     Indent(usize, Box<Notation>),
-    /// Display both notations. The first character of the right notation
-    /// immediately follows the last character of the left notation. The right
-    /// notation's indentation level is not affected.
-    Concat(Box<Notation>, Box<Notation>),
-    /// Display the left notation if it fits within the required width;
-    /// otherwise the right.
-    Choice(Box<Notation>, Box<Notation>),
+    /// Display the second notation after the first, and so forth. The last character of one of the
+    /// notations is immediately followed by the first character of the next. The notations'
+    /// indentation levels are not affected.
+    Follow(Vec<Notation>),
+    /// Pick exactly one of the notations to display: either the first one that fits in the allowed
+    /// width or, failing that, the last one.
+    Choice(Vec<Notation>),
+    /// Display a piece of text. Must be used on a texty node.
+    Text(Style),
+    /// Determines what to display based on the arity of this node.
+    /// Used for syntactic constructs that have extendable arity.
+    Repeat(Box<Repeat>),
+    /// Used in [`Repeat`](Repeat) to refer to the accumulated Notation
+    /// in `join`.
+    Left,
+    /// Used in [`Repeat`](Repeat) to refer to the next child in `join`.
+    Right,
+    /// Used in [`Repeat`](Repeat) to refer to the Notation inside of
+    /// `surround`.
+    Surrounded,
 }
 
-impl Notation {
-    // TODO: build this into the notation. This can be exponentially large!
-    pub fn repeat<L, J, S>(
-        elements: Vec<Notation>,
-        empty: Notation,
-        lone: L,
-        join: J,
-        surround: S,
-    ) -> Notation
-    where
-        L: Fn(Notation) -> Notation,
-        J: Fn(Notation, Notation) -> Notation,
-        S: Fn(Notation) -> Notation,
-    {
-        let mut iter = elements.into_iter();
-        match iter.len() {
-            0 => empty,
-            1 => lone(iter.next().unwrap()),
-            _ => {
-                let mut iter = iter.rev();
-                let mut accumulator = iter.next().unwrap();
-                for elem in iter {
-                    accumulator = join(elem, accumulator);
-                }
-                surround(accumulator)
-            }
-        }
-    }
+/// Describes how to display the extra children of a syntactic
+/// construct with extendable arity.
+#[derive(Clone, Debug)]
+pub struct Repeat {
+    /// If the sequence is empty, use this notation.
+    pub empty: Notation,
+    /// If the sequence has length one, use this notation.
+    pub lone: Notation,
+    /// If the sequence has length 2 or more, (right-)fold elements together with
+    /// this notation. [`Right`](Right) holds the notation so far, while
+    /// [`Left`](Left) holds the next child to be folded.
+    pub join: Notation,
+    /// If the sequence has length 2 or more, surround the folded notation with
+    /// this notation. [`Surrounded`](Surrounded) holds the folded notation.
+    pub surround: Notation,
 }
 
 impl Add<Notation> for Notation {
     type Output = Notation;
     /// Shorthand for `Concat`.
     fn add(self, other: Notation) -> Notation {
-        Notation::Concat(Box::new(self), Box::new(other))
+        Notation::Follow(vec![self, other])
     }
 }
 
@@ -65,6 +67,6 @@ impl BitOr<Notation> for Notation {
     type Output = Notation;
     /// Shorthand for `Choice`.
     fn bitor(self, other: Notation) -> Notation {
-        Notation::Choice(Box::new(self), Box::new(other))
+        Notation::Choice(vec![self, other])
     }
 }
