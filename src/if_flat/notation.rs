@@ -8,6 +8,8 @@ pub enum Notation {
     Literal(String),
     /// Display a newline. If this is inside an `Indent`, the new line will be indented.
     Newline,
+    /// Only consider single-line options of the contained notation.
+    Flat(Box<Notation>),
     /// Indent all lines of the contained notation except the first to the right by the given
     /// number of spaces.
     Indent(usize, Box<Notation>),
@@ -49,63 +51,50 @@ impl Notation {
         }
     }
 
-    // Returns None if it doesn't fit, or Some(used_len) if it does.
-    pub(super) fn fits_when_flat(&self, len: usize) -> Option<usize> {
+    // Returns None if impossible.
+    pub(super) fn min_first_line_len(&self, flat: bool) -> Option<FirstLineLen> {
         use Notation::*;
 
         match self {
-            Empty => Some(0),
+            Empty => Some(FirstLineLen {
+                len: 0,
+                has_newline: false,
+            }),
             Literal(text) => {
                 let text_len = text.chars().count();
-                if text_len <= len {
-                    Some(text_len)
-                } else {
+                Some(FirstLineLen {
+                    len: text_len,
+                    has_newline: false,
+                })
+            }
+            Newline => {
+                if flat {
                     None
-                }
-            }
-            Newline => None,
-            Indent(_, note) => note.fits_when_flat(len),
-            Choice(note1, note2) => note2
-                .fits_when_flat(len)
-                .or_else(|| note1.fits_when_flat(len)),
-            Concat(note1, note2) => note1.fits_when_flat(len).and_then(|len1| {
-                note2
-                    .fits_when_flat(len - len1)
-                    .and_then(|len2| Some(len1 + len2))
-            }),
-        }
-    }
-
-    pub(super) fn min_first_line_len(&self) -> FirstLineLen {
-        use Notation::*;
-
-        match self {
-            Empty => FirstLineLen {
-                len: 0,
-                has_newline: false,
-            },
-            Literal(text) => FirstLineLen {
-                len: text.chars().count(),
-                has_newline: false,
-            },
-            Newline => FirstLineLen {
-                len: 0,
-                has_newline: true,
-            },
-            Indent(_, note) => note.min_first_line_len(),
-            Choice(_note1, note2) => note2.min_first_line_len(),
-            Concat(note1, note2) => {
-                let len1 = note1.min_first_line_len();
-                if len1.has_newline {
-                    len1
                 } else {
-                    let len2 = note2.min_first_line_len();
-                    FirstLineLen {
-                        len: len1.len + len2.len,
-                        has_newline: len2.has_newline,
-                    }
+                    Some(FirstLineLen {
+                        len: 0,
+                        has_newline: true,
+                    })
                 }
             }
+            Flat(note) => note.min_first_line_len(true),
+            Indent(_, note) => note.min_first_line_len(flat),
+            // Note2 must always be smaller
+            Choice(note1, note2) => note2
+                .min_first_line_len(flat)
+                .or_else(|| note1.min_first_line_len(flat)),
+            Concat(note1, note2) => note1.min_first_line_len(flat).and_then(|len1| {
+                if len1.has_newline {
+                    Some(len1)
+                } else {
+                    note2.min_first_line_len(flat).and_then(|len2| {
+                        Some(FirstLineLen {
+                            len: len1.len + len2.len,
+                            has_newline: len2.has_newline,
+                        })
+                    })
+                }
+            }),
         }
     }
 }
@@ -124,7 +113,8 @@ impl BitOr<Notation> for Notation {
 
     /// Shorthand for `Choice`.
     fn bitor(self, other: Notation) -> Notation {
-        Notation::Choice(Box::new(self), Box::new(other))
+        // TODO: if_flat?!
+        Notation::Choice(Box::new(Notation::Flat(Box::new(self))), Box::new(other))
     }
 }
 

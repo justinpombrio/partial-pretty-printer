@@ -22,6 +22,10 @@ mod if_flat {
         Notation::Indent(i, Box::new(n))
     }
 
+    fn flat(n: Notation) -> Notation {
+        Notation::Flat(Box::new(n))
+    }
+
     #[track_caller]
     fn assert_pp(notation: &Notation, width: usize, expected_lines: &[&str]) {
         let actual_lines = pretty_print(&notation, width);
@@ -76,7 +80,7 @@ mod if_flat {
             let join =
                 |elem: Notation, accum: Notation| elem + lit(",") + (lit(" ") | nl()) + accum;
             let surround = |accum: Notation| {
-                let single = lit("[") + accum.clone() + lit("]");
+                let single = lit("[") + flat(accum.clone()) + lit("]");
                 let multi = lit("[") + (4 >> accum) ^ lit("]");
                 single | multi
             };
@@ -91,12 +95,7 @@ mod if_flat {
                 single | multi
             };
             let join = |elem: Notation, accum: Notation| elem + lit(",") + nl() + accum;
-            let surround = |accum: Notation| {
-                // This single case is never used, because `accum` is never flat!
-                let single = lit("{") + accum.clone() + lit("}");
-                let multi = lit("{") + (4 >> accum) ^ lit("}");
-                single | multi
-            };
+            let surround = |accum: Notation| lit("{") + (4 >> accum) ^ lit("}");
             Notation::repeat(entries, empty, lone, join, surround)
         }
 
@@ -344,27 +343,25 @@ mod if_flat {
     fn iter_with_closure() {
         fn method(obj: Notation, method: &str, arg: Notation) -> Notation {
             let single = lit(method) + lit("(") + arg.clone() + lit(")");
-            // foobazzle.bar(arg)
+            // foobaxxle.bar(arg)
             //
-            // foobazzle.bar(
+            // -- Eliminating this case:
+            // foobaxxle.bar(
             //     arg
             // )
             //
-            // foobazzle
+            // foobaxxle
             //     .bar(arg)
             //
-            // foobazzle
+            // foobaxxle
             //     .bar(
             //         arg
             //      )
 
-            // (obj.bar | obj!4.bar) ([arg] | [!4arg])
-            // obj.bar[?4arg] | obj!4.bar[?4arg]
-
-            let opt_nl = lit("") | nl();
-            let single = lit(method) + lit("(") + arg.clone() + lit(")");
-            let multi = lit(method) + lit("(") + (4 >> arg) ^ lit(")");
-            obj + lit(".") + (single | multi)
+            let single = lit(".") + lit(method) + lit("(") + flat(arg.clone()) + lit(")");
+            let two_lines = lit(".") + lit(method) + lit("(") + flat(arg.clone()) + lit(")");
+            let multi = lit(".") + lit(method) + lit("(") + (4 >> arg) ^ lit(")");
+            obj + (single | (4 >> (two_lines | multi)))
         }
 
         fn closure(var: &str, body: Notation) -> Notation {
@@ -395,8 +392,133 @@ mod if_flat {
             &[
                 // force rustfmt
                 "some_vec.iter().map(|elem| { elem * elem })",
-                ".collect()",
+                "    .collect()",
             ],
         );
+        assert_pp(
+            &n,
+            40,
+            //  0    5   10   15   20   25   30   35   40   45   50   55   60
+            &[
+                // force rustfmt
+                "some_vec.iter()",
+                "    .map(|elem| { elem * elem })",
+                "    .collect()",
+            ],
+        );
+        assert_pp(
+            &n,
+            30,
+            //  0    5   10   15   20   25   30   35   40   45   50   55   60
+            &[
+                // force rustfmt
+                "some_vec.iter()",
+                "    .map(",
+                "        |elem| { elem * elem }",
+                "    ).collect()",
+            ],
+        );
+
+        let n = lit("some_vec");
+        let n = method(n, "map", closure("elem", times(lit("elem"), lit("elem"))));
+
+        assert_pp(
+            &n,
+            31,
+            //  0    5   10   15   20   25   30   35   40   45   50   55   60
+            &[
+                // force rustfmt
+                "some_vec",
+                "    .map(",
+                "        |elem| { elem * elem }",
+                "    )",
+            ],
+        );
+
+        let n = lit("some_vec");
+        let n = method(n, "call_the_map_method", closure("elem", lit("elem")));
+        let n = method(n, "call_the_map_method", closure("elem", lit("elem")));
+
+        assert_pp(
+            &n,
+            41,
+            //  0    5   10   15   20   25   30   35   40   45   50   55   60
+            &[
+                // force rustfmt
+                "some_vec",
+                "    .call_the_map_method(|elem| { elem })",
+                "    .call_the_map_method(|elem| { elem })",
+            ],
+        );
+        // Likewise
+        assert_pp(
+            &n,
+            35,
+            //  0    5   10   15   20   25   30   35   40   45   50   55   60
+            &[
+                // force rustfmt
+                "some_vec",
+                "    .call_the_map_method(",
+                "        |elem| { elem }",
+                "    )",
+                "    .call_the_map_method(",
+                "        |elem| { elem }",
+                "    )",
+            ],
+        );
+    }
+
+    #[test]
+    fn ruby() {
+        // (1..5).each do |i| puts i end
+        //
+        // (1..5).each do |i|
+        //     puts i
+        // end
+        //
+        // -- ELIMINATE THIS?
+        // (1..5).each
+        //     do |i|
+        //         puts i
+        //     end
+        //
+        // (1..5)
+        //     .each do |i|
+        //         puts i
+        //     end
+        //
+        // object.method argument
+        // object.method
+        //     argument
+        // object
+        //     .method argument
+        // object
+        //     .method
+        //         argument
+
+        fn method(obj: Notation, method: &str, arg: Notation) -> Notation {
+            let single = lit(".") + lit(method) + lit(" ") + flat(arg.clone());
+            let multi = 4 >> (lit(".") + lit(method) + lit
+
+            let single = lit(".") + lit(method) + lit("(") + flat(arg.clone()) + lit(")");
+            let two_lines = lit(".") + lit(method) + lit("(") + (4 >> arg.clone()) ^ lit(")");
+            let multi = lit(".") + lit(method) + lit("(") + (4 >> arg) ^ lit(")");
+            obj + (single | (4 >> (two_lines | multi)))
+        }
+
+        fn closure(var: &str, body: Notation) -> Notation {
+            let single = lit("|") + lit(var) + lit("| { ") + body.clone() + lit(" }");
+            let multi = lit("|") + lit(var) + lit("| {") + (4 >> body) ^ lit("}");
+            single | multi
+        }
+
+        fn times(arg1: Notation, arg2: Notation) -> Notation {
+            arg1 + lit(" * ") + arg2
+        }
+
+        let n = lit("some_vec");
+        let n = method(n, "iter", lit(""));
+        let n = method(n, "map", closure("elem", times(lit("elem"), lit("elem"))));
+        let n = method(n, "collect", lit(""));
     }
 }
