@@ -3,12 +3,12 @@ mod if_flat {
 
     // TODO: Put these in a shared common file. Break this file into several.
 
-    // TODO: Tests:
+    // TESTS:
     // x Json
     // x text flow
     // n imports with multi-line import not sharing lines
     // - let w/ list w/ an element that doesn't want to share a line
-    // - iter w/ map & closure
+    // x iter w/ map & closure
 
     fn nl() -> Notation {
         Notation::Newline
@@ -18,9 +18,11 @@ mod if_flat {
         Notation::Literal(s.to_string())
     }
 
+    /*
     fn indent(i: usize, n: Notation) -> Notation {
         Notation::Indent(i, Box::new(n))
     }
+    */
 
     fn flat(n: Notation) -> Notation {
         Notation::Flat(Box::new(n))
@@ -342,10 +344,9 @@ mod if_flat {
     #[test]
     fn iter_with_closure() {
         fn method(obj: Notation, method: &str, arg: Notation) -> Notation {
-            let single = lit(method) + lit("(") + arg.clone() + lit(")");
             // foobaxxle.bar(arg)
             //
-            // -- Eliminating this case:
+            // -- Disallowing this layout:
             // foobaxxle.bar(
             //     arg
             // )
@@ -469,14 +470,14 @@ mod if_flat {
     }
 
     #[test]
-    fn ruby() {
+    fn ruby_loop() {
         // (1..5).each do |i| puts i end
         //
         // (1..5).each do |i|
         //     puts i
         // end
         //
-        // -- ELIMINATE THIS?
+        // -- Dissalow this layout?
         // (1..5).each
         //     do |i|
         //         puts i
@@ -497,28 +498,51 @@ mod if_flat {
         //         argument
 
         fn method(obj: Notation, method: &str, arg: Notation) -> Notation {
-            let single = lit(".") + lit(method) + lit(" ") + flat(arg.clone());
-            let multi = 4 >> (lit(".") + lit(method) + lit
-
-            let single = lit(".") + lit(method) + lit("(") + flat(arg.clone()) + lit(")");
-            let two_lines = lit(".") + lit(method) + lit("(") + (4 >> arg.clone()) ^ lit(")");
-            let multi = lit(".") + lit(method) + lit("(") + (4 >> arg) ^ lit(")");
+            let single = lit(".") + lit(method) + lit(" ") + arg.clone();
+            let two_lines = lit(".") + lit(method) + lit(" ") + arg.clone();
+            let multi = lit(".") + lit(method) + (4 >> arg);
             obj + (single | (4 >> (two_lines | multi)))
         }
 
-        fn closure(var: &str, body: Notation) -> Notation {
-            let single = lit("|") + lit(var) + lit("| { ") + body.clone() + lit(" }");
-            let multi = lit("|") + lit(var) + lit("| {") + (4 >> body) ^ lit("}");
+        fn ruby_do(var: &str, body: Notation) -> Notation {
+            let single = lit("do |") + lit(var) + lit("| ") + flat(body.clone()) + lit(" end");
+            let multi = lit("do |") + lit(var) + lit("|") + (4 >> body.clone()) ^ lit("end");
             single | multi
         }
 
-        fn times(arg1: Notation, arg2: Notation) -> Notation {
-            arg1 + lit(" * ") + arg2
-        }
-
-        let n = lit("some_vec");
-        let n = method(n, "iter", lit(""));
-        let n = method(n, "map", closure("elem", times(lit("elem"), lit("elem"))));
-        let n = method(n, "collect", lit(""));
+        let n = method(lit("(1..5)"), "each", ruby_do("i", lit("puts i")));
+        assert_pp(
+            &n,
+            30,
+            //  0    5   10   15   20   25   30   35   40
+            &[
+                // force rustfmt
+                "(1..5).each do |i| puts i end",
+            ],
+        );
+        assert_pp(
+            &n,
+            20,
+            //  0    5   10   15   20   25   30   35   40
+            &[
+                // force rustfmt
+                "(1..5).each do |i|",
+                "    puts i",
+                "end",
+            ],
+        );
+        assert_pp(
+            &n,
+            15,
+            //  0    5   10   15   20   25   30   35   40
+            &[
+                // force rustfmt
+                "(1..5)",
+                "    .each",
+                "        do |i|",
+                "            puts i",
+                "        end",
+            ],
+        );
     }
 }

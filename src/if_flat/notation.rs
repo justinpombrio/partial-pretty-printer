@@ -114,7 +114,7 @@ impl BitOr<Notation> for Notation {
     /// Shorthand for `Choice`.
     fn bitor(self, other: Notation) -> Notation {
         // TODO: if_flat?!
-        Notation::Choice(Box::new(Notation::Flat(Box::new(self))), Box::new(other))
+        Notation::Choice(Box::new(self), Box::new(other))
     }
 }
 
