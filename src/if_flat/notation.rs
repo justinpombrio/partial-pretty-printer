@@ -1,4 +1,8 @@
+use std::fmt;
 use std::ops::{Add, BitOr, BitXor, Shr};
+
+// ASSUMPTION:
+// In every choice `X | Y`, `min_first_line_len(Y) <= min_first_line_len(X)`.
 
 #[derive(Clone, Debug)]
 pub enum Notation {
@@ -22,6 +26,7 @@ pub enum Notation {
     Choice(Box<Notation>, Box<Notation>),
 }
 
+#[derive(Clone, Debug)]
 pub struct FirstLineLen {
     pub len: usize,
     pub has_newline: bool,
@@ -99,6 +104,22 @@ impl Notation {
     }
 }
 
+impl fmt::Display for Notation {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use Notation::*;
+
+        match self {
+            Empty => write!(f, "ε"),
+            Newline => write!(f, "↵"),
+            Literal(lit) => write!(f, "{}", lit),
+            Flat(note) => write!(f, "Flat({})", note),
+            Indent(i, note) => write!(f, "⇒{}({})", i, note),
+            Concat(left, right) => write!(f, "({} + {})", left, right),
+            Choice(opt1, opt2) => write!(f, "({} | {})", opt1, opt2),
+        }
+    }
+}
+
 impl Add<Notation> for Notation {
     type Output = Notation;
 
@@ -113,7 +134,6 @@ impl BitOr<Notation> for Notation {
 
     /// Shorthand for `Choice`.
     fn bitor(self, other: Notation) -> Notation {
-        // TODO: if_flat?!
         Notation::Choice(Box::new(self), Box::new(other))
     }
 }
@@ -129,6 +149,7 @@ impl BitXor<Notation> for Notation {
 
 impl Shr<Notation> for usize {
     type Output = Notation;
+
     /// Shorthand for nesting (indented newline)
     fn shr(self, notation: Notation) -> Notation {
         Notation::Indent(self, Box::new(Notation::Newline + notation))

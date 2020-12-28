@@ -1,5 +1,7 @@
 mod if_flat {
-    use partial_pretty_printer::if_flat::{pretty_print, Notation};
+    use partial_pretty_printer::if_flat::{
+        pretty_print, print_downward_for_testing, print_upward_for_testing, Notation,
+    };
 
     // TODO: Put these in a shared common file. Break this file into several.
 
@@ -18,27 +20,30 @@ mod if_flat {
         Notation::Literal(s.to_string())
     }
 
-    /*
-    fn indent(i: usize, n: Notation) -> Notation {
-        Notation::Indent(i, Box::new(n))
-    }
-    */
-
     fn flat(n: Notation) -> Notation {
         Notation::Flat(Box::new(n))
+    }
+
+    fn compare_lines(message: &str, actual: &[String], expected: &[&str]) {
+        if actual != expected {
+            eprintln!(
+                "{}\nEXPECTED:\n{}\nACTUAL:\n{}\n=========",
+                message,
+                expected.join("\n"),
+                actual.join("\n"),
+            );
+            assert_eq!(actual, expected);
+        }
     }
 
     #[track_caller]
     fn assert_pp(notation: &Notation, width: usize, expected_lines: &[&str]) {
         let actual_lines = pretty_print(&notation, width);
-        if actual_lines != expected_lines {
-            eprintln!(
-                "EXPECTED:\n{}\nACTUAL:\n{}\n========",
-                expected_lines.join("\n"),
-                actual_lines.join("\n"),
-            );
-            assert_eq!(actual_lines, expected_lines);
-        }
+        compare_lines("IN REGULAR PRINTING", &actual_lines, expected_lines);
+        let downward_lines = print_downward_for_testing(notation, width);
+        compare_lines("IN DOWNWARD PRINTING", &downward_lines, expected_lines);
+        let upward_lines = print_upward_for_testing(notation, width);
+        compare_lines("IN UPWARD PRINTING", &upward_lines, expected_lines);
     }
 
     #[test]
