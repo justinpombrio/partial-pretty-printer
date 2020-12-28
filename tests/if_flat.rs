@@ -1,6 +1,6 @@
 mod if_flat {
     use partial_pretty_printer::if_flat::{
-        pretty_print, print_downward_for_testing, print_upward_for_testing, Notation,
+        print_downward_for_testing, print_upward_for_testing, Notation,
     };
 
     // TODO: Put these in a shared common file. Break this file into several.
@@ -38,8 +38,6 @@ mod if_flat {
 
     #[track_caller]
     fn assert_pp(notation: &Notation, width: usize, expected_lines: &[&str]) {
-        let actual_lines = pretty_print(&notation, width);
-        compare_lines("IN REGULAR PRINTING", &actual_lines, expected_lines);
         let downward_lines = print_downward_for_testing(notation, width);
         compare_lines("IN DOWNWARD PRINTING", &downward_lines, expected_lines);
         let upward_lines = print_upward_for_testing(notation, width);
