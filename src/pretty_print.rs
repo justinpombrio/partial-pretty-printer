@@ -1,374 +1,339 @@
-use super::measure::{MeasuredNotation, Pos};
+use crate::doc::{Doc, NotationCase, NotationRef};
 use std::iter::Iterator;
-use std::mem;
 
-#[derive(Debug, Clone)]
-struct Block<'n> {
+// Seeking:
+//
+// 1. Expand forward to sought Child, or Choice containing sought Child.
+//    If instead reach end of doc, panic (every hole must be present).
+// 2. Walk backwards to nearest Newline (or beginning of doc).
+// 3. Walk forwards to nearest Child or Choice, and resolve it. Go to step 1.
+//    If instead reach sought Child or Choice containing sought Child,
+//    continue seeking the inner child, or you're done seeking.
+//    If instead reach end of doc, panic (every hole must be present).
+
+// Expansion: eliminate Flat, Indent, Concat, Empty.
+// Walk: assume that expansion has already happened.
+// Resolution: eliminate Choice, Child.
+
+type Chunk<'d, D> = (Option<usize>, NotationRef<'d, D>);
+
+#[derive(Clone, Debug)]
+pub struct FirstLineLen {
+    pub len: usize,
+    pub has_newline: bool,
+}
+
+struct DownwardPrinter<'d, D: Doc> {
+    width: usize,
+    next: Vec<Chunk<'d, D>>,
     spaces: usize,
-    chunks: Vec<Chunk<'n>>,
+    at_end: bool,
 }
 
-#[derive(Debug, Clone)]
-enum Chunk<'n> {
-    Text(String),
-    Notation {
-        indent: Option<usize>, // None means flat
-        notation: &'n MeasuredNotation,
-    },
-}
-
-#[derive(Debug, Clone)]
-pub struct ForwardPrinter<'n> {
+struct UpwardPrinter<'d, D: Doc> {
     width: usize,
-    blocks: Vec<Block<'n>>,
+    prev: Vec<Chunk<'d, D>>,
+    // INVARIANT: only ever contains `Literal` and `Choice` notations.
+    next: Vec<Chunk<'d, D>>,
+    at_beginning: bool,
 }
 
-#[derive(Debug)]
-pub struct NextLinePrinter<'b, 'n> {
-    width: usize,
-    spaces: usize,
-    prefix: String,
-    chunks: &'b mut Vec<Chunk<'n>>,
-    blocks: &'b mut Vec<Block<'n>>,
-}
-
-#[derive(Debug, Clone)]
-pub struct BackwardPrinter<'n> {
-    width: usize,
-    blocks: Vec<Block<'n>>,
-}
-
-#[derive(Debug)]
-pub struct PrevLinePrinter<'b, 'n> {
-    width: usize,
-    spaces: usize,
-    suffix: String,
-    chunks: &'b mut Vec<Chunk<'n>>,
-    blocks: &'b mut Vec<Block<'n>>,
-}
-
-#[derive(Debug, Clone)]
-pub struct PrettyPrinter<'n> {
-    width: usize,
-    spaces: usize, // TODO: needed?
-    prev_blocks: Vec<Block<'n>>,
-    next_blocks: Vec<Block<'n>>,
-    prev_chunks: Vec<Chunk<'n>>,
-    next_chunks: Vec<Chunk<'n>>,
-}
-
-/// Display the notation, using at most `width` columns if possible.
-/// Returns an iterator over `(indent, line)` pairs, where `indent` is the number of
-/// spaces that should precede `line`.
-pub fn pretty_print<'n>(notation: &'n MeasuredNotation, width: usize) -> ForwardPrinter<'n> {
-    let sought_pos: Pos = 0; // first node in the document
-    let (_bw_iter, fw_iter) = pretty_print_at(&notation, width, sought_pos);
-    fw_iter
-}
-
-pub fn pretty_print_at<'n>(
-    notation: &'n MeasuredNotation,
-    width: usize,
-    pos: Pos,
-) -> (BackwardPrinter<'n>, ForwardPrinter<'n>) {
-    let mut ppp = PrettyPrinter {
-        width,
-        spaces: 0,
-        prev_blocks: vec![],
-        next_blocks: vec![],
-        prev_chunks: vec![],
-        next_chunks: vec![],
+pub fn print_downward_for_testing<D: Doc>(doc: &D, width: usize) -> Vec<String> {
+    let notation = NotationRef {
+        doc,
+        notation: doc.notation(),
     };
-    ppp.seek(pos, notation, Some(0));
-    ppp.print()
+    let printer = DownwardPrinter::new(notation, width);
+    printer
+        .map(|(spaces, line)| format!("{:spaces$}{}", "", line, spaces = spaces))
+        .collect()
 }
 
-pub fn pretty_print_first<'n>(notation: &'n MeasuredNotation, width: usize) -> ForwardPrinter<'n> {
-    let blocks = vec![Block::new(notation)];
-    ForwardPrinter { width, blocks }
+pub fn print_upward_for_testing<D: Doc>(doc: &D, width: usize) -> Vec<String> {
+    let notation = NotationRef {
+        doc,
+        notation: doc.notation(),
+    };
+    let printer = UpwardPrinter::new(notation, width);
+    let mut lines = printer
+        .map(|(spaces, line)| format!("{:spaces$}{}", "", line, spaces = spaces))
+        .collect::<Vec<_>>();
+    lines.reverse();
+    lines
 }
 
-pub fn pretty_print_last<'n>(notation: &'n MeasuredNotation, width: usize) -> BackwardPrinter<'n> {
-    let blocks = vec![Block::new(notation)];
-    BackwardPrinter { width, blocks }
-}
-
-impl<'n> PrettyPrinter<'n> {
-    fn seek(&mut self, sought: Pos, notation: &'n MeasuredNotation, indent: Option<usize>) {
-        use MeasuredNotation::*;
-        if sought <= notation.span().start {
-            self.next_chunks.push(Chunk::Notation { indent, notation });
-            return;
-        } else if sought >= notation.span().end {
-            self.prev_chunks.push(Chunk::Notation { indent, notation });
-            return;
-        }
-        match notation {
-            Empty(_) | Literal(_, _) | Newline(_) => unreachable!(), // pos, not span
-            Indent(_, i, inner_notation) => {
-                self.seek(sought, inner_notation, indent.map(|j| j + i));
-            }
-            Flat(_, inner_notation) => {
-                self.seek(sought, inner_notation, None);
-            }
-            Concat(_, left, right, _) => {
-                if sought <= right.span().start {
-                    self.next_chunks.push(Chunk::Notation {
-                        indent,
-                        notation: right,
-                    });
-                    self.seek(sought, left, indent);
-                } else {
-                    self.prev_chunks.push(Chunk::Notation {
-                        indent,
-                        notation: left,
-                    });
-                    self.seek(sought, right, indent);
-                }
-            }
-            Choice(_, choice) => {
-                if let Some(chosen_notation) = choice.sole_option(indent.is_none()) {
-                    self.seek(sought, chosen_notation, indent);
-                    return;
-                }
-
-                // Compute prefix
-                let prefix_printer = PrevLinePrinter {
-                    width: self.width,
-                    spaces: self.spaces,
-                    suffix: "".to_string(),
-                    chunks: &mut self.prev_chunks,
-                    blocks: &mut self.prev_blocks,
-                };
-                let (prefix_spaces, prefix) = prefix_printer.print();
-                let prefix_len = prefix_spaces + prefix.chars().count();
-                self.spaces = prefix_spaces;
-                self.prev_chunks.push(Chunk::Text(prefix));
-
-                // Compute suffix
-                let suffix_printer = NextLinePrinter {
-                    width: self.width,
-                    spaces: 0,
-                    prefix: "".to_string(),
-                    chunks: &mut self.next_chunks,
-                    blocks: &mut self.next_blocks,
-                };
-                let (suffix_spaces, suffix) = suffix_printer.print();
-                assert_eq!(suffix_spaces, 0);
-                let suffix_len = suffix.chars().count();
-                self.next_chunks.push(Chunk::Text(suffix));
-
-                // Choose a notation
-                let chosen_notation =
-                    choice.choose(indent, Some(prefix_len), Some(suffix_len), self.width);
-                self.seek(sought, chosen_notation, indent);
-            }
-        }
-    }
-
-    fn print(mut self) -> (BackwardPrinter<'n>, ForwardPrinter<'n>) {
-        let mut chunks = mem::take(&mut self.next_chunks);
-        self.prev_chunks.reverse();
-        chunks.append(&mut self.prev_chunks);
-        self.next_blocks.push(Block {
-            spaces: self.spaces,
-            chunks,
-        });
-        let bpp = BackwardPrinter {
-            width: self.width,
-            blocks: self.prev_blocks,
-        };
-        let fpp = ForwardPrinter {
-            width: self.width,
-            blocks: self.next_blocks,
-        };
-        (bpp, fpp)
-    }
-}
-
-impl<'n> Iterator for ForwardPrinter<'n> {
-    type Item = (usize, String);
-
-    fn next(&mut self) -> Option<(usize, String)> {
-        if let Some(mut block) = self.blocks.pop() {
-            let next_line_printer = NextLinePrinter {
-                width: self.width,
-                spaces: block.spaces,
-                prefix: "".to_string(),
-                chunks: &mut block.chunks,
-                blocks: &mut self.blocks,
-            };
-            Some(next_line_printer.print())
-        } else {
-            None
-        }
-    }
-}
-
-impl<'b, 'n> NextLinePrinter<'b, 'n> {
-    fn print(mut self) -> (usize, String) {
-        while let Some(chunk) = self.chunks.pop() {
-            match chunk {
-                Chunk::Text(text) => self.prefix += &text,
-                Chunk::Notation { indent, notation } => self.print_notation(indent, notation),
-            }
-        }
-        (self.spaces, self.prefix)
-    }
-
-    fn print_notation(&mut self, indent: Option<usize>, notation: &'n MeasuredNotation) {
-        use MeasuredNotation::*;
-        match notation {
-            Empty(_) => (),
-            Literal(_, text) => self.prefix += &text,
-            Newline(_) => self.newline(indent),
-            Indent(_, inner_indent, inner_notation) => {
-                let full_indent = indent.map(|i| i + inner_indent);
-                self.push_chunk(full_indent, inner_notation);
-            }
-            Flat(_, inner_notation) => {
-                self.push_chunk(None, inner_notation);
-            }
-            Concat(_, left, right, _) => {
-                self.push_chunk(indent, right);
-                self.push_chunk(indent, left);
-            }
-            Choice(_, choice) => {
-                if let Some(chosen_notation) = choice.sole_option(indent.is_none()) {
-                    self.push_chunk(indent, chosen_notation);
-                    return;
-                }
-                let suffix_printer = NextLinePrinter {
-                    width: self.width,
-                    spaces: 0,
-                    prefix: "".to_string(),
-                    chunks: &mut self.chunks,
-                    blocks: &mut self.blocks,
-                };
-                let (suffix_spaces, suffix) = suffix_printer.print();
-                assert_eq!(suffix_spaces, 0);
-                let prefix_len = self.spaces + self.prefix.chars().count();
-                let suffix_len = suffix.chars().count();
-                let chosen_notation =
-                    choice.choose(indent, Some(prefix_len), Some(suffix_len), self.width);
-                self.push_text(suffix);
-                self.push_chunk(indent, chosen_notation);
-            }
-        }
-    }
-
-    fn push_chunk(&mut self, indent: Option<usize>, notation: &'n MeasuredNotation) {
-        self.chunks.push(Chunk::Notation { indent, notation });
-    }
-
-    fn push_text(&mut self, text: String) {
-        self.chunks.push(Chunk::Text(text));
-    }
-
-    fn newline(&mut self, indent: Option<usize>) {
-        self.blocks.push(Block {
-            spaces: indent.unwrap(),
-            chunks: mem::take(&mut self.chunks),
-        });
-    }
-}
-
-impl<'n> Iterator for BackwardPrinter<'n> {
-    type Item = (usize, String);
-
-    fn next(&mut self) -> Option<(usize, String)> {
-        if let Some(mut block) = self.blocks.pop() {
-            let prev_line_printer = PrevLinePrinter {
-                width: self.width,
-                spaces: block.spaces,
-                suffix: "".to_string(),
-                chunks: &mut block.chunks,
-                blocks: &mut self.blocks,
-            };
-            Some(prev_line_printer.print())
-        } else {
-            None
-        }
-    }
-}
-
-impl<'b, 'n> PrevLinePrinter<'b, 'n> {
-    fn print(mut self) -> (usize, String) {
-        while let Some(chunk) = self.chunks.pop() {
-            match chunk {
-                Chunk::Text(text) => self.suffix = text + &self.suffix,
-                Chunk::Notation { indent, notation } => self.print_notation(indent, notation),
-            }
-        }
-        (self.spaces, self.suffix)
-    }
-
-    fn print_notation(&mut self, indent: Option<usize>, notation: &'n MeasuredNotation) {
-        use MeasuredNotation::*;
-        match notation {
-            Empty(_) => (),
-            Literal(_, text) => self.suffix = text.to_string() + &self.suffix,
-            Newline(_) => self.newline(indent),
-            Indent(_, inner_indent, inner_notation) => {
-                let full_indent = indent.map(|i| i + inner_indent);
-                self.push_chunk(full_indent, inner_notation);
-            }
-            Flat(_, inner_notation) => {
-                self.push_chunk(None, inner_notation);
-            }
-            Concat(_, left, right, _) => {
-                self.push_chunk(indent, left);
-                self.push_chunk(indent, right);
-            }
-            Choice(_, choice) => {
-                if let Some(chosen_notation) = choice.sole_option(indent.is_none()) {
-                    self.push_chunk(indent, chosen_notation);
-                    return;
-                }
-                let prefix_printer = PrevLinePrinter {
-                    width: self.width,
-                    spaces: self.spaces,
-                    suffix: "".to_string(),
-                    chunks: &mut self.chunks,
-                    blocks: &mut self.blocks,
-                };
-                let (prefix_spaces, prefix) = prefix_printer.print();
-                let prefix_len = prefix_spaces + prefix.chars().count();
-                let suffix_len = self.suffix.chars().count();
-                let chosen_notation =
-                    choice.choose(indent, Some(prefix_len), Some(suffix_len), self.width);
-                self.spaces = prefix_spaces;
-                self.push_text(prefix);
-                self.push_chunk(indent, chosen_notation);
-            }
-        }
-    }
-
-    fn push_chunk(&mut self, indent: Option<usize>, notation: &'n MeasuredNotation) {
-        self.chunks.push(Chunk::Notation { indent, notation });
-    }
-
-    fn push_text(&mut self, text: String) {
-        self.chunks.push(Chunk::Text(text));
-    }
-
-    fn newline(&mut self, indent: Option<usize>) {
-        self.blocks.push(Block {
-            spaces: self.spaces,
-            chunks: mem::take(&mut self.chunks),
-        });
-        self.spaces = indent.unwrap();
-    }
-}
-
-impl<'n> Block<'n> {
-    fn new(notation: &'n MeasuredNotation) -> Block<'n> {
-        Block {
+impl<'d, D: Doc> DownwardPrinter<'d, D> {
+    fn new(notation: NotationRef<'d, D>, width: usize) -> DownwardPrinter<'d, D> {
+        DownwardPrinter {
+            width,
+            next: vec![(Some(0), notation)],
             spaces: 0,
-            chunks: vec![Chunk::Notation {
-                indent: Some(0),
-                notation,
-            }],
+            at_end: false,
         }
+    }
+
+    fn print_first_line(&mut self) -> Option<(usize, String)> {
+        use NotationCase::*;
+
+        if self.at_end {
+            return None;
+        }
+
+        let mut string = String::new();
+        let mut prefix_len = self.spaces;
+        while let Some((indent, notation)) = self.next.pop() {
+            match notation.case() {
+                Empty => (),
+                Literal(lit) => {
+                    string.push_str(lit);
+                    prefix_len += lit.chars().count();
+                }
+                Newline => {
+                    let line = (self.spaces, string);
+                    self.spaces = indent.unwrap();
+                    return Some(line);
+                }
+                Indent(j, note) => self.next.push((indent.map(|i| i + j), note)),
+                Flat(note) => self.next.push((None, note)),
+                Concat(left, right) => {
+                    self.next.push((indent, right));
+                    self.next.push((indent, left));
+                }
+                Choice(opt1, opt2) => {
+                    let suffix_len = compute_suffix_len(&self.next);
+                    let choice = choose(self.width, indent, prefix_len, opt1, opt2, suffix_len);
+                    self.next.push((indent, choice));
+                }
+                Child(_, child_note) => self.next.push((indent, child_note)),
+            }
+        }
+
+        self.at_end = true;
+        Some((self.spaces, string))
+    }
+
+    #[allow(unused)]
+    fn display(&self) {
+        for (_, notation) in self.next.iter().rev() {
+            print!("{} ", notation);
+        }
+        println!();
+    }
+}
+
+impl<'d, D: Doc> UpwardPrinter<'d, D> {
+    fn new(notation: NotationRef<'d, D>, width: usize) -> UpwardPrinter<'d, D> {
+        UpwardPrinter {
+            width,
+            prev: vec![(Some(0), notation)],
+            next: vec![],
+            at_beginning: false,
+        }
+    }
+
+    fn print_last_line(&mut self) -> Option<(usize, String)> {
+        use NotationCase::*;
+
+        if self.at_beginning {
+            return None;
+        }
+
+        let spaces = self.seek_start_of_last_line(false);
+        let mut prefix_len = spaces.unwrap_or(0);
+        while let Some((indent, notation)) = self.next.pop() {
+            match notation.case() {
+                Literal(lit) => {
+                    prefix_len += lit.chars().count();
+                    self.prev.push((indent, notation));
+                }
+                Choice(opt1, opt2) => {
+                    let suffix_len = compute_suffix_len(&self.next);
+                    let choice = choose(self.width, indent, prefix_len, opt1, opt2, suffix_len);
+                    self.prev.push((indent, choice));
+                    self.seek_end();
+                    let spaces = self.seek_start_of_last_line(false);
+                    prefix_len = spaces.unwrap_or(0);
+                }
+                _ => unreachable!(),
+            }
+        }
+
+        let spaces;
+        if let Some(indent) = self.seek_start_of_last_line(true) {
+            self.at_beginning = false;
+            spaces = indent;
+        } else {
+            self.at_beginning = true;
+            spaces = 0;
+        }
+
+        let mut string = String::new();
+        while let Some((_, notation)) = self.next.pop() {
+            match notation.case() {
+                NotationCase::Literal(lit) => string.push_str(lit),
+                _ => panic!("display_line: expected only literals"),
+            }
+        }
+        Some((spaces, string))
+    }
+
+    fn seek_end(&mut self) {
+        while let Some((indent, notation)) = self.next.pop() {
+            self.prev.push((indent, notation));
+        }
+    }
+
+    /// Move the "printing cursor" from the very end to the start of the last line. If there is a
+    /// preceding newline, return the indentation. Otherwise -- i.e., if this is the last remaining
+    /// line -- return None.
+    // Maintains the invariant that `next` only ever contains `Literal` and `Choice` notations.
+    fn seek_start_of_last_line(&mut self, delete_newline: bool) -> Option<usize> {
+        use NotationCase::*;
+
+        assert!(self.next.is_empty());
+        while let Some((indent, notation)) = self.prev.pop() {
+            match notation.case() {
+                Empty => (),
+                Literal(_) => self.next.push((indent, notation)),
+                Newline => {
+                    if !delete_newline {
+                        self.prev.push((indent, notation));
+                    }
+                    return Some(indent.unwrap());
+                }
+                Indent(j, note) => self.prev.push((indent.map(|i| i + j), note)),
+                Flat(note) => self.prev.push((None, note)),
+                Concat(left, right) => {
+                    self.prev.push((indent, left));
+                    self.prev.push((indent, right));
+                }
+                Choice(_, _) => self.next.push((indent, notation)),
+                Child(_, note) => self.prev.push((indent, note)),
+            }
+        }
+        None
+    }
+
+    #[allow(unused)]
+    fn display(&self) {
+        for (_, notation) in &self.prev {
+            print!("{} ", notation);
+        }
+        print!(" / ");
+        for (_, notation) in self.next.iter().rev() {
+            print!("{} ", notation);
+        }
+        println!();
+    }
+}
+
+// Returns None if impossible.
+fn min_first_line_len<'d, D: Doc>(
+    notation: NotationRef<'d, D>,
+    flat: bool,
+) -> Option<FirstLineLen> {
+    use NotationCase::*;
+
+    match notation.case() {
+        Empty => Some(FirstLineLen {
+            len: 0,
+            has_newline: false,
+        }),
+        Literal(text) => {
+            let text_len = text.chars().count();
+            Some(FirstLineLen {
+                len: text_len,
+                has_newline: false,
+            })
+        }
+        Newline => {
+            if flat {
+                None
+            } else {
+                Some(FirstLineLen {
+                    len: 0,
+                    has_newline: true,
+                })
+            }
+        }
+        Flat(note) => min_first_line_len(note, true),
+        Indent(_, note) => min_first_line_len(note, flat),
+        // Note2 must always be smaller
+        Choice(note1, note2) => {
+            min_first_line_len(note2, flat).or_else(|| min_first_line_len(note1, flat))
+        }
+        Concat(note1, note2) => min_first_line_len(note1, flat).and_then(|len1| {
+            if len1.has_newline {
+                Some(len1)
+            } else {
+                min_first_line_len(note2, flat).and_then(|len2| {
+                    Some(FirstLineLen {
+                        len: len1.len + len2.len,
+                        has_newline: len2.has_newline,
+                    })
+                })
+            }
+        }),
+        Child(_, child_note) => min_first_line_len(child_note, flat),
+    }
+}
+
+fn compute_suffix_len<'d, D: Doc>(next_chunks: &[Chunk<'d, D>]) -> usize {
+    let mut len = 0;
+    for (indent, notation) in next_chunks.iter().rev() {
+        let flat = indent.is_none();
+        let note_len = min_first_line_len(*notation, flat).unwrap();
+        len += note_len.len;
+        if note_len.has_newline {
+            break;
+        }
+    }
+    len
+}
+
+fn choose<'d, D: Doc>(
+    width: usize,
+    indent: Option<usize>,
+    prefix_len: usize,
+    note1: NotationRef<'d, D>,
+    note2: NotationRef<'d, D>,
+    suffix_len: usize,
+) -> NotationRef<'d, D> {
+    // Print note1 if it fits, or if it's possible but note2 isn't.
+    let flat = indent.is_none();
+    if let Some(len1) = min_first_line_len(note1, flat) {
+        let fits = if len1.has_newline {
+            prefix_len + len1.len <= width
+        } else {
+            prefix_len + len1.len + suffix_len <= width
+        };
+        if fits {
+            note1
+        } else {
+            // (impossibility logic is here)
+            if min_first_line_len(note2, flat).is_none() {
+                note1
+            } else {
+                note2
+            }
+        }
+    } else {
+        note2
+    }
+}
+
+impl<'d, D: Doc> Iterator for DownwardPrinter<'d, D> {
+    type Item = (usize, String);
+
+    fn next(&mut self) -> Option<(usize, String)> {
+        self.print_first_line()
+    }
+}
+
+impl<'d, D: Doc> Iterator for UpwardPrinter<'d, D> {
+    type Item = (usize, String);
+
+    fn next(&mut self) -> Option<(usize, String)> {
+        self.print_last_line()
     }
 }

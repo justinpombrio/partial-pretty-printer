@@ -1,4 +1,4 @@
-use super::notation::Notation;
+use crate::notation::Notation;
 use std::fmt;
 
 pub trait Doc {
@@ -7,12 +7,12 @@ pub trait Doc {
 }
 
 #[derive(Debug)]
-pub(super) struct NotationRef<'d, D: Doc> {
-    pub(super) notation: &'d Notation,
-    pub(super) doc: &'d D,
+pub struct NotationRef<'d, D: Doc> {
+    pub notation: &'d Notation,
+    pub doc: &'d D,
 }
 
-pub(super) enum NotationCase<'d, D: Doc> {
+pub enum NotationCase<'d, D: Doc> {
     Empty,
     Literal(&'d str),
     Newline,

@@ -1,5 +1,5 @@
-mod if_flat {
-    use partial_pretty_printer::if_flat::{
+mod tests {
+    use partial_pretty_printer::{
         print_downward_for_testing, print_upward_for_testing, Doc, Notation,
     };
 

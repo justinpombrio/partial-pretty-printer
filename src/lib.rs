@@ -1,13 +1,8 @@
-mod measure;
+mod doc;
 mod notation;
 mod pretty_print;
-mod staircase;
-mod validate;
 
-pub mod if_flat;
-
+// TODO: have an api
+pub use doc::Doc;
 pub use notation::Notation;
-pub use pretty_print::{pretty_print, pretty_print_at, pretty_print_first, pretty_print_last};
-
-// TODO: Make these private
-pub use measure::{MeasuredNotation, Pos, Shapes};
+pub use pretty_print::{print_downward_for_testing, print_upward_for_testing};
