@@ -1,9 +1,10 @@
 mod if_flat {
     use partial_pretty_printer::if_flat::{
-        print_downward_for_testing, print_upward_for_testing, Notation,
+        print_downward_for_testing, print_upward_for_testing, Doc, Notation,
     };
 
     // TODO: Put these in a shared common file. Break this file into several.
+    // TODO: Use real tree-shaped Docs for testing
 
     // TESTS:
     // x Json
@@ -12,8 +13,41 @@ mod if_flat {
     // - let w/ list w/ an element that doesn't want to share a line
     // x iter w/ map & closure
 
+    #[derive(Debug, Clone)]
+    struct Tree {
+        notation: Notation,
+        children: Vec<Tree>,
+    }
+
+    impl Tree {
+        fn new_branch(notation: Notation, children: Vec<Tree>) -> Tree {
+            Tree { notation, children }
+        }
+
+        fn new_leaf(notation: Notation) -> Tree {
+            Tree {
+                notation,
+                children: vec![],
+            }
+        }
+    }
+
+    impl Doc for Tree {
+        fn notation(&self) -> &Notation {
+            &self.notation
+        }
+
+        fn child(&self, i: usize) -> &Tree {
+            &self.children[i]
+        }
+    }
+
     fn nl() -> Notation {
         Notation::Newline
+    }
+
+    fn child(i: usize) -> Notation {
+        Notation::Child(i)
     }
 
     fn lit(s: &str) -> Notation {
@@ -37,49 +71,55 @@ mod if_flat {
     }
 
     #[track_caller]
-    fn assert_pp(notation: &Notation, width: usize, expected_lines: &[&str]) {
-        let downward_lines = print_downward_for_testing(notation, width);
+    fn assert_pp<D: Doc>(doc: &D, width: usize, expected_lines: &[&str]) {
+        let downward_lines = print_downward_for_testing(doc, width);
         compare_lines("IN DOWNWARD PRINTING", &downward_lines, expected_lines);
-        let upward_lines = print_upward_for_testing(notation, width);
+        let upward_lines = print_upward_for_testing(doc, width);
         compare_lines("IN UPWARD PRINTING", &upward_lines, expected_lines);
     }
 
     #[test]
     fn basics() {
         // Empty
-        assert_pp(&Notation::Empty, 80, &[""]);
+        let notation = Notation::Empty;
+        assert_pp(&Tree::new_leaf(notation), 80, &[""]);
         // Literal
-        assert_pp(&lit("Hello world!"), 80, &["Hello world!"]);
+        let notation = lit("Hello world!");
+        assert_pp(&Tree::new_leaf(notation), 80, &["Hello world!"]);
         // Concat
-        assert_pp(&(lit("Hello") + lit(" world!")), 80, &["Hello world!"]);
+        let notation = lit("Hello") + lit(" world!");
+        assert_pp(&Tree::new_leaf(notation), 80, &["Hello world!"]);
         // Newline
-        assert_pp(&(lit("Hello") ^ lit("world!")), 80, &["Hello", "world!"]);
+        let notation = lit("Hello") ^ lit("world!");
+        assert_pp(&Tree::new_leaf(notation), 80, &["Hello", "world!"]);
         // Indent
-        assert_pp(
-            &(lit("Hello") + (2 >> lit("world!"))),
-            80,
-            &["Hello", "  world!"],
-        );
+        let notation = lit("Hello") + (2 >> lit("world!"));
+        assert_pp(&Tree::new_leaf(notation), 80, &["Hello", "  world!"]);
         // Choice
         let notation = lit("Hello world!") | lit("Hello") ^ lit("world!");
-        assert_pp(&notation, 12, &["Hello world!"]);
-        assert_pp(&notation, 11, &["Hello", "world!"]);
+        assert_pp(&Tree::new_leaf(notation.clone()), 12, &["Hello world!"]);
+        assert_pp(&Tree::new_leaf(notation), 11, &["Hello", "world!"]);
     }
 
     #[test]
     fn json() {
-        fn json_string(s: &str) -> Notation {
+        fn json_string(s: &str) -> Tree {
             // Using single quote instead of double quote to avoid inconvenient
             // escaping
-            lit("'") + lit(s) + lit("'")
+            Tree::new_leaf(lit("'") + lit(s) + lit("'"))
+        }
+
+        fn json_number(n: &str) -> Tree {
+            Tree::new_leaf(lit(n))
         }
 
         // TODO: allow newline?
-        fn json_entry(key: &str, value: Notation) -> Notation {
-            json_string(key) + lit(": ") + value
+        fn json_entry(key: &str, value: Tree) -> Tree {
+            let notation = lit("'") + lit(key) + lit("': ") + child(0);
+            Tree::new_branch(notation, vec![value])
         }
 
-        fn json_list(elements: Vec<Notation>) -> Notation {
+        fn json_list(elements: Vec<Tree>) -> Tree {
             let empty = lit("[]");
             let lone = |elem| lit("[") + elem + lit("]");
             let join =
@@ -89,10 +129,11 @@ mod if_flat {
                 let multi = lit("[") + (4 >> accum) ^ lit("]");
                 single | multi
             };
-            Notation::repeat(elements, empty, lone, join, surround)
+            let notation = Notation::repeat(elements.len(), empty, lone, join, surround);
+            Tree::new_branch(notation, elements)
         }
 
-        fn json_dict(entries: Vec<Notation>) -> Notation {
+        fn json_dict(entries: Vec<Tree>) -> Tree {
             let empty = lit("{}");
             let lone = |elem: Notation| {
                 let single = lit("{") + elem.clone() + lit("}");
@@ -101,11 +142,12 @@ mod if_flat {
             };
             let join = |elem: Notation, accum: Notation| elem + lit(",") + nl() + accum;
             let surround = |accum: Notation| lit("{") + (4 >> accum) ^ lit("}");
-            Notation::repeat(entries, empty, lone, join, surround)
+            let notation = Notation::repeat(entries.len(), empty, lone, join, surround);
+            Tree::new_branch(notation, entries)
         }
 
         let e1 = json_entry("Name", json_string("Alice"));
-        let e2 = json_entry("Age", lit("42"));
+        let e2 = json_entry("Age", json_number("42"));
         let favorites_list = json_list(vec![
             json_string("chocolate"),
             json_string("lemon"),
@@ -193,21 +235,26 @@ mod if_flat {
 
     #[test]
     fn flow() {
-        fn word_flow(words: &[&str]) -> Notation {
-            let elements = words.iter().map(|w| lit(w)).collect::<Vec<_>>();
+        fn word_flow(words: &[&str]) -> Tree {
+            let elements = words
+                .iter()
+                .map(|w| Tree::new_leaf(lit(w)))
+                .collect::<Vec<_>>();
             let empty = lit("");
             let lone = |elem| lit("    ") + elem;
             let soft_break = || lit(" ") | nl();
             let join = |elem: Notation, accum: Notation| elem + lit(",") + soft_break() + accum;
             let surround = |accum: Notation| lit("    ") + accum;
-            Notation::repeat(elements, empty, lone, join, surround)
+            let notation = Notation::repeat(elements.len(), empty, lone, join, surround);
+            Tree::new_branch(notation, elements)
         }
 
-        fn mark_paragraph(notation: Notation) -> Notation {
-            lit("¶") + notation + lit("□")
+        fn mark_paragraph(paragraph: Tree) -> Tree {
+            let notation = lit("¶") + child(0) + lit("□");
+            Tree::new_branch(notation, vec![paragraph])
         }
 
-        let n = mark_paragraph(word_flow(&[
+        let doc = mark_paragraph(word_flow(&[
             "Oh",
             "woe",
             "is",
@@ -219,13 +266,13 @@ mod if_flat {
         ]));
 
         assert_pp(
-            &n,
+            &doc,
             80,
             //0    5   10   15   20   25   30   35   40   45   50   55   60
             &["¶    Oh, woe, is, me, the, turbofish, remains, undefeated□"],
         );
         assert_pp(
-            &n,
+            &doc,
             46,
             //  0    5   10   15   20   25   30   35   40   45   50   55   60
             &[
@@ -234,7 +281,7 @@ mod if_flat {
             ],
         );
         assert_pp(
-            &n,
+            &doc,
             45,
             //  0    5   10   15   20   25   30   35   40   45   50   55   60
             &[
@@ -243,7 +290,7 @@ mod if_flat {
             ],
         );
         assert_pp(
-            &n,
+            &doc,
             20,
             //  0    5   10   15   20   25   30   35   40   45   50   55   60
             &[
@@ -253,7 +300,7 @@ mod if_flat {
             ],
         );
         assert_pp(
-            &n,
+            &doc,
             19,
             //  0    5   10   15   20   25   30   35   40   45   50   55   60
             &[
@@ -264,7 +311,7 @@ mod if_flat {
             ],
         );
         assert_pp(
-            &n,
+            &doc,
             18,
             //  0    5   10   15   20   25   30   35   40   45   50   55   60
             &[
@@ -276,7 +323,7 @@ mod if_flat {
             ],
         );
         assert_pp(
-            &n,
+            &doc,
             15,
             //  0    5   10   15   20   25   30   35   40   45   50   55   60
             &[
@@ -288,7 +335,7 @@ mod if_flat {
             ],
         );
         assert_pp(
-            &n,
+            &doc,
             0,
             //  0    5   10   15   20   25   30   35   40   45   50   55   60
             &[
@@ -307,7 +354,7 @@ mod if_flat {
     #[test]
     #[ignore]
     fn let_list() {
-        fn list(elements: Vec<Notation>) -> Notation {
+        fn list(elements: Vec<Tree>) -> Tree {
             let empty = lit("[]");
             let lone = |elem| lit("[") + elem + lit("]");
             let join =
@@ -317,36 +364,43 @@ mod if_flat {
                 let multi = lit("[") + (4 >> accum) ^ lit("]");
                 single | multi
             };
-            Notation::repeat(elements, empty, lone, join, surround)
+            let notation = Notation::repeat(elements.len(), empty, lone, join, surround);
+            Tree::new_branch(notation, elements)
         }
 
-        fn make_let(var: &str, defn: Notation) -> Notation {
-            lit("let ") + lit(var) + lit(" =") + (lit(" ") | nl()) + defn + lit(";")
+        fn make_let(var: &str, defn: Tree) -> Tree {
+            let notation =
+                lit("let ") + child(0) + lit(" =") + (lit(" ") | nl()) + child(1) + lit(";");
+            Tree::new_branch(notation, vec![Tree::new_leaf(lit(var)), defn])
         }
 
         // TODO: Add a way to get this to not share lines
-        fn phi() -> Notation {
-            lit("1 + sqrt(5)") ^ lit("-----------") ^ lit("     2")
+        fn phi() -> Tree {
+            Tree::new_leaf(lit("1 + sqrt(5)") ^ lit("-----------") ^ lit("     2"))
         }
 
-        let n = make_let(
+        fn num(n: &str) -> Tree {
+            Tree::new_leaf(lit(n))
+        }
+
+        let doc = make_let(
             "best_numbers",
             list(vec![
-                lit("1025"),
-                lit("-58"),
-                lit("33297"),
+                num("1025"),
+                num("-58"),
+                num("33297"),
                 phi(),
-                lit("1.618281828"),
-                lit("23"),
+                num("1.618281828"),
+                num("23"),
             ]),
         );
 
-        assert_pp(&n, 80, &[""]);
+        assert_pp(&doc, 80, &[""]);
     }
 
     #[test]
     fn iter_with_closure() {
-        fn method(obj: Notation, method: &str, arg: Notation) -> Notation {
+        fn method(obj: Tree, method: &str, arg: Tree) -> Tree {
             // foobaxxle.bar(arg)
             //
             // -- Disallowing this layout:
@@ -362,35 +416,42 @@ mod if_flat {
             //         arg
             //      )
 
-            let single = lit(".") + lit(method) + lit("(") + flat(arg.clone()) + lit(")");
-            let two_lines = lit(".") + lit(method) + lit("(") + flat(arg.clone()) + lit(")");
-            let multi = lit(".") + lit(method) + lit("(") + (4 >> arg) ^ lit(")");
-            obj + (single | (4 >> (two_lines | multi)))
+            let single = lit(".") + lit(method) + lit("(") + flat(child(1).clone()) + lit(")");
+            let two_lines = lit(".") + lit(method) + lit("(") + flat(child(1).clone()) + lit(")");
+            let multi = lit(".") + lit(method) + lit("(") + (4 >> child(1)) ^ lit(")");
+            let notation = child(0) + (single | (4 >> (two_lines | multi)));
+            Tree::new_branch(notation, vec![obj, arg])
         }
 
-        fn closure(var: &str, body: Notation) -> Notation {
-            let single = lit("|") + lit(var) + lit("| { ") + body.clone() + lit(" }");
-            let multi = lit("|") + lit(var) + lit("| {") + (4 >> body) ^ lit("}");
-            single | multi
+        fn closure(var: &str, body: Tree) -> Tree {
+            let single = lit("|") + lit(var) + lit("| { ") + child(0) + lit(" }");
+            let multi = lit("|") + lit(var) + lit("| {") + (4 >> child(0)) ^ lit("}");
+            let notation = single | multi;
+            Tree::new_branch(notation, vec![body])
         }
 
-        fn times(arg1: Notation, arg2: Notation) -> Notation {
-            arg1 + lit(" * ") + arg2
+        fn times(arg1: Tree, arg2: Tree) -> Tree {
+            let notation = child(0) + lit(" * ") + child(1);
+            Tree::new_branch(notation, vec![arg1, arg2])
         }
 
-        let n = lit("some_vec");
-        let n = method(n, "iter", lit(""));
-        let n = method(n, "map", closure("elem", times(lit("elem"), lit("elem"))));
-        let n = method(n, "collect", lit(""));
+        fn var(var: &str) -> Tree {
+            Tree::new_leaf(lit(var))
+        }
+
+        let doc = var("some_vec");
+        let doc = method(doc, "iter", var(""));
+        let doc = method(doc, "map", closure("elem", times(var("elem"), var("elem"))));
+        let doc = method(doc, "collect", var(""));
 
         assert_pp(
-            &n,
+            &doc,
             80,
             //0    5   10   15   20   25   30   35   40   45   50   55   60
             &["some_vec.iter().map(|elem| { elem * elem }).collect()"],
         );
         assert_pp(
-            &n,
+            &doc,
             50,
             //  0    5   10   15   20   25   30   35   40   45   50   55   60
             &[
@@ -400,7 +461,7 @@ mod if_flat {
             ],
         );
         assert_pp(
-            &n,
+            &doc,
             40,
             //  0    5   10   15   20   25   30   35   40   45   50   55   60
             &[
@@ -411,7 +472,7 @@ mod if_flat {
             ],
         );
         assert_pp(
-            &n,
+            &doc,
             30,
             //  0    5   10   15   20   25   30   35   40   45   50   55   60
             &[
@@ -423,11 +484,11 @@ mod if_flat {
             ],
         );
 
-        let n = lit("some_vec");
-        let n = method(n, "map", closure("elem", times(lit("elem"), lit("elem"))));
+        let doc = var("some_vec");
+        let doc = method(doc, "map", closure("elem", times(var("elem"), var("elem"))));
 
         assert_pp(
-            &n,
+            &doc,
             31,
             //  0    5   10   15   20   25   30   35   40   45   50   55   60
             &[
@@ -439,12 +500,12 @@ mod if_flat {
             ],
         );
 
-        let n = lit("some_vec");
-        let n = method(n, "call_the_map_method", closure("elem", lit("elem")));
-        let n = method(n, "call_the_map_method", closure("elem", lit("elem")));
+        let doc = var("some_vec");
+        let doc = method(doc, "call_the_map_method", closure("elem", var("elem")));
+        let doc = method(doc, "call_the_map_method", closure("elem", var("elem")));
 
         assert_pp(
-            &n,
+            &doc,
             41,
             //  0    5   10   15   20   25   30   35   40   45   50   55   60
             &[
@@ -456,7 +517,7 @@ mod if_flat {
         );
         // Likewise
         assert_pp(
-            &n,
+            &doc,
             35,
             //  0    5   10   15   20   25   30   35   40   45   50   55   60
             &[
@@ -500,22 +561,28 @@ mod if_flat {
         //     .method
         //         argument
 
-        fn method(obj: Notation, method: &str, arg: Notation) -> Notation {
-            let single = lit(".") + lit(method) + lit(" ") + arg.clone();
-            let two_lines = lit(".") + lit(method) + lit(" ") + arg.clone();
-            let multi = lit(".") + lit(method) + (4 >> arg);
-            obj + (single | (4 >> (two_lines | multi)))
+        fn method(obj: Tree, method: &str, arg: Tree) -> Tree {
+            let single = lit(".") + child(1) + lit(" ") + child(2);
+            let two_lines = lit(".") + child(1) + lit(" ") + child(2);
+            let multi = lit(".") + child(1) + (4 >> child(2));
+            let notation = child(0) + (single | (4 >> (two_lines | multi)));
+            Tree::new_branch(notation, vec![obj, var(method), arg])
         }
 
-        fn ruby_do(var: &str, body: Notation) -> Notation {
-            let single = lit("do |") + lit(var) + lit("| ") + flat(body.clone()) + lit(" end");
-            let multi = lit("do |") + lit(var) + lit("|") + (4 >> body.clone()) ^ lit("end");
-            single | multi
+        fn ruby_do(var_name: &str, body: Tree) -> Tree {
+            let single = lit("do |") + child(0) + lit("| ") + flat(child(1)) + lit(" end");
+            let multi = lit("do |") + child(0) + lit("|") + (4 >> child(1)) ^ lit("end");
+            let notation = single | multi;
+            Tree::new_branch(notation, vec![var(var_name), body])
         }
 
-        let n = method(lit("(1..5)"), "each", ruby_do("i", lit("puts i")));
+        fn var(var_name: &str) -> Tree {
+            Tree::new_leaf(lit(var_name))
+        }
+
+        let doc = method(var("(1..5)"), "each", ruby_do("i", var("puts i")));
         assert_pp(
-            &n,
+            &doc,
             30,
             //  0    5   10   15   20   25   30   35   40
             &[
@@ -524,7 +591,7 @@ mod if_flat {
             ],
         );
         assert_pp(
-            &n,
+            &doc,
             20,
             //  0    5   10   15   20   25   30   35   40
             &[
@@ -535,7 +602,7 @@ mod if_flat {
             ],
         );
         assert_pp(
-            &n,
+            &doc,
             15,
             //  0    5   10   15   20   25   30   35   40
             &[

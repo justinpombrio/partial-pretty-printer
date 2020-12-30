@@ -1,31 +1,59 @@
-use super::notation::Notation;
+use super::doc::{Doc, NotationCase, NotationRef};
 use std::iter::Iterator;
 
-type Chunk<'n> = (Option<usize>, &'n Notation);
+// Seeking:
+//
+// 1. Expand forward to sought Child, or Choice containing sought Child.
+//    If instead reach end of doc, panic (every hole must be present).
+// 2. Walk backwards to nearest Newline (or beginning of doc).
+// 3. Walk forwards to nearest Child or Choice, and resolve it. Go to step 1.
+//    If instead reach sought Child or Choice containing sought Child,
+//    continue seeking the inner child, or you're done seeking.
+//    If instead reach end of doc, panic (every hole must be present).
 
-struct DownwardPrinter<'n> {
+// Expansion: eliminate Flat, Indent, Concat, Empty.
+// Walk: assume that expansion has already happened.
+// Resolution: eliminate Choice, Child.
+
+type Chunk<'d, D> = (Option<usize>, NotationRef<'d, D>);
+
+#[derive(Clone, Debug)]
+pub struct FirstLineLen {
+    pub len: usize,
+    pub has_newline: bool,
+}
+
+struct DownwardPrinter<'d, D: Doc> {
     width: usize,
-    next: Vec<Chunk<'n>>,
+    next: Vec<Chunk<'d, D>>,
     spaces: usize,
     at_end: bool,
 }
 
-struct UpwardPrinter<'n> {
+struct UpwardPrinter<'d, D: Doc> {
     width: usize,
-    prev: Vec<Chunk<'n>>,
+    prev: Vec<Chunk<'d, D>>,
     // INVARIANT: only ever contains `Literal` and `Choice` notations.
-    next: Vec<Chunk<'n>>,
+    next: Vec<Chunk<'d, D>>,
     at_beginning: bool,
 }
 
-pub fn print_downward_for_testing(notation: &Notation, width: usize) -> Vec<String> {
+pub fn print_downward_for_testing<D: Doc>(doc: &D, width: usize) -> Vec<String> {
+    let notation = NotationRef {
+        doc,
+        notation: doc.notation(),
+    };
     let printer = DownwardPrinter::new(notation, width);
     printer
         .map(|(spaces, line)| format!("{:spaces$}{}", "", line, spaces = spaces))
         .collect()
 }
 
-pub fn print_upward_for_testing(notation: &Notation, width: usize) -> Vec<String> {
+pub fn print_upward_for_testing<D: Doc>(doc: &D, width: usize) -> Vec<String> {
+    let notation = NotationRef {
+        doc,
+        notation: doc.notation(),
+    };
     let printer = UpwardPrinter::new(notation, width);
     let mut lines = printer
         .map(|(spaces, line)| format!("{:spaces$}{}", "", line, spaces = spaces))
@@ -34,8 +62,8 @@ pub fn print_upward_for_testing(notation: &Notation, width: usize) -> Vec<String
     lines
 }
 
-impl<'n> DownwardPrinter<'n> {
-    fn new(notation: &'n Notation, width: usize) -> DownwardPrinter<'n> {
+impl<'d, D: Doc> DownwardPrinter<'d, D> {
+    fn new(notation: NotationRef<'d, D>, width: usize) -> DownwardPrinter<'d, D> {
         DownwardPrinter {
             width,
             next: vec![(Some(0), notation)],
@@ -45,7 +73,7 @@ impl<'n> DownwardPrinter<'n> {
     }
 
     fn print_first_line(&mut self) -> Option<(usize, String)> {
-        use Notation::*;
+        use NotationCase::*;
 
         if self.at_end {
             return None;
@@ -54,7 +82,7 @@ impl<'n> DownwardPrinter<'n> {
         let mut string = String::new();
         let mut prefix_len = self.spaces;
         while let Some((indent, notation)) = self.next.pop() {
-            match notation {
+            match notation.case() {
                 Empty => (),
                 Literal(lit) => {
                     string.push_str(lit);
@@ -76,6 +104,7 @@ impl<'n> DownwardPrinter<'n> {
                     let choice = choose(self.width, indent, prefix_len, opt1, opt2, suffix_len);
                     self.next.push((indent, choice));
                 }
+                Child(_, child_note) => self.next.push((indent, child_note)),
             }
         }
 
@@ -92,8 +121,8 @@ impl<'n> DownwardPrinter<'n> {
     }
 }
 
-impl<'n> UpwardPrinter<'n> {
-    fn new(notation: &'n Notation, width: usize) -> UpwardPrinter<'n> {
+impl<'d, D: Doc> UpwardPrinter<'d, D> {
+    fn new(notation: NotationRef<'d, D>, width: usize) -> UpwardPrinter<'d, D> {
         UpwardPrinter {
             width,
             prev: vec![(Some(0), notation)],
@@ -103,7 +132,7 @@ impl<'n> UpwardPrinter<'n> {
     }
 
     fn print_last_line(&mut self) -> Option<(usize, String)> {
-        use Notation::*;
+        use NotationCase::*;
 
         if self.at_beginning {
             return None;
@@ -112,7 +141,7 @@ impl<'n> UpwardPrinter<'n> {
         let spaces = self.seek_start_of_last_line(false);
         let mut prefix_len = spaces.unwrap_or(0);
         while let Some((indent, notation)) = self.next.pop() {
-            match notation {
+            match notation.case() {
                 Literal(lit) => {
                     prefix_len += lit.chars().count();
                     self.prev.push((indent, notation));
@@ -140,8 +169,8 @@ impl<'n> UpwardPrinter<'n> {
 
         let mut string = String::new();
         while let Some((_, notation)) = self.next.pop() {
-            match notation {
-                Notation::Literal(lit) => string.push_str(lit),
+            match notation.case() {
+                NotationCase::Literal(lit) => string.push_str(lit),
                 _ => panic!("display_line: expected only literals"),
             }
         }
@@ -159,11 +188,11 @@ impl<'n> UpwardPrinter<'n> {
     /// line -- return None.
     // Maintains the invariant that `next` only ever contains `Literal` and `Choice` notations.
     fn seek_start_of_last_line(&mut self, delete_newline: bool) -> Option<usize> {
-        use Notation::*;
+        use NotationCase::*;
 
         assert!(self.next.is_empty());
         while let Some((indent, notation)) = self.prev.pop() {
-            match notation {
+            match notation.case() {
                 Empty => (),
                 Literal(_) => self.next.push((indent, notation)),
                 Newline => {
@@ -179,6 +208,7 @@ impl<'n> UpwardPrinter<'n> {
                     self.prev.push((indent, right));
                 }
                 Choice(_, _) => self.next.push((indent, notation)),
+                Child(_, note) => self.prev.push((indent, note)),
             }
         }
         None
@@ -197,11 +227,62 @@ impl<'n> UpwardPrinter<'n> {
     }
 }
 
-fn compute_suffix_len<'n>(next_chunks: &[Chunk<'n>]) -> usize {
+// Returns None if impossible.
+fn min_first_line_len<'d, D: Doc>(
+    notation: NotationRef<'d, D>,
+    flat: bool,
+) -> Option<FirstLineLen> {
+    use NotationCase::*;
+
+    match notation.case() {
+        Empty => Some(FirstLineLen {
+            len: 0,
+            has_newline: false,
+        }),
+        Literal(text) => {
+            let text_len = text.chars().count();
+            Some(FirstLineLen {
+                len: text_len,
+                has_newline: false,
+            })
+        }
+        Newline => {
+            if flat {
+                None
+            } else {
+                Some(FirstLineLen {
+                    len: 0,
+                    has_newline: true,
+                })
+            }
+        }
+        Flat(note) => min_first_line_len(note, true),
+        Indent(_, note) => min_first_line_len(note, flat),
+        // Note2 must always be smaller
+        Choice(note1, note2) => {
+            min_first_line_len(note2, flat).or_else(|| min_first_line_len(note1, flat))
+        }
+        Concat(note1, note2) => min_first_line_len(note1, flat).and_then(|len1| {
+            if len1.has_newline {
+                Some(len1)
+            } else {
+                min_first_line_len(note2, flat).and_then(|len2| {
+                    Some(FirstLineLen {
+                        len: len1.len + len2.len,
+                        has_newline: len2.has_newline,
+                    })
+                })
+            }
+        }),
+        Child(_, child_note) => min_first_line_len(child_note, flat),
+    }
+}
+
+fn compute_suffix_len<'d, D: Doc>(next_chunks: &[Chunk<'d, D>]) -> usize {
     let mut len = 0;
     for (indent, notation) in next_chunks.iter().rev() {
         let flat = indent.is_none();
-        let note_len = notation.min_first_line_len(flat).unwrap();
+        let note_len = min_first_line_len(*notation, flat).unwrap();
         len += note_len.len;
         if note_len.has_newline {
             break;
@@ -210,17 +291,17 @@ fn compute_suffix_len<'n>(next_chunks: &[Chunk<'n>]) -> usize {
     len
 }
 
-pub(crate) fn choose<'n>(
+pub(super) fn choose<'d, D: Doc>(
     width: usize,
     indent: Option<usize>,
     prefix_len: usize,
-    note1: &'n Notation,
-    note2: &'n Notation,
+    note1: NotationRef<'d, D>,
+    note2: NotationRef<'d, D>,
     suffix_len: usize,
-) -> &'n Notation {
+) -> NotationRef<'d, D> {
     // Print note1 if it fits, or if it's possible but note2 isn't.
     let flat = indent.is_none();
-    if let Some(len1) = note1.min_first_line_len(flat) {
+    if let Some(len1) = min_first_line_len(note1, flat) {
         let fits = if len1.has_newline {
             prefix_len + len1.len <= width
         } else {
@@ -230,7 +311,7 @@ pub(crate) fn choose<'n>(
             note1
         } else {
             // (impossibility logic is here)
-            if note2.min_first_line_len(flat).is_none() {
+            if min_first_line_len(note2, flat).is_none() {
                 note1
             } else {
                 note2
@@ -241,7 +322,7 @@ pub(crate) fn choose<'n>(
     }
 }
 
-impl<'n> Iterator for DownwardPrinter<'n> {
+impl<'d, D: Doc> Iterator for DownwardPrinter<'d, D> {
     type Item = (usize, String);
 
     fn next(&mut self) -> Option<(usize, String)> {
@@ -249,7 +330,7 @@ impl<'n> Iterator for DownwardPrinter<'n> {
     }
 }
 
-impl<'n> Iterator for UpwardPrinter<'n> {
+impl<'d, D: Doc> Iterator for UpwardPrinter<'d, D> {
     type Item = (usize, String);
 
     fn next(&mut self) -> Option<(usize, String)> {

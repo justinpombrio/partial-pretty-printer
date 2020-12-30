@@ -24,25 +24,26 @@ pub enum Notation {
     /// Display the left notation if it fits on one line within the required width; otherwise the
     /// right.
     Choice(Box<Notation>, Box<Notation>),
-}
-
-#[derive(Clone, Debug)]
-pub struct FirstLineLen {
-    pub len: usize,
-    pub has_newline: bool,
+    /// Display the `i`th child of this node.
+    /// Must be used on a foresty node.
+    /// `i` must be less than the node's arity number.
+    Child(usize),
 }
 
 impl Notation {
     // TODO: build this into the notation. This can be exponentially large!
     pub fn repeat(
-        elements: Vec<Notation>,
+        num_elements: usize,
         empty: Notation,
         lone: impl Fn(Notation) -> Notation,
         join: impl Fn(Notation, Notation) -> Notation,
         surround: impl Fn(Notation) -> Notation,
     ) -> Notation {
+        let elements = (0..num_elements)
+            .map(|i| Notation::Child(i))
+            .collect::<Vec<_>>();
         let mut iter = elements.into_iter();
-        match iter.len() {
+        match num_elements {
             0 => empty,
             1 => lone(iter.next().unwrap()),
             _ => {
@@ -53,53 +54,6 @@ impl Notation {
                 }
                 surround(accumulator)
             }
-        }
-    }
-
-    // Returns None if impossible.
-    pub(super) fn min_first_line_len(&self, flat: bool) -> Option<FirstLineLen> {
-        use Notation::*;
-
-        match self {
-            Empty => Some(FirstLineLen {
-                len: 0,
-                has_newline: false,
-            }),
-            Literal(text) => {
-                let text_len = text.chars().count();
-                Some(FirstLineLen {
-                    len: text_len,
-                    has_newline: false,
-                })
-            }
-            Newline => {
-                if flat {
-                    None
-                } else {
-                    Some(FirstLineLen {
-                        len: 0,
-                        has_newline: true,
-                    })
-                }
-            }
-            Flat(note) => note.min_first_line_len(true),
-            Indent(_, note) => note.min_first_line_len(flat),
-            // Note2 must always be smaller
-            Choice(note1, note2) => note2
-                .min_first_line_len(flat)
-                .or_else(|| note1.min_first_line_len(flat)),
-            Concat(note1, note2) => note1.min_first_line_len(flat).and_then(|len1| {
-                if len1.has_newline {
-                    Some(len1)
-                } else {
-                    note2.min_first_line_len(flat).and_then(|len2| {
-                        Some(FirstLineLen {
-                            len: len1.len + len2.len,
-                            has_newline: len2.has_newline,
-                        })
-                    })
-                }
-            }),
         }
     }
 }
@@ -116,6 +70,7 @@ impl fmt::Display for Notation {
             Indent(i, note) => write!(f, "⇒{}({})", i, note),
             Concat(left, right) => write!(f, "({} + {})", left, right),
             Choice(opt1, opt2) => write!(f, "({} | {})", opt1, opt2),
+            Child(i) => write!(f, "${}", i),
         }
     }
 }
