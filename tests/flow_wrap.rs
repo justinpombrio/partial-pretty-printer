@@ -1,19 +1,20 @@
 mod common;
 
-use common::{assert_pp, child, lit, nl, Tree};
-use partial_pretty_printer::Notation;
+use common::{assert_pp, child, left, lit, nl, repeat, right, surrounded, Tree};
+use partial_pretty_printer::RepeatInner;
 
 fn word_flow(words: &[&str]) -> Tree {
     let elements = words
         .iter()
         .map(|w| Tree::new_leaf(lit(w)))
         .collect::<Vec<_>>();
-    let empty = lit("");
-    let lone = |elem| lit("    ") + elem;
     let soft_break = || lit(" ") | nl();
-    let join = |elem: Notation, accum: Notation| elem + lit(",") + soft_break() + accum;
-    let surround = |accum: Notation| lit("    ") + accum;
-    let notation = Notation::repeat(elements.len(), empty, lone, join, surround);
+    let notation = repeat(RepeatInner {
+        empty: lit(""),
+        lone: lit("    ") + child(0),
+        join: left() + lit(",") + soft_break() + right(),
+        surround: lit("    ") + surrounded(),
+    });
     Tree::new_branch(notation, elements)
 }
 

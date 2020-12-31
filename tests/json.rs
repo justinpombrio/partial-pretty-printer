@@ -1,7 +1,7 @@
 mod common;
 
-use common::{assert_pp, child, flat, lit, nl, Tree};
-use partial_pretty_printer::Notation;
+use common::{assert_pp, child, flat, left, lit, nl, repeat, right, surrounded, Tree};
+use partial_pretty_printer::RepeatInner;
 
 fn json_string(s: &str) -> Tree {
     // Using single quote instead of double quote to avoid inconvenient
@@ -19,28 +19,30 @@ fn json_entry(key: &str, value: Tree) -> Tree {
 }
 
 fn json_list(elements: Vec<Tree>) -> Tree {
-    let empty = lit("[]");
-    let lone = |elem| lit("[") + elem + lit("]");
-    let join = |elem: Notation, accum: Notation| elem + lit(",") + (lit(" ") | nl()) + accum;
-    let surround = |accum: Notation| {
-        let single = lit("[") + flat(accum.clone()) + lit("]");
-        let multi = lit("[") + (4 >> accum) ^ lit("]");
-        single | multi
-    };
-    let notation = Notation::repeat(elements.len(), empty, lone, join, surround);
+    let notation = repeat(RepeatInner {
+        empty: lit("[]"),
+        lone: lit("[") + child(0) + lit("]"),
+        join: "(" + left() + lit(",") + (lit(" ") | nl()) + right() + ")",
+        surround: {
+            let single = lit("[") + flat(surrounded()) + lit("]");
+            let multi = lit("[") + (4 >> surrounded()) ^ lit("]");
+            single | multi
+        },
+    });
     Tree::new_branch(notation, elements)
 }
 
 fn json_dict(entries: Vec<Tree>) -> Tree {
-    let empty = lit("{}");
-    let lone = |elem: Notation| {
-        let single = lit("{") + elem.clone() + lit("}");
-        let multi = lit("{") + (4 >> elem) ^ lit("}");
-        single | multi
-    };
-    let join = |elem: Notation, accum: Notation| elem + lit(",") + nl() + accum;
-    let surround = |accum: Notation| lit("{") + (4 >> accum) ^ lit("}");
-    let notation = Notation::repeat(entries.len(), empty, lone, join, surround);
+    let notation = repeat(RepeatInner {
+        empty: lit("{}"),
+        lone: {
+            let single = lit("{") + left() + lit("}");
+            let multi = lit("{") + (4 >> left()) ^ lit("}");
+            single | multi
+        },
+        join: left() + lit(",") + nl() + right(),
+        surround: lit("{") + (4 >> surrounded()) ^ lit("}"),
+    });
     Tree::new_branch(notation, entries)
 }
 

@@ -1,6 +1,8 @@
 #![allow(unused)]
 
-use partial_pretty_printer::{print_downward_for_testing, print_upward_for_testing, Doc, Notation};
+use partial_pretty_printer::{
+    print_downward_for_testing, print_upward_for_testing, Doc, Notation, RepeatInner,
+};
 
 #[derive(Debug, Clone)]
 pub struct Tree {
@@ -29,6 +31,10 @@ impl Doc for Tree {
     fn child(&self, i: usize) -> &Tree {
         &self.children[i]
     }
+
+    fn num_children(&self) -> usize {
+        self.children.len()
+    }
 }
 
 pub fn nl() -> Notation {
@@ -45,6 +51,22 @@ pub fn lit(s: &str) -> Notation {
 
 pub fn flat(n: Notation) -> Notation {
     Notation::Flat(Box::new(n))
+}
+
+pub fn left() -> Notation {
+    Notation::Left
+}
+
+pub fn right() -> Notation {
+    Notation::Right
+}
+
+pub fn surrounded() -> Notation {
+    Notation::Surrounded
+}
+
+pub fn repeat(repeat: RepeatInner) -> Notation {
+    Notation::Repeat(Box::new(repeat))
 }
 
 fn compare_lines(message: &str, actual: &[String], expected: &[&str]) {

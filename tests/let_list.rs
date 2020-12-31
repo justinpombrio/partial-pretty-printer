@@ -1,21 +1,22 @@
 mod common;
 
-use common::{assert_pp, child, lit, nl, Tree};
-use partial_pretty_printer::Notation;
+use common::{assert_pp, child, left, lit, nl, repeat, right, surrounded, Tree};
+use partial_pretty_printer::RepeatInner;
 
 #[test]
 #[ignore]
 fn let_list() {
     fn list(elements: Vec<Tree>) -> Tree {
-        let empty = lit("[]");
-        let lone = |elem| lit("[") + elem + lit("]");
-        let join = |elem: Notation, accum: Notation| elem + lit(",") + (lit(" ") | nl()) + accum;
-        let surround = |accum: Notation| {
-            let single = lit("[") + accum.clone() + lit("]");
-            let multi = lit("[") + (4 >> accum) ^ lit("]");
-            single | multi
-        };
-        let notation = Notation::repeat(elements.len(), empty, lone, join, surround);
+        let notation = repeat(RepeatInner {
+            empty: lit("[]"),
+            lone: lit("[") + child(0) + lit("]"),
+            join: left() + lit(",") + (lit(" ") | nl()) + right(),
+            surround: {
+                let single = lit("[") + surrounded() + lit("]");
+                let multi = lit("[") + (4 >> surrounded()) ^ lit("]");
+                single | multi
+            },
+        });
         Tree::new_branch(notation, elements)
     }
 

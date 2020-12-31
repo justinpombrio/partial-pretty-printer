@@ -28,34 +28,34 @@ pub enum Notation {
     /// Must be used on a foresty node.
     /// `i` must be less than the node's arity number.
     Child(usize),
+    /// Determines what to display based on the arity of this node.
+    /// Used for syntactic constructs that have extendable arity.
+    Repeat(Box<RepeatInner>),
+    /// Used in [`Repeat`](Repeat) to refer to the accumulated Notation
+    /// in `join`.
+    Left,
+    /// Used in [`Repeat`](Repeat) to refer to the next child in `join`.
+    Right,
+    /// Used in [`Repeat`](Repeat) to refer to the Notation inside of
+    /// `surround`.
+    Surrounded,
 }
 
-impl Notation {
-    // TODO: build this into the notation. This can be exponentially large!
-    pub fn repeat(
-        num_elements: usize,
-        empty: Notation,
-        lone: impl Fn(Notation) -> Notation,
-        join: impl Fn(Notation, Notation) -> Notation,
-        surround: impl Fn(Notation) -> Notation,
-    ) -> Notation {
-        let elements = (0..num_elements)
-            .map(|i| Notation::Child(i))
-            .collect::<Vec<_>>();
-        let mut iter = elements.into_iter();
-        match num_elements {
-            0 => empty,
-            1 => lone(iter.next().unwrap()),
-            _ => {
-                let mut iter = iter.rev();
-                let mut accumulator = iter.next().unwrap();
-                for elem in iter {
-                    accumulator = join(elem, accumulator);
-                }
-                surround(accumulator)
-            }
-        }
-    }
+/// Describes how to display the extra children of a syntactic
+/// construct with extendable arity.
+#[derive(Clone, Debug)]
+pub struct RepeatInner {
+    /// If the sequence is empty, use this notation.
+    pub empty: Notation,
+    /// If the sequence has length one, use this notation.
+    pub lone: Notation,
+    /// If the sequence has length 2 or more, (left-)fold elements together with
+    /// this notation. [`Left`](Left) holds the notation so far, while
+    /// [`Right`](Right) holds the next child to be folded.
+    pub join: Notation,
+    /// If the sequence has length 2 or more, surround the folded notation with
+    /// this notation. [`Surrounded`](Surrounded) holds the folded notation.
+    pub surround: Notation,
 }
 
 impl fmt::Display for Notation {
@@ -71,6 +71,14 @@ impl fmt::Display for Notation {
             Concat(left, right) => write!(f, "({} + {})", left, right),
             Choice(opt1, opt2) => write!(f, "({} | {})", opt1, opt2),
             Child(i) => write!(f, "${}", i),
+            Repeat(repeat) => write!(
+                f,
+                "Repeat{{empty={} lone={} join={} surround={}",
+                repeat.empty, repeat.lone, repeat.join, repeat.surround
+            ),
+            Left => write!(f, "$Left"),
+            Right => write!(f, "$Right"),
+            Surrounded => write!(f, "$Surrounded"),
         }
     }
 }

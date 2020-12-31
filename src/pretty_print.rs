@@ -39,10 +39,7 @@ struct UpwardPrinter<'d, D: Doc> {
 }
 
 pub fn print_downward_for_testing<D: Doc>(doc: &D, width: usize) -> Vec<String> {
-    let notation = NotationRef {
-        doc,
-        notation: doc.notation(),
-    };
+    let notation = NotationRef::new(doc);
     let printer = DownwardPrinter::new(notation, width);
     printer
         .map(|(spaces, line)| format!("{:spaces$}{}", "", line, spaces = spaces))
@@ -50,10 +47,7 @@ pub fn print_downward_for_testing<D: Doc>(doc: &D, width: usize) -> Vec<String> 
 }
 
 pub fn print_upward_for_testing<D: Doc>(doc: &D, width: usize) -> Vec<String> {
-    let notation = NotationRef {
-        doc,
-        notation: doc.notation(),
-    };
+    let notation = NotationRef::new(doc);
     let printer = UpwardPrinter::new(notation, width);
     let mut lines = printer
         .map(|(spaces, line)| format!("{:spaces$}{}", "", line, spaces = spaces))
