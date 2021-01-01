@@ -1,6 +1,6 @@
 mod common;
 
-use common::{assert_pp, child, left, lit, nl, repeat, right, surrounded, Tree};
+use common::{assert_pp, assert_pp_seek, child, left, lit, nl, repeat, right, surrounded, Tree};
 use partial_pretty_printer::RepeatInner;
 
 fn word_flow(words: &[&str]) -> Tree {
@@ -119,6 +119,96 @@ fn flow_wrap() {
             "the,",
             "turbofish,",
             "remains,",
+            "undefeated□",
+        ],
+    );
+
+    // Explicit seeking tests
+    assert_pp_seek(
+        &doc,
+        19,
+        &[0, 2],
+        &[],
+        &[
+            // force rustfmt
+            "¶    Oh, woe, is,",
+            "me, the, turbofish,",
+            "remains,",
+            "undefeated□",
+        ],
+    );
+    assert_pp_seek(
+        &doc,
+        19,
+        &[0, 3],
+        &[
+            // force rustfmt
+            "¶    Oh, woe, is,",
+        ],
+        &[
+            // force rustfmt
+            "me, the, turbofish,",
+            "remains,",
+            "undefeated□",
+        ],
+    );
+    assert_pp_seek(
+        &doc,
+        19,
+        &[0, 4],
+        &[
+            // force rustfmt
+            "¶    Oh, woe, is,",
+        ],
+        &[
+            // force rustfmt
+            "me, the, turbofish,",
+            "remains,",
+            "undefeated□",
+        ],
+    );
+    assert_pp_seek(
+        &doc,
+        19,
+        &[0, 5],
+        &[
+            // force rustfmt
+            "¶    Oh, woe, is,",
+        ],
+        &[
+            // force rustfmt
+            "me, the, turbofish,",
+            "remains,",
+            "undefeated□",
+        ],
+    );
+    assert_pp_seek(
+        &doc,
+        19,
+        &[0, 6],
+        &[
+            // force rustfmt
+            "¶    Oh, woe, is,",
+            "me, the, turbofish,",
+        ],
+        &[
+            // force rustfmt
+            "remains,",
+            "undefeated□",
+        ],
+    );
+    assert_pp_seek(
+        &doc,
+        19,
+        &[0, 7],
+        &[
+            // force rustfmt
+            "¶    Oh, woe, is,",
+            "me, the, turbofish,",
+            "remains,",
+        ],
+        &[
+            // force rustfmt
             "undefeated□",
         ],
     );

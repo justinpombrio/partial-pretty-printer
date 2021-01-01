@@ -2,6 +2,8 @@ use crate::notation::{Notation, RepeatInner};
 use std::fmt;
 
 pub trait Doc {
+    type Id: Eq + Copy;
+    fn id(&self) -> Self::Id;
     fn num_children(&self) -> usize;
     fn child(&self, index: usize) -> &Self;
     fn notation(&self) -> &Notation;
@@ -79,6 +81,10 @@ impl<'d, D: Doc> NotationRef<'d, D> {
 
     pub fn new(doc: &'d D) -> NotationRef<'d, D> {
         NotationRef::from_parts(doc, doc.notation(), RepeatPos::None)
+    }
+
+    pub fn doc_id(&self) -> D::Id {
+        self.doc.id()
     }
 
     fn from_parts(

@@ -1,26 +1,18 @@
 use crate::doc::{Doc, NotationCase, NotationRef};
 use std::iter::Iterator;
 
-// Seeking:
-//
-// 1. Expand forward to sought Child, or Choice containing sought Child.
-//    If instead reach end of doc, panic (every hole must be present).
-// 2. Walk backwards to nearest Newline (or beginning of doc).
-// 3. Walk forwards to nearest Child or Choice, and resolve it. Go to step 1.
-//    If instead reach sought Child or Choice containing sought Child,
-//    continue seeking the inner child, or you're done seeking.
-//    If instead reach end of doc, panic (every hole must be present).
-
-// Expansion: eliminate Flat, Indent, Concat, Empty.
-// Walk: assume that expansion has already happened.
-// Resolution: eliminate Choice, Child.
-
 type Chunk<'d, D> = (Option<usize>, NotationRef<'d, D>);
 
 #[derive(Clone, Debug)]
 pub struct FirstLineLen {
     pub len: usize,
     pub has_newline: bool,
+}
+
+struct Seeker<'d, D: Doc> {
+    width: usize,
+    prev: Vec<Chunk<'d, D>>,
+    next: Vec<Chunk<'d, D>>,
 }
 
 struct DownwardPrinter<'d, D: Doc> {
@@ -36,6 +28,19 @@ struct UpwardPrinter<'d, D: Doc> {
     // INVARIANT: only ever contains `Literal` and `Choice` notations.
     next: Vec<Chunk<'d, D>>,
     at_beginning: bool,
+}
+
+pub fn pretty_print<'d, D: Doc>(
+    doc: &'d D,
+    width: usize,
+    path: impl IntoIterator<Item = usize>,
+) -> (
+    impl Iterator<Item = (usize, String)> + 'd,
+    impl Iterator<Item = (usize, String)> + 'd,
+) {
+    let notation = NotationRef::new(doc);
+    let seeker = Seeker::new(notation, width);
+    seeker.seek(path)
 }
 
 pub fn print_downward_for_testing<D: Doc>(doc: &D, width: usize) -> Vec<String> {
@@ -54,6 +59,156 @@ pub fn print_upward_for_testing<D: Doc>(doc: &D, width: usize) -> Vec<String> {
         .collect::<Vec<_>>();
     lines.reverse();
     lines
+}
+
+impl<'d, D: Doc> Seeker<'d, D> {
+    fn new(notation: NotationRef<'d, D>, width: usize) -> Seeker<'d, D> {
+        Seeker {
+            width,
+            prev: vec![],
+            next: vec![(Some(0), notation)],
+        }
+    }
+
+    fn seek(
+        mut self,
+        path: impl IntoIterator<Item = usize>,
+    ) -> (UpwardPrinter<'d, D>, DownwardPrinter<'d, D>) {
+        use NotationCase::*;
+
+        let path = path.into_iter().collect::<Vec<_>>();
+        println!("\n!!!!! SEEK {:?}", path);
+
+        let mut path = path.into_iter();
+        while let Some(child_index) = path.next() {
+            let parent_doc_id = self.next.last().unwrap().1.doc_id();
+            'find_child: loop {
+                self.display();
+
+                // 1. Expand forward to the nearest `Choice` or `Child` belonging to `parent_doc`.
+                //    (NOTE: more precise would be looking for Child(child_index) or a Choice
+                //     containing it, but you can't tell right now what children a choice might
+                //     contain.)
+                while let Some((indent, notation)) = self.next.pop() {
+                    match notation.case() {
+                        Empty => (),
+                        Literal(_) => self.prev.push((indent, notation)),
+                        Newline => self.prev.push((indent, notation)),
+                        Indent(j, note) => self.next.push((indent.map(|i| i + j), note)),
+                        Flat(note) => self.next.push((None, note)),
+                        Concat(left, right) => {
+                            self.next.push((indent, right));
+                            self.next.push((indent, left));
+                        }
+                        Choice(_, _) if notation.doc_id() == parent_doc_id => {
+                            self.next.push((indent, notation));
+                            break;
+                        }
+                        Choice(_, _) => self.prev.push((indent, notation)),
+                        Child(i, _) if notation.doc_id() == parent_doc_id && i == child_index => {
+                            self.next.push((indent, notation));
+                            break;
+                        }
+                        Child(_, _) => self.prev.push((indent, notation)),
+                    }
+                }
+
+                // 2. Walk backward to the nearest Newline (or beginning of the doc).
+                let mut prefix_len = 0;
+                while let Some((indent, notation)) = self.prev.pop() {
+                    match notation.case() {
+                        Empty | Indent(_, _) | Flat(_) | Concat(_, _) => unreachable!(),
+                        Literal(_) | Choice(_, _) | Child(_, _) => {
+                            self.next.push((indent, notation))
+                        }
+                        Newline => {
+                            prefix_len = indent.unwrap();
+                            self.prev.push((indent, notation));
+                            break;
+                        }
+                    }
+                }
+
+                // 3. Walk forward to the nearest Child or Choice, and resolve it. Go back to 1.
+                //    If you hit `Child(i)` belonging to `parent_doc`, success.
+                //    If you hit end of doc, panic (every child must be present).
+                while let Some((indent, notation)) = self.next.pop() {
+                    match notation.case() {
+                        Empty | Indent(_, _) | Flat(_) | Concat(_, _) | Newline => unreachable!(),
+                        Literal(lit) => {
+                            prefix_len += lit.chars().count();
+                            self.prev.push((indent, notation))
+                        }
+                        Child(i, child)
+                            if notation.doc_id() == parent_doc_id && i == child_index =>
+                        {
+                            self.next.push((indent, child));
+                            break 'find_child;
+                        }
+                        Child(_, child) => {
+                            self.next.push((indent, child));
+                            continue 'find_child;
+                        }
+                        Choice(opt1, opt2) => {
+                            let suffix_len = compute_suffix_len(&self.next);
+                            let choice =
+                                choose(self.width, indent, prefix_len, opt1, opt2, suffix_len);
+                            self.next.push((indent, choice));
+                            continue 'find_child;
+                        }
+                    }
+                }
+
+                panic!("Missing child ({})", child_index);
+            }
+        }
+
+        // Walk backward to the nearest Newline (or beginning of the doc).
+        self.display();
+        let mut spaces = 0;
+        let mut at_beginning = true;
+        while let Some((indent, notation)) = self.prev.pop() {
+            match notation.case() {
+                Empty | Indent(_, _) | Flat(_) | Concat(_, _) | Choice(_, _) | Child(_, _) => {
+                    println!("boom!");
+                    unreachable!()
+                }
+                Literal(_) => self.next.push((indent, notation)),
+                Newline => {
+                    // drop the newline, but take note of it by setting at_beginning=false.
+                    at_beginning = false;
+                    spaces = indent.unwrap();
+                    break;
+                }
+            }
+        }
+
+        let upward_printer = UpwardPrinter {
+            width: self.width,
+            prev: self.prev,
+            next: vec![],
+            at_beginning,
+        };
+        let downward_printer = DownwardPrinter {
+            width: self.width,
+            next: self.next,
+            spaces,
+            at_end: false,
+        };
+        (upward_printer, downward_printer)
+    }
+
+    #[allow(unused)]
+    fn display(&self) {
+        for (_, notation) in &self.prev {
+            print!("{} ", notation);
+        }
+        print!(" / ");
+        for (_, notation) in self.next.iter().rev() {
+            print!("{} ", notation);
+        }
+        println!();
+    }
 }
 
 impl<'d, D: Doc> DownwardPrinter<'d, D> {

@@ -1,6 +1,8 @@
 mod common;
 
-use common::{assert_pp, child, flat, left, lit, nl, repeat, right, surrounded, Tree};
+use common::{
+    assert_pp, assert_pp_seek, child, flat, left, lit, nl, repeat, right, surrounded, Tree,
+};
 use partial_pretty_printer::RepeatInner;
 
 fn json_string(s: &str) -> Tree {
@@ -22,7 +24,7 @@ fn json_list(elements: Vec<Tree>) -> Tree {
     let notation = repeat(RepeatInner {
         empty: lit("[]"),
         lone: lit("[") + child(0) + lit("]"),
-        join: "(" + left() + lit(",") + (lit(" ") | nl()) + right() + ")",
+        join: left() + lit(",") + (lit(" ") | nl()) + right(),
         surround: {
             let single = lit("[") + flat(surrounded()) + lit("]");
             let multi = lit("[") + (4 >> surrounded()) ^ lit("]");
@@ -72,8 +74,82 @@ fn dictionary() -> Tree {
 
 #[test]
 fn json_small_dict() {
+    let doc = json_dict(vec![entry_1(), entry_2()]);
+    assert_pp_seek(
+        &doc,
+        80,
+        &[],
+        &[],
+        &[
+            // force rustfmt
+            "{",
+            "    'Name': 'Alice',",
+            "    'Age': 42",
+            "}",
+        ],
+    );
+    assert_pp_seek(
+        &doc,
+        80,
+        &[0],
+        &[
+            // force rustfmt
+            "{",
+        ],
+        &[
+            // force rustfmt
+            "    'Name': 'Alice',",
+            "    'Age': 42",
+            "}",
+        ],
+    );
+    assert_pp_seek(
+        &doc,
+        80,
+        &[0, 0],
+        &[
+            // force rustfmt
+            "{",
+        ],
+        &[
+            // force rustfmt
+            "    'Name': 'Alice',",
+            "    'Age': 42",
+            "}",
+        ],
+    );
+    assert_pp_seek(
+        &doc,
+        80,
+        &[1],
+        &[
+            // force rustfmt
+            "{",
+            "    'Name': 'Alice',",
+        ],
+        &[
+            // force rustfmt
+            "    'Age': 42",
+            "}",
+        ],
+    );
+    assert_pp_seek(
+        &doc,
+        80,
+        &[1, 0],
+        &[
+            // force rustfmt
+            "{",
+            "    'Name': 'Alice',",
+        ],
+        &[
+            // force rustfmt
+            "    'Age': 42",
+            "}",
+        ],
+    );
     assert_pp(
-        &json_dict(vec![entry_1(), entry_2()]),
+        &doc,
         80,
         &[
             // force rustfmt
@@ -83,6 +159,13 @@ fn json_small_dict() {
             "}",
         ],
     );
+}
+
+#[test]
+#[should_panic(expected = "Missing child (1)")]
+fn json_invalid_path() {
+    let doc = json_dict(vec![entry_1(), entry_2()]);
+    assert_pp_seek(&doc, 80, &[0, 1], &[], &[]);
 }
 
 #[test]
