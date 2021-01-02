@@ -1,12 +1,16 @@
 use crate::notation::{Notation, RepeatInner};
 use std::fmt;
 
+/// A "document" that supports the necessary methods to be pretty-printed.
 pub trait Doc {
     type Id: Eq + Copy;
+    type TextRef: AsRef<str>;
+
     fn id(&self) -> Self::Id;
     fn num_children(&self) -> usize;
     fn child(&self, index: usize) -> &Self;
     fn notation(&self) -> &Notation;
+    fn text(&self) -> Option<Self::TextRef>;
 }
 
 #[derive(Debug)]
@@ -28,6 +32,7 @@ pub enum NotationCase<'d, D: Doc> {
     Empty,
     Literal(&'d str),
     Newline,
+    Text(D::TextRef),
     Flat(NotationRef<'d, D>),
     Indent(usize, NotationRef<'d, D>),
     Concat(NotationRef<'d, D>, NotationRef<'d, D>),
@@ -52,6 +57,7 @@ impl<'d, D: Doc> NotationRef<'d, D> {
             Notation::Empty => NotationCase::Empty,
             Notation::Literal(lit) => NotationCase::Literal(lit),
             Notation::Newline => NotationCase::Newline,
+            Notation::Text => NotationCase::Text(self.doc.text().unwrap()),
             Notation::Flat(note) => NotationCase::Flat(self.subnotation(note)),
             Notation::Indent(i, note) => NotationCase::Indent(*i, self.subnotation(note)),
             Notation::Concat(left, right) => {
@@ -75,7 +81,9 @@ impl<'d, D: Doc> NotationRef<'d, D> {
                     unreachable!()
                 }
             }
-            Notation::Repeat(_) | Notation::Surrounded => unreachable!(),
+            Notation::Repeat(_) | Notation::Surrounded | Notation::IfEmptyText(_, _) => {
+                unreachable!()
+            }
         }
     }
 
@@ -145,9 +153,17 @@ impl<'d, D: Doc> NotationRef<'d, D> {
                         panic!("`Right` is only allowed in `RepeatInner::join`");
                     }
                 }
+                IfEmptyText(opt1, opt2) => {
+                    if refn.doc.text().is_none() {
+                        refn.notation = opt1;
+                    } else {
+                        refn.notation = opt2;
+                    }
+                }
                 Empty
                 | Literal(_)
                 | Newline
+                | Text
                 | Indent(_, _)
                 | Flat(_)
                 | Concat(_, _)

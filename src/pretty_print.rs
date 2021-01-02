@@ -73,6 +73,7 @@ impl<'d, D: Doc> Seeker<'d, D> {
                         Empty => (),
                         Literal(_) => self.prev.push((indent, notation)),
                         Newline => self.prev.push((indent, notation)),
+                        Text(_) => self.prev.push((indent, notation)),
                         Indent(j, note) => self.next.push((indent.map(|i| i + j), note)),
                         Flat(note) => self.next.push((None, note)),
                         Concat(left, right) => {
@@ -97,7 +98,7 @@ impl<'d, D: Doc> Seeker<'d, D> {
                 while let Some((indent, notation)) = self.prev.pop() {
                     match notation.case() {
                         Empty | Indent(_, _) | Flat(_) | Concat(_, _) => unreachable!(),
-                        Literal(_) | Choice(_, _) | Child(_, _) => {
+                        Literal(_) | Text(_) | Choice(_, _) | Child(_, _) => {
                             self.next.push((indent, notation))
                         }
                         Newline => {
@@ -116,7 +117,11 @@ impl<'d, D: Doc> Seeker<'d, D> {
                         Empty | Indent(_, _) | Flat(_) | Concat(_, _) | Newline => unreachable!(),
                         Literal(lit) => {
                             prefix_len += lit.chars().count();
-                            self.prev.push((indent, notation))
+                            self.prev.push((indent, notation));
+                        }
+                        Text(text) => {
+                            prefix_len += text.as_ref().chars().count();
+                            self.prev.push((indent, notation));
                         }
                         Child(i, child)
                             if notation.doc_id() == parent_doc_id && i == child_index =>
@@ -151,6 +156,7 @@ impl<'d, D: Doc> Seeker<'d, D> {
                     unreachable!()
                 }
                 Literal(_) => self.next.push((indent, notation)),
+                Text(_) => self.next.push((indent, notation)),
                 Newline => {
                     // drop the newline, but take note of it by setting at_beginning=false.
                     at_beginning = false;
@@ -204,6 +210,11 @@ impl<'d, D: Doc> DownwardPrinter<'d, D> {
                 Literal(lit) => {
                     string.push_str(lit);
                     prefix_len += lit.chars().count();
+                }
+                Text(text) => {
+                    let text = text.as_ref();
+                    string.push_str(text);
+                    prefix_len += text.chars().count();
                 }
                 Newline => {
                     let line = (self.spaces, string);
@@ -302,6 +313,7 @@ impl<'d, D: Doc> UpwardPrinter<'d, D> {
         while let Some((indent, notation)) = self.prev.pop() {
             match notation.case() {
                 Empty => (),
+                Text(_) => self.next.push((indent, notation)),
                 Literal(_) => self.next.push((indent, notation)),
                 Newline => {
                     if !delete_newline {
@@ -349,6 +361,13 @@ fn min_first_line_len<'d, D: Doc>(
         }),
         Literal(text) => {
             let text_len = text.chars().count();
+            Some(FirstLineLen {
+                len: text_len,
+                has_newline: false,
+            })
+        }
+        Text(text) => {
+            let text_len = text.as_ref().chars().count();
             Some(FirstLineLen {
                 len: text_len,
                 has_newline: false,
