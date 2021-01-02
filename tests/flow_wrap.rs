@@ -1,6 +1,9 @@
 mod common;
 
-use common::{assert_pp, assert_pp_seek, child, left, lit, nl, repeat, right, surrounded, Tree};
+use common::{assert_pp, assert_pp_seek, Tree};
+use partial_pretty_printer::notation_constructors::{
+    child, left, lit, nl, repeat, right, surrounded,
+};
 use partial_pretty_printer::RepeatInner;
 
 fn word_flow(words: &[&str]) -> Tree {

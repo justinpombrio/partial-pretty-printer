@@ -1,6 +1,9 @@
 mod common;
 
-use common::{assert_pp, child, left, lit, nl, repeat, right, surrounded, Tree};
+use common::{assert_pp, Tree};
+use partial_pretty_printer::notation_constructors::{
+    child, left, lit, nl, repeat, right, surrounded,
+};
 use partial_pretty_printer::RepeatInner;
 
 #[test]

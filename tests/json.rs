@@ -1,9 +1,15 @@
+#![feature(test)]
+
+extern crate test;
+
 mod common;
 
-use common::{
-    assert_pp, assert_pp_seek, child, flat, left, lit, nl, repeat, right, surrounded, Tree,
+use common::{assert_pp, assert_pp_seek, print_region, Tree};
+use partial_pretty_printer::notation_constructors::{
+    child, flat, left, lit, nl, repeat, right, surrounded,
 };
 use partial_pretty_printer::RepeatInner;
+use test::Bencher;
 
 fn json_string(s: &str) -> Tree {
     // Using single quote instead of double quote to avoid inconvenient
@@ -236,4 +242,20 @@ fn json_big_dict() {
             "}",
         ],
     );
+}
+
+#[bench]
+fn json_long_list_bench(bencher: &mut Bencher) {
+    let num_elems = 1000;
+    let numbers = (0..num_elems)
+        .map(|n| json_number(&format!("{}", n)))
+        .collect::<Vec<_>>();
+    let list = json_list(numbers);
+
+    //let lines = print_region(&list, 80, &[num_elems / 2], 60);
+    //assert_eq!(lines, &[""]);
+
+    bencher.iter(|| {
+        print_region(&list, 80, &[num_elems / 2], 60);
+    });
 }

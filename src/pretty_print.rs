@@ -43,24 +43,6 @@ pub fn pretty_print<'d, D: Doc>(
     seeker.seek(path)
 }
 
-pub fn print_downward_for_testing<D: Doc>(doc: &D, width: usize) -> Vec<String> {
-    let notation = NotationRef::new(doc);
-    let printer = DownwardPrinter::new(notation, width);
-    printer
-        .map(|(spaces, line)| format!("{:spaces$}{}", "", line, spaces = spaces))
-        .collect()
-}
-
-pub fn print_upward_for_testing<D: Doc>(doc: &D, width: usize) -> Vec<String> {
-    let notation = NotationRef::new(doc);
-    let printer = UpwardPrinter::new(notation, width);
-    let mut lines = printer
-        .map(|(spaces, line)| format!("{:spaces$}{}", "", line, spaces = spaces))
-        .collect::<Vec<_>>();
-    lines.reverse();
-    lines
-}
-
 impl<'d, D: Doc> Seeker<'d, D> {
     fn new(notation: NotationRef<'d, D>, width: usize) -> Seeker<'d, D> {
         Seeker {
@@ -77,14 +59,11 @@ impl<'d, D: Doc> Seeker<'d, D> {
         use NotationCase::*;
 
         let path = path.into_iter().collect::<Vec<_>>();
-        println!("\n!!!!! SEEK {:?}", path);
 
         let mut path = path.into_iter();
         while let Some(child_index) = path.next() {
             let parent_doc_id = self.next.last().unwrap().1.doc_id();
             'find_child: loop {
-                self.display();
-
                 // 1. Expand forward to the nearest `Choice` or `Child` belonging to `parent_doc`.
                 //    (NOTE: more precise would be looking for Child(child_index) or a Choice
                 //     containing it, but you can't tell right now what children a choice might
@@ -164,13 +143,11 @@ impl<'d, D: Doc> Seeker<'d, D> {
         }
 
         // Walk backward to the nearest Newline (or beginning of the doc).
-        self.display();
         let mut spaces = 0;
         let mut at_beginning = true;
         while let Some((indent, notation)) = self.prev.pop() {
             match notation.case() {
                 Empty | Indent(_, _) | Flat(_) | Concat(_, _) | Choice(_, _) | Child(_, _) => {
-                    println!("boom!");
                     unreachable!()
                 }
                 Literal(_) => self.next.push((indent, notation)),
@@ -212,15 +189,6 @@ impl<'d, D: Doc> Seeker<'d, D> {
 }
 
 impl<'d, D: Doc> DownwardPrinter<'d, D> {
-    fn new(notation: NotationRef<'d, D>, width: usize) -> DownwardPrinter<'d, D> {
-        DownwardPrinter {
-            width,
-            next: vec![(Some(0), notation)],
-            spaces: 0,
-            at_end: false,
-        }
-    }
-
     fn print_first_line(&mut self) -> Option<(usize, String)> {
         use NotationCase::*;
 
@@ -271,15 +239,6 @@ impl<'d, D: Doc> DownwardPrinter<'d, D> {
 }
 
 impl<'d, D: Doc> UpwardPrinter<'d, D> {
-    fn new(notation: NotationRef<'d, D>, width: usize) -> UpwardPrinter<'d, D> {
-        UpwardPrinter {
-            width,
-            prev: vec![(Some(0), notation)],
-            next: vec![],
-            at_beginning: false,
-        }
-    }
-
     fn print_last_line(&mut self) -> Option<(usize, String)> {
         use NotationCase::*;
 

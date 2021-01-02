@@ -1,6 +1,7 @@
 mod common;
 
-use common::{assert_pp, child, flat, lit, Tree};
+use common::{assert_pp, Tree};
+use partial_pretty_printer::notation_constructors::{child, flat, lit};
 
 fn method(obj: Tree, method: &str, arg: Tree) -> Tree {
     // foobaxxle.bar(arg)

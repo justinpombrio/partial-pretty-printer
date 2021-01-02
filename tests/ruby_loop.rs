@@ -1,6 +1,7 @@
 mod common;
 
-use common::{assert_pp, child, flat, lit, Tree};
+use common::{assert_pp, Tree};
+use partial_pretty_printer::notation_constructors::{child, flat, lit};
 
 // (1..5).each do |i| puts i end
 //

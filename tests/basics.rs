@@ -1,6 +1,7 @@
 mod common;
 
-use common::{assert_pp, flat, lit, Tree};
+use common::{assert_pp, Tree};
+use partial_pretty_printer::notation_constructors::{flat, lit};
 use partial_pretty_printer::Notation;
 
 #[test]

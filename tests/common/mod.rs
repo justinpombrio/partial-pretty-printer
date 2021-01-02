@@ -1,10 +1,7 @@
 #![allow(unused)]
 
+use partial_pretty_printer::{pretty_print, Doc, Notation, RepeatInner};
 use std::sync::atomic::{AtomicUsize, Ordering};
-
-use partial_pretty_printer::{
-    pretty_print, print_downward_for_testing, print_upward_for_testing, Doc, Notation, RepeatInner,
-};
 
 static ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
@@ -55,38 +52,6 @@ impl Doc for Tree {
     }
 }
 
-pub fn nl() -> Notation {
-    Notation::Newline
-}
-
-pub fn child(i: usize) -> Notation {
-    Notation::Child(i)
-}
-
-pub fn lit(s: &str) -> Notation {
-    Notation::Literal(s.to_string())
-}
-
-pub fn flat(n: Notation) -> Notation {
-    Notation::Flat(Box::new(n))
-}
-
-pub fn left() -> Notation {
-    Notation::Left
-}
-
-pub fn right() -> Notation {
-    Notation::Right
-}
-
-pub fn surrounded() -> Notation {
-    Notation::Surrounded
-}
-
-pub fn repeat(repeat: RepeatInner) -> Notation {
-    Notation::Repeat(Box::new(repeat))
-}
-
 fn compare_lines(message: &str, actual: &[String], expected: &[&str]) {
     if actual != expected {
         eprintln!(
@@ -128,6 +93,22 @@ fn all_paths<D: Doc>(doc: &D) -> Vec<Vec<usize>> {
     let mut paths = vec![];
     recur(doc, &mut vec![], &mut paths);
     paths
+}
+
+pub fn print_region<D: Doc>(doc: &D, width: usize, path: &[usize], rows: usize) -> Vec<String> {
+    let path_iter = path.into_iter().map(|i| *i);
+    let (upward_printer, downward_printer) = pretty_print(doc, width, path_iter);
+    let mut lines = upward_printer
+        .map(|(spaces, line)| format!("{:spaces$}{}", "", line, spaces = spaces))
+        .take(rows / 2)
+        .collect::<Vec<_>>();
+    lines.reverse();
+    let mut lines_below = downward_printer
+        .map(|(spaces, line)| format!("{:spaces$}{}", "", line, spaces = spaces))
+        .take(rows / 2)
+        .collect::<Vec<_>>();
+    lines.append(&mut lines_below);
+    lines
 }
 
 #[track_caller]
