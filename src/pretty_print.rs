@@ -59,87 +59,9 @@ impl<'d, D: Doc> Seeker<'d, D> {
         use NotationCase::*;
 
         let path = path.into_iter().collect::<Vec<_>>();
-
         let mut path = path.into_iter();
         while let Some(child_index) = path.next() {
-            let parent_doc_id = self.next.last().unwrap().1.doc_id();
-            'find_child: loop {
-                // 1. Expand forward to the nearest `Choice` or `Child` belonging to `parent_doc`.
-                //    (NOTE: more precise would be looking for Child(child_index) or a Choice
-                //     containing it, but you can't tell right now what children a choice might
-                //     contain.)
-                while let Some((indent, notation)) = self.next.pop() {
-                    match notation.case() {
-                        Empty => (),
-                        Literal(_) => self.prev.push((indent, notation)),
-                        Newline => self.prev.push((indent, notation)),
-                        Indent(j, note) => self.next.push((indent.map(|i| i + j), note)),
-                        Flat(note) => self.next.push((None, note)),
-                        Concat(left, right) => {
-                            self.next.push((indent, right));
-                            self.next.push((indent, left));
-                        }
-                        Choice(_, _) if notation.doc_id() == parent_doc_id => {
-                            self.next.push((indent, notation));
-                            break;
-                        }
-                        Choice(_, _) => self.prev.push((indent, notation)),
-                        Child(i, _) if notation.doc_id() == parent_doc_id && i == child_index => {
-                            self.next.push((indent, notation));
-                            break;
-                        }
-                        Child(_, _) => self.prev.push((indent, notation)),
-                    }
-                }
-
-                // 2. Walk backward to the nearest Newline (or beginning of the doc).
-                let mut prefix_len = 0;
-                while let Some((indent, notation)) = self.prev.pop() {
-                    match notation.case() {
-                        Empty | Indent(_, _) | Flat(_) | Concat(_, _) => unreachable!(),
-                        Literal(_) | Choice(_, _) | Child(_, _) => {
-                            self.next.push((indent, notation))
-                        }
-                        Newline => {
-                            prefix_len = indent.unwrap();
-                            self.prev.push((indent, notation));
-                            break;
-                        }
-                    }
-                }
-
-                // 3. Walk forward to the nearest Child or Choice, and resolve it. Go back to 1.
-                //    If you hit `Child(i)` belonging to `parent_doc`, success.
-                //    If you hit end of doc, panic (every child must be present).
-                while let Some((indent, notation)) = self.next.pop() {
-                    match notation.case() {
-                        Empty | Indent(_, _) | Flat(_) | Concat(_, _) | Newline => unreachable!(),
-                        Literal(lit) => {
-                            prefix_len += lit.chars().count();
-                            self.prev.push((indent, notation))
-                        }
-                        Child(i, child)
-                            if notation.doc_id() == parent_doc_id && i == child_index =>
-                        {
-                            self.next.push((indent, child));
-                            break 'find_child;
-                        }
-                        Child(_, child) => {
-                            self.next.push((indent, child));
-                            continue 'find_child;
-                        }
-                        Choice(opt1, opt2) => {
-                            let suffix_len = compute_suffix_len(&self.next);
-                            let choice =
-                                choose(self.width, indent, prefix_len, opt1, opt2, suffix_len);
-                            self.next.push((indent, choice));
-                            continue 'find_child;
-                        }
-                    }
-                }
-
-                panic!("Missing child ({})", child_index);
-            }
+            self.seek_child(child_index);
         }
 
         // Walk backward to the nearest Newline (or beginning of the doc).
@@ -173,6 +95,84 @@ impl<'d, D: Doc> Seeker<'d, D> {
             at_end: false,
         };
         (upward_printer, downward_printer)
+    }
+
+    fn seek_child(&mut self, child_index: usize) {
+        use NotationCase::*;
+
+        let parent_doc_id = self.next.last().unwrap().1.doc_id();
+        'find_child: loop {
+            // 1. Expand forward to the nearest `Choice` or `Child` belonging to `parent_doc`.
+            //    (NOTE: more precise would be looking for Child(child_index) or a Choice
+            //     containing it, but you can't tell right now what children a choice might
+            //     contain.)
+            while let Some((indent, notation)) = self.next.pop() {
+                match notation.case() {
+                    Empty => (),
+                    Literal(_) => self.prev.push((indent, notation)),
+                    Newline => self.prev.push((indent, notation)),
+                    Indent(j, note) => self.next.push((indent.map(|i| i + j), note)),
+                    Flat(note) => self.next.push((None, note)),
+                    Concat(left, right) => {
+                        self.next.push((indent, right));
+                        self.next.push((indent, left));
+                    }
+                    Choice(_, _) if notation.doc_id() == parent_doc_id => {
+                        self.next.push((indent, notation));
+                        break;
+                    }
+                    Choice(_, _) => self.prev.push((indent, notation)),
+                    Child(i, _) if notation.doc_id() == parent_doc_id && i == child_index => {
+                        self.next.push((indent, notation));
+                        break;
+                    }
+                    Child(_, _) => self.prev.push((indent, notation)),
+                }
+            }
+
+            // 2. Walk backward to the nearest Newline (or beginning of the doc).
+            let mut prefix_len = 0;
+            while let Some((indent, notation)) = self.prev.pop() {
+                match notation.case() {
+                    Empty | Indent(_, _) | Flat(_) | Concat(_, _) => unreachable!(),
+                    Literal(_) | Choice(_, _) | Child(_, _) => self.next.push((indent, notation)),
+                    Newline => {
+                        prefix_len = indent.unwrap();
+                        self.prev.push((indent, notation));
+                        break;
+                    }
+                }
+            }
+
+            // 3. Walk forward to the nearest Child or Choice, and resolve it. Go back to 1.
+            //    If you hit `Child(i)` belonging to `parent_doc`, success.
+            //    If you hit end of doc, panic (every child must be present).
+            while let Some((indent, notation)) = self.next.pop() {
+                match notation.case() {
+                    Empty | Indent(_, _) | Flat(_) | Concat(_, _) | Newline => unreachable!(),
+                    Literal(lit) => {
+                        prefix_len += lit.chars().count();
+                        self.prev.push((indent, notation))
+                    }
+                    Child(i, child) if notation.doc_id() == parent_doc_id && i == child_index => {
+                        self.next.push((indent, child));
+                        return;
+                    }
+                    Child(_, child) => {
+                        self.next.push((indent, child));
+                        continue 'find_child;
+                    }
+                    Choice(opt1, opt2) => {
+                        let suffix_len = compute_suffix_len(&self.next);
+                        let choice = choose(self.width, indent, prefix_len, opt1, opt2, suffix_len);
+                        self.next.push((indent, choice));
+                        continue 'find_child;
+                    }
+                }
+            }
+
+            panic!("Missing child ({})", child_index);
+        }
     }
 
     #[allow(unused)]
