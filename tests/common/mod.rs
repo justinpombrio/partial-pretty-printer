@@ -1,56 +1,4 @@
-#![allow(unused)]
-
-use partial_pretty_printer::{pretty_print, Doc, Notation, RepeatInner};
-use std::sync::atomic::{AtomicUsize, Ordering};
-
-static ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
-
-#[derive(Debug, Clone)]
-pub struct Tree {
-    id: usize,
-    notation: Notation,
-    children: Vec<Tree>,
-}
-
-impl Tree {
-    pub fn new_branch(notation: Notation, children: Vec<Tree>) -> Tree {
-        let id = ID_COUNTER.fetch_add(1, Ordering::SeqCst);
-        Tree {
-            id,
-            notation,
-            children,
-        }
-    }
-
-    pub fn new_leaf(notation: Notation) -> Tree {
-        let id = ID_COUNTER.fetch_add(1, Ordering::SeqCst);
-        Tree {
-            id,
-            notation,
-            children: vec![],
-        }
-    }
-}
-
-impl Doc for Tree {
-    type Id = usize;
-
-    fn id(&self) -> usize {
-        self.id
-    }
-
-    fn notation(&self) -> &Notation {
-        &self.notation
-    }
-
-    fn child(&self, i: usize) -> &Tree {
-        &self.children[i]
-    }
-
-    fn num_children(&self) -> usize {
-        self.children.len()
-    }
-}
+use partial_pretty_printer::{pretty_print, Doc};
 
 fn compare_lines(message: &str, actual: &[String], expected: &[&str]) {
     if actual != expected {
@@ -84,9 +32,9 @@ fn print_above_and_below<D: Doc>(
 fn all_paths<D: Doc>(doc: &D) -> Vec<Vec<usize>> {
     fn recur<D: Doc>(doc: &D, path: &mut Vec<usize>, paths: &mut Vec<Vec<usize>>) {
         paths.push(path.clone());
-        for i in 0..doc.num_children() {
+        for i in 0..doc.num_children().unwrap_or(0) {
             path.push(i);
-            recur(doc.child(i), path, paths);
+            recur(doc.unwrap_child(i), path, paths);
             path.pop();
         }
     }
@@ -95,6 +43,7 @@ fn all_paths<D: Doc>(doc: &D) -> Vec<Vec<usize>> {
     paths
 }
 
+#[allow(unused)]
 pub fn print_region<D: Doc>(doc: &D, width: usize, path: &[usize], rows: usize) -> Vec<String> {
     let path_iter = path.into_iter().map(|i| *i);
     let (upward_printer, downward_printer) = pretty_print(doc, width, path_iter);
@@ -125,6 +74,7 @@ pub fn assert_pp<D: Doc>(doc: &D, width: usize, expected_lines: &[&str]) {
     }
 }
 
+#[allow(unused)]
 #[track_caller]
 pub fn assert_pp_seek<D: Doc>(
     doc: &D,
@@ -148,12 +98,14 @@ pub fn assert_pp_seek<D: Doc>(
 
 #[test]
 fn test_all_paths_fn() {
-    let br = |children: Vec<Tree>| -> Tree { Tree::new_branch(Notation::Empty, children) };
-    let leaf = || -> Tree { Tree::new_leaf(Notation::Empty) };
-    let doc = br(vec![
-        br(vec![leaf(), leaf()]),
-        leaf(),
-        br(vec![br(vec![leaf()]), leaf()]),
+    use partial_pretty_printer::json_notation::{json_list, json_string};
+    let doc = json_list(vec![
+        json_list(vec![json_string("0.0"), json_string("0.1")]),
+        json_string("1"),
+        json_list(vec![
+            json_list(vec![json_string("2.0.0")]),
+            json_string("2.1"),
+        ]),
     ]);
     assert_eq!(
         all_paths(&doc),

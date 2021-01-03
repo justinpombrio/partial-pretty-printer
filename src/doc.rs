@@ -2,15 +2,41 @@ use crate::notation::{Notation, RepeatInner};
 use std::fmt;
 
 /// A "document" that supports the necessary methods to be pretty-printed.
-pub trait Doc {
+pub trait Doc: Sized {
     type Id: Eq + Copy;
-    type TextRef: AsRef<str>;
 
     fn id(&self) -> Self::Id;
-    fn num_children(&self) -> usize;
-    fn child(&self, index: usize) -> &Self;
     fn notation(&self) -> &Notation;
-    fn text(&self) -> Option<Self::TextRef>;
+    fn contents(&self) -> DocContents<Self>;
+
+    fn unwrap_text(&self) -> &str {
+        match self.contents() {
+            DocContents::Text(text) => text,
+            DocContents::Children(_) => panic!("Doc: expected text"),
+        }
+    }
+
+    fn num_children(&self) -> Option<usize> {
+        match self.contents() {
+            DocContents::Text(_) => None,
+            DocContents::Children(children) => Some(children.len()),
+        }
+    }
+
+    fn unwrap_child(&self, i: usize) -> &Self {
+        match self.contents() {
+            DocContents::Text(_) => panic!("Doc: expected children"),
+            DocContents::Children(children) => {
+                children.get(i).expect("Doc: child index out of bounds")
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum DocContents<'d, D: Doc> {
+    Text(&'d str),
+    Children(&'d [D]),
 }
 
 #[derive(Debug)]
@@ -32,7 +58,7 @@ pub enum NotationCase<'d, D: Doc> {
     Empty,
     Literal(&'d str),
     Newline,
-    Text(D::TextRef),
+    Text(&'d str),
     Flat(NotationRef<'d, D>),
     Indent(usize, NotationRef<'d, D>),
     Concat(NotationRef<'d, D>, NotationRef<'d, D>),
@@ -57,7 +83,7 @@ impl<'d, D: Doc> NotationRef<'d, D> {
             Notation::Empty => NotationCase::Empty,
             Notation::Literal(lit) => NotationCase::Literal(lit),
             Notation::Newline => NotationCase::Newline,
-            Notation::Text => NotationCase::Text(self.doc.text().unwrap()),
+            Notation::Text => NotationCase::Text(self.doc.unwrap_text()),
             Notation::Flat(note) => NotationCase::Flat(self.subnotation(note)),
             Notation::Indent(i, note) => NotationCase::Indent(*i, self.subnotation(note)),
             Notation::Concat(left, right) => {
@@ -115,7 +141,7 @@ impl<'d, D: Doc> NotationRef<'d, D> {
                         matches!(parent_repeat_pos, RepeatPos::None),
                         "Can't handle nested repeats"
                     );
-                    refn.notation = match doc.num_children() {
+                    refn.notation = match doc.num_children().unwrap() {
                         0 => &repeat.empty,
                         1 => &repeat.lone,
                         _ => &repeat.surround,
@@ -142,7 +168,7 @@ impl<'d, D: Doc> NotationRef<'d, D> {
                 }
                 Right => {
                     if let RepeatPos::Join(repeat, i) = refn.repeat_pos {
-                        if i + 2 == refn.doc.num_children() {
+                        if i + 2 == refn.doc.num_children().unwrap() {
                             // Similar to the Left case: equivalent to Child(i)
                             break;
                         } else {
@@ -154,7 +180,7 @@ impl<'d, D: Doc> NotationRef<'d, D> {
                     }
                 }
                 IfEmptyText(opt1, opt2) => {
-                    if refn.doc.text().is_none() {
+                    if refn.doc.unwrap_text().is_empty() {
                         refn.notation = opt1;
                     } else {
                         refn.notation = opt2;
@@ -180,7 +206,7 @@ impl<'d, D: Doc> NotationRef<'d, D> {
     }
 
     fn child(&self, index: usize) -> NotationRef<'d, D> {
-        let child = self.doc.child(index);
+        let child = self.doc.unwrap_child(index);
         NotationRef::from_parts(child, child.notation(), RepeatPos::None)
     }
 }
