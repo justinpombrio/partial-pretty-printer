@@ -8,10 +8,12 @@ use std::ops::{Add, BitOr, BitXor, Shr};
 pub enum Notation {
     /// Display nothing. Identical to `Literal("")`.
     Empty,
-    /// Literal text. Cannot contain a newline.
-    Literal(String),
     /// Display a newline. If this is inside an `Indent`, the new line will be indented.
     Newline,
+    /// Display a piece of text. Must be used on a texty node.
+    Text,
+    /// Literal text. Cannot contain a newline.
+    Literal(String),
     /// Only consider single-line options of the contained notation.
     Flat(Box<Notation>),
     /// Indent all lines of the contained notation except the first to the right by the given
@@ -24,6 +26,9 @@ pub enum Notation {
     /// Display the left notation if it fits on one line within the required width; otherwise the
     /// right.
     Choice(Box<Notation>, Box<Notation>),
+    /// Display the first notation in case this tree has empty text,
+    /// otherwise show the second notation.
+    IfEmptyText(Box<Notation>, Box<Notation>),
     /// Display the `i`th child of this node.
     /// Must be used on a foresty node.
     /// `i` must be less than the node's arity number.
@@ -65,11 +70,13 @@ impl fmt::Display for Notation {
         match self {
             Empty => write!(f, "ε"),
             Newline => write!(f, "↵"),
+            Text => write!(f, "TEXT"),
             Literal(lit) => write!(f, "{}", lit),
             Flat(note) => write!(f, "Flat({})", note),
             Indent(i, note) => write!(f, "⇒{}({})", i, note),
             Concat(left, right) => write!(f, "({} + {})", left, right),
             Choice(opt1, opt2) => write!(f, "({} | {})", opt1, opt2),
+            IfEmptyText(opt1, opt2) => write!(f, "IfEmptyText({} | {})", opt1, opt2),
             Child(i) => write!(f, "${}", i),
             Repeat(repeat) => write!(
                 f,

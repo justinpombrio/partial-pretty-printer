@@ -1,9 +1,33 @@
 mod common;
 
-use common::{assert_pp, Tree};
-use partial_pretty_printer::notation_constructors::{child, flat, lit};
+use common::assert_pp;
+use once_cell::sync::Lazy;
+use partial_pretty_printer::notation_constructors::{child, flat, lit, text};
+use partial_pretty_printer::simple_doc::{SimpleDoc, Sort};
+use partial_pretty_printer::Notation;
 
-fn method(obj: Tree, method: &str, arg: Tree) -> Tree {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum IterChain {
+    Var,
+    MethodCall,
+    Closure,
+    Times,
+}
+
+impl Sort for IterChain {
+    fn notation(self) -> &'static Notation {
+        use IterChain::*;
+        match self {
+            Var => &VAR_NOTATION,
+            MethodCall => &METHOD_CALL_NOTATION,
+            Closure => &CLOSURE_NOTATION,
+            Times => &TIMES_NOTATION,
+        }
+    }
+}
+
+static VAR_NOTATION: Lazy<Notation> = Lazy::new(|| text());
+static METHOD_CALL_NOTATION: Lazy<Notation> = Lazy::new(|| {
     // foobaxxle.bar(arg)
     //
     // -- Disallowing this layout:
@@ -18,36 +42,44 @@ fn method(obj: Tree, method: &str, arg: Tree) -> Tree {
     //     .bar(
     //         arg
     //      )
+    let single = lit(".") + child(1) + lit("(") + flat(child(2).clone()) + lit(")");
+    let two_lines = lit(".") + child(1) + lit("(") + flat(child(2).clone()) + lit(")");
+    let multi = lit(".") + child(1) + lit("(") + (4 >> child(2)) ^ lit(")");
+    child(0) + (single | (4 >> (two_lines | multi)))
+});
+static CLOSURE_NOTATION: Lazy<Notation> = Lazy::new(|| {
+    let single = lit("|") + child(0) + lit("| { ") + child(1) + lit(" }");
+    let multi = lit("|") + child(0) + lit("| {") + (4 >> child(1)) ^ lit("}");
+    single | multi
+});
+static TIMES_NOTATION: Lazy<Notation> = Lazy::new(|| child(0) + lit(" * ") + child(1));
 
-    let single = lit(".") + lit(method) + lit("(") + flat(child(1).clone()) + lit(")");
-    let two_lines = lit(".") + lit(method) + lit("(") + flat(child(1).clone()) + lit(")");
-    let multi = lit(".") + lit(method) + lit("(") + (4 >> child(1)) ^ lit(")");
-    let notation = child(0) + (single | (4 >> (two_lines | multi)));
-    Tree::new_branch(notation, vec![obj, arg])
+fn method_call(
+    obj: SimpleDoc<IterChain>,
+    method: &str,
+    arg: SimpleDoc<IterChain>,
+) -> SimpleDoc<IterChain> {
+    SimpleDoc::new_node(IterChain::MethodCall, vec![obj, var(method), arg])
 }
 
-fn closure(var: &str, body: Tree) -> Tree {
-    let single = lit("|") + lit(var) + lit("| { ") + child(0) + lit(" }");
-    let multi = lit("|") + lit(var) + lit("| {") + (4 >> child(0)) ^ lit("}");
-    let notation = single | multi;
-    Tree::new_branch(notation, vec![body])
+fn closure(var_name: &str, body: SimpleDoc<IterChain>) -> SimpleDoc<IterChain> {
+    SimpleDoc::new_node(IterChain::Closure, vec![var(var_name), body])
 }
 
-fn times(arg1: Tree, arg2: Tree) -> Tree {
-    let notation = child(0) + lit(" * ") + child(1);
-    Tree::new_branch(notation, vec![arg1, arg2])
+fn times(arg1: SimpleDoc<IterChain>, arg2: SimpleDoc<IterChain>) -> SimpleDoc<IterChain> {
+    SimpleDoc::new_node(IterChain::Times, vec![arg1, arg2])
 }
 
-fn var(var: &str) -> Tree {
-    Tree::new_leaf(lit(var))
+fn var(var: &str) -> SimpleDoc<IterChain> {
+    SimpleDoc::new_text(IterChain::Var, var.to_owned())
 }
 
 #[test]
 fn iter_chain_iter_map_collect() {
     let doc = var("some_vec");
-    let doc = method(doc, "iter", var(""));
-    let doc = method(doc, "map", closure("elem", times(var("elem"), var("elem"))));
-    let doc = method(doc, "collect", var(""));
+    let doc = method_call(doc, "iter", var(""));
+    let doc = method_call(doc, "map", closure("elem", times(var("elem"), var("elem"))));
+    let doc = method_call(doc, "collect", var(""));
 
     assert_pp(
         &doc,
@@ -93,7 +125,7 @@ fn iter_chain_iter_map_collect() {
 #[test]
 fn iter_chain_long_method_body() {
     let doc = var("some_vec");
-    let doc = method(doc, "map", closure("elem", times(var("elem"), var("elem"))));
+    let doc = method_call(doc, "map", closure("elem", times(var("elem"), var("elem"))));
 
     assert_pp(
         &doc,
@@ -112,8 +144,8 @@ fn iter_chain_long_method_body() {
 #[test]
 fn iter_chain_long_methods() {
     let doc = var("some_vec");
-    let doc = method(doc, "call_the_map_method", closure("elem", var("elem")));
-    let doc = method(doc, "call_the_map_method", closure("elem", var("elem")));
+    let doc = method_call(doc, "call_the_map_method", closure("elem", var("elem")));
+    let doc = method_call(doc, "call_the_map_method", closure("elem", var("elem")));
 
     assert_pp(
         &doc,

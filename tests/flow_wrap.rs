@@ -1,36 +1,59 @@
 mod common;
 
-use common::{assert_pp, assert_pp_seek, Tree};
+use common::{assert_pp, assert_pp_seek};
+use once_cell::sync::Lazy;
 use partial_pretty_printer::notation_constructors::{
-    child, left, lit, nl, repeat, right, surrounded,
+    child, left, lit, nl, repeat, right, surrounded, text,
 };
-use partial_pretty_printer::RepeatInner;
+use partial_pretty_printer::simple_doc::{SimpleDoc, Sort};
+use partial_pretty_printer::{Notation, RepeatInner};
 
-fn word_flow(words: &[&str]) -> Tree {
-    let elements = words
-        .iter()
-        .map(|w| Tree::new_leaf(lit(w)))
-        .collect::<Vec<_>>();
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FlowWrap {
+    Word,
+    Words,
+    Paragraph,
+}
+
+static WORD_NOTATION: Lazy<Notation> = Lazy::new(|| text());
+static WORDS_NOTATION: Lazy<Notation> = Lazy::new(|| {
     let soft_break = || lit(" ") | nl();
-    let notation = repeat(RepeatInner {
+    repeat(RepeatInner {
         empty: lit(""),
         lone: lit("    ") + child(0),
         join: left() + lit(",") + soft_break() + right(),
         surround: lit("    ") + surrounded(),
-    });
-    Tree::new_branch(notation, elements)
+    })
+});
+static PARAGRAPH_NOTATION: Lazy<Notation> = Lazy::new(|| lit("¶") + child(0) + lit("□"));
+
+impl Sort for FlowWrap {
+    fn notation(self) -> &'static Notation {
+        use FlowWrap::*;
+        match self {
+            Word => &WORD_NOTATION,
+            Words => &WORDS_NOTATION,
+            Paragraph => &PARAGRAPH_NOTATION,
+        }
+    }
 }
 
-fn mark_paragraph(paragraph: Tree) -> Tree {
-    let notation = lit("¶") + child(0) + lit("□");
-    Tree::new_branch(notation, vec![paragraph])
+fn paragraph(words: &[&str]) -> SimpleDoc<FlowWrap> {
+    let children = words
+        .into_iter()
+        .map(|w| SimpleDoc::new_text(FlowWrap::Word, (*w).to_owned()))
+        .collect::<Vec<_>>();
+    SimpleDoc::new_node(
+        FlowWrap::Paragraph,
+        vec![SimpleDoc::new_node(FlowWrap::Words, children)],
+    )
 }
 
 #[test]
 fn flow_wrap() {
     // from https://github.com/rust-lang/rust/blob/master/src/test/ui/bastion-of-the-turbofish.rs
 
-    let doc = mark_paragraph(word_flow(&[
+    let doc = paragraph(&[
         "Oh",
         "woe",
         "is",
@@ -39,7 +62,7 @@ fn flow_wrap() {
         "turbofish",
         "remains",
         "undefeated",
-    ]));
+    ]);
 
     assert_pp(
         &doc,

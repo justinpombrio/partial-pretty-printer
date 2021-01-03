@@ -8,6 +8,10 @@ pub fn child(i: usize) -> Notation {
     Notation::Child(i)
 }
 
+pub fn text() -> Notation {
+    Notation::Text
+}
+
 pub fn lit(s: &str) -> Notation {
     Notation::Literal(s.to_string())
 }
