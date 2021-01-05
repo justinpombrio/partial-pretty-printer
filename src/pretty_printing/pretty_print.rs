@@ -156,7 +156,7 @@ impl<'d, D: PrettyDoc> Seeker<'d, D> {
                 match notation.case() {
                     Empty | Indent(_, _) | Flat(_) | Concat(_, _) | Newline => unreachable!(),
                     Literal(lit) => {
-                        prefix_len += lit.chars().count();
+                        prefix_len += lit.len();
                         self.prev.push((indent, notation))
                     }
                     Text(text) => {
@@ -211,13 +211,13 @@ impl<'d, D: PrettyDoc> DownwardPrinter<'d, D> {
             match notation.case() {
                 Empty => (),
                 Literal(lit) => {
-                    string.push_str(lit);
-                    prefix_len += lit.chars().count();
+                    string.push_str(lit.str());
+                    prefix_len += lit.len();
                 }
                 Text(text) => {
                     let text = text.as_ref();
                     string.push_str(text);
-                    prefix_len += text.chars().count();
+                    prefix_len += text_len(text);
                 }
                 Newline => {
                     let line = (self.spaces, string);
@@ -265,11 +265,11 @@ impl<'d, D: PrettyDoc> UpwardPrinter<'d, D> {
         while let Some((indent, notation)) = self.next.pop() {
             match notation.case() {
                 Literal(lit) => {
-                    prefix_len += lit.chars().count();
+                    prefix_len += lit.len();
                     self.prev.push((indent, notation));
                 }
                 Text(text) => {
-                    prefix_len += text.chars().count();
+                    prefix_len += text_len(text);
                     self.prev.push((indent, notation));
                 }
                 Choice(opt1, opt2) => {
@@ -298,7 +298,7 @@ impl<'d, D: PrettyDoc> UpwardPrinter<'d, D> {
         let mut string = String::new();
         while let Some((_, notation)) = self.next.pop() {
             match notation.case() {
-                NotationCase::Literal(lit) => string.push_str(lit),
+                NotationCase::Literal(lit) => string.push_str(lit.str()),
                 NotationCase::Text(text) => string.push_str(text),
                 _ => panic!("display_line: expected only literals and text"),
             }
@@ -369,15 +369,15 @@ fn min_first_line_len<'d, D: PrettyDoc>(
             len: 0,
             has_newline: false,
         }),
-        Literal(text) => {
-            let text_len = text.chars().count();
+        Literal(lit) => {
+            let lit_len = lit.len();
             Some(FirstLineLen {
-                len: text_len,
+                len: lit_len,
                 has_newline: false,
             })
         }
         Text(text) => {
-            let text_len = text.chars().count();
+            let text_len = text_len(text);
             Some(FirstLineLen {
                 len: text_len,
                 has_newline: false,
@@ -457,6 +457,10 @@ fn choose<'d, D: PrettyDoc>(
     } else {
         note2
     }
+}
+
+fn text_len(text: &str) -> usize {
+    text.chars().count()
 }
 
 impl<'d, D: PrettyDoc> Iterator for DownwardPrinter<'d, D> {

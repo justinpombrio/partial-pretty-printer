@@ -1,4 +1,4 @@
-use super::notation::{Notation, RepeatInner};
+use super::notation::{Literal, Notation, RepeatInner};
 
 pub fn nl() -> Notation {
     Notation::Newline
@@ -13,7 +13,7 @@ pub fn text() -> Notation {
 }
 
 pub fn lit(s: &str) -> Notation {
-    Notation::Literal(s.to_string())
+    Notation::Literal(Literal::new(s))
 }
 
 pub fn flat(n: Notation) -> Notation {

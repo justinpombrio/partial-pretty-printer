@@ -1,5 +1,5 @@
 use super::pretty_doc::PrettyDoc;
-use crate::notation::{Notation, RepeatInner};
+use crate::notation::{Literal, Notation, RepeatInner};
 use std::fmt;
 
 #[derive(Debug)]
@@ -19,7 +19,7 @@ enum RepeatPos<'d> {
 #[derive(Debug)]
 pub enum NotationCase<'d, D: PrettyDoc> {
     Empty,
-    Literal(&'d str),
+    Literal(&'d Literal),
     Newline,
     Text(&'d str),
     Flat(NotationRef<'d, D>),

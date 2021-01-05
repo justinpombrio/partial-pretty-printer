@@ -14,7 +14,7 @@ pub enum Notation {
     /// Display a piece of text. Must be used on a texty node.
     Text,
     /// Literal text. Cannot contain a newline.
-    Literal(String),
+    Literal(Literal),
     /// Only consider single-line options of the contained notation.
     Flat(Box<Notation>),
     /// Indent all lines of the contained notation except the first to the right by the given
@@ -47,6 +47,12 @@ pub enum Notation {
     Surrounded,
 }
 
+#[derive(Clone, Debug)]
+pub struct Literal {
+    string: String,
+    len: usize,
+}
+
 /// Describes how to display the extra children of a syntactic
 /// construct with extendable arity.
 #[derive(Clone, Debug)]
@@ -64,6 +70,23 @@ pub struct RepeatInner {
     pub surround: Notation,
 }
 
+impl Literal {
+    pub fn new(s: &str) -> Literal {
+        Literal {
+            string: s.to_owned(),
+            len: s.chars().count(),
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.len
+    }
+
+    pub fn str(&self) -> &str {
+        &self.string
+    }
+}
+
 impl fmt::Display for Notation {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use Notation::*;
@@ -72,7 +95,7 @@ impl fmt::Display for Notation {
             Empty => write!(f, "ε"),
             Newline => write!(f, "↵"),
             Text => write!(f, "TEXT"),
-            Literal(lit) => write!(f, "{}", lit),
+            Literal(lit) => write!(f, "{}", lit.string),
             Flat(note) => write!(f, "Flat({})", note),
             Indent(i, note) => write!(f, "⇒{}({})", i, note),
             Concat(left, right) => write!(f, "({} + {})", left, right),
