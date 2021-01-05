@@ -101,6 +101,23 @@ pub fn assert_pp_seek<D: PrettyDoc>(
     );
 }
 
+#[allow(unused)]
+#[track_caller]
+pub fn assert_pp_region<D: PrettyDoc>(
+    doc: &D,
+    width: usize,
+    path: &[usize],
+    rows: usize,
+    expected_lines: &[&str],
+) {
+    let lines = print_region(doc, width, path, rows);
+    compare_lines(
+        &format!("IN PRINTING {} ROWS AT PATH {:?}", rows, path),
+        &lines,
+        expected_lines,
+    );
+}
+
 #[test]
 fn test_all_paths_fn() {
     use partial_pretty_printer::examples::json::{json_list, json_string};

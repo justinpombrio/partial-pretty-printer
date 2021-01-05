@@ -79,8 +79,8 @@ pub fn json_string(s: &str) -> Doc<Json> {
     Doc::new_text(Json::String, s.to_owned())
 }
 
-pub fn json_number(n: usize) -> Doc<Json> {
-    Doc::new_text(Json::Number, n.to_string())
+pub fn json_number(f: f64) -> Doc<Json> {
+    Doc::new_text(Json::Number, f.to_string())
 }
 
 pub fn json_dict_entry(key: &str, value: Doc<Json>) -> Doc<Json> {
