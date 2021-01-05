@@ -1,4 +1,4 @@
-use partial_pretty_printer::{pretty_print, Doc};
+use partial_pretty_printer::{pretty_print, PrettyDoc};
 
 fn compare_lines(message: &str, actual: &[String], expected: &[&str]) {
     if actual != expected {
@@ -12,7 +12,7 @@ fn compare_lines(message: &str, actual: &[String], expected: &[&str]) {
     }
 }
 
-fn print_above_and_below<D: Doc>(
+fn print_above_and_below<D: PrettyDoc>(
     doc: &D,
     width: usize,
     path: &[usize],
@@ -29,8 +29,8 @@ fn print_above_and_below<D: Doc>(
     (lines_above, lines_below)
 }
 
-fn all_paths<D: Doc>(doc: &D) -> Vec<Vec<usize>> {
-    fn recur<D: Doc>(doc: &D, path: &mut Vec<usize>, paths: &mut Vec<Vec<usize>>) {
+fn all_paths<D: PrettyDoc>(doc: &D) -> Vec<Vec<usize>> {
+    fn recur<D: PrettyDoc>(doc: &D, path: &mut Vec<usize>, paths: &mut Vec<Vec<usize>>) {
         paths.push(path.clone());
         for i in 0..doc.num_children().unwrap_or(0) {
             path.push(i);
@@ -44,7 +44,12 @@ fn all_paths<D: Doc>(doc: &D) -> Vec<Vec<usize>> {
 }
 
 #[allow(unused)]
-pub fn print_region<D: Doc>(doc: &D, width: usize, path: &[usize], rows: usize) -> Vec<String> {
+pub fn print_region<D: PrettyDoc>(
+    doc: &D,
+    width: usize,
+    path: &[usize],
+    rows: usize,
+) -> Vec<String> {
     let path_iter = path.into_iter().map(|i| *i);
     let (upward_printer, downward_printer) = pretty_print(doc, width, path_iter);
     let mut lines = upward_printer
@@ -61,7 +66,7 @@ pub fn print_region<D: Doc>(doc: &D, width: usize, path: &[usize], rows: usize) 
 }
 
 #[track_caller]
-pub fn assert_pp<D: Doc>(doc: &D, width: usize, expected_lines: &[&str]) {
+pub fn assert_pp<D: PrettyDoc>(doc: &D, width: usize, expected_lines: &[&str]) {
     for path in all_paths(doc) {
         let (lines_above, mut lines_below) = print_above_and_below(doc, width, &path);
         let mut lines = lines_above;
@@ -76,7 +81,7 @@ pub fn assert_pp<D: Doc>(doc: &D, width: usize, expected_lines: &[&str]) {
 
 #[allow(unused)]
 #[track_caller]
-pub fn assert_pp_seek<D: Doc>(
+pub fn assert_pp_seek<D: PrettyDoc>(
     doc: &D,
     width: usize,
     path: &[usize],
@@ -98,7 +103,7 @@ pub fn assert_pp_seek<D: Doc>(
 
 #[test]
 fn test_all_paths_fn() {
-    use partial_pretty_printer::json_notation::{json_list, json_string};
+    use partial_pretty_printer::examples::json::{json_list, json_string};
     let doc = json_list(vec![
         json_list(vec![json_string("0.0"), json_string("0.1")]),
         json_string("1"),

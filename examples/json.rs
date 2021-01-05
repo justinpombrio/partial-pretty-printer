@@ -1,7 +1,12 @@
-use partial_pretty_printer::json_notation::{json_list, json_number};
-use partial_pretty_printer::{pretty_print, Doc};
+use partial_pretty_printer::examples::json::{json_list, json_number};
+use partial_pretty_printer::{pretty_print, PrettyDoc};
 
-pub fn print_region<D: Doc>(doc: &D, width: usize, path: &[usize], rows: usize) -> Vec<String> {
+pub fn print_region<D: PrettyDoc>(
+    doc: &D,
+    width: usize,
+    path: &[usize],
+    rows: usize,
+) -> Vec<String> {
     let path_iter = path.into_iter().map(|i| *i);
     let (upward_printer, downward_printer) = pretty_print(doc, width, path_iter);
     let mut lines = upward_printer

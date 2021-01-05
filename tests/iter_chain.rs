@@ -2,8 +2,8 @@ mod common;
 
 use common::assert_pp;
 use once_cell::sync::Lazy;
+use partial_pretty_printer::examples::{Doc, Sort};
 use partial_pretty_printer::notation_constructors::{child, flat, lit, text};
-use partial_pretty_printer::simple_doc::{SimpleDoc, Sort};
 use partial_pretty_printer::Notation;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -54,24 +54,20 @@ static CLOSURE_NOTATION: Lazy<Notation> = Lazy::new(|| {
 });
 static TIMES_NOTATION: Lazy<Notation> = Lazy::new(|| child(0) + lit(" * ") + child(1));
 
-fn method_call(
-    obj: SimpleDoc<IterChain>,
-    method: &str,
-    arg: SimpleDoc<IterChain>,
-) -> SimpleDoc<IterChain> {
-    SimpleDoc::new_node(IterChain::MethodCall, vec![obj, var(method), arg])
+fn method_call(obj: Doc<IterChain>, method: &str, arg: Doc<IterChain>) -> Doc<IterChain> {
+    Doc::new_node(IterChain::MethodCall, vec![obj, var(method), arg])
 }
 
-fn closure(var_name: &str, body: SimpleDoc<IterChain>) -> SimpleDoc<IterChain> {
-    SimpleDoc::new_node(IterChain::Closure, vec![var(var_name), body])
+fn closure(var_name: &str, body: Doc<IterChain>) -> Doc<IterChain> {
+    Doc::new_node(IterChain::Closure, vec![var(var_name), body])
 }
 
-fn times(arg1: SimpleDoc<IterChain>, arg2: SimpleDoc<IterChain>) -> SimpleDoc<IterChain> {
-    SimpleDoc::new_node(IterChain::Times, vec![arg1, arg2])
+fn times(arg1: Doc<IterChain>, arg2: Doc<IterChain>) -> Doc<IterChain> {
+    Doc::new_node(IterChain::Times, vec![arg1, arg2])
 }
 
-fn var(var: &str) -> SimpleDoc<IterChain> {
-    SimpleDoc::new_text(IterChain::Var, var.to_owned())
+fn var(var: &str) -> Doc<IterChain> {
+    Doc::new_text(IterChain::Var, var.to_owned())
 }
 
 #[test]

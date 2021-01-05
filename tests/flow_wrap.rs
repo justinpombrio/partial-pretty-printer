@@ -2,10 +2,10 @@ mod common;
 
 use common::{assert_pp, assert_pp_seek};
 use once_cell::sync::Lazy;
+use partial_pretty_printer::examples::{Doc, Sort};
 use partial_pretty_printer::notation_constructors::{
     child, left, lit, nl, repeat, right, surrounded, text,
 };
-use partial_pretty_printer::simple_doc::{SimpleDoc, Sort};
 use partial_pretty_printer::{Notation, RepeatInner};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -38,14 +38,14 @@ impl Sort for FlowWrap {
     }
 }
 
-fn paragraph(words: &[&str]) -> SimpleDoc<FlowWrap> {
+fn paragraph(words: &[&str]) -> Doc<FlowWrap> {
     let children = words
         .into_iter()
-        .map(|w| SimpleDoc::new_text(FlowWrap::Word, (*w).to_owned()))
+        .map(|w| Doc::new_text(FlowWrap::Word, (*w).to_owned()))
         .collect::<Vec<_>>();
-    SimpleDoc::new_node(
+    Doc::new_node(
         FlowWrap::Paragraph,
-        vec![SimpleDoc::new_node(FlowWrap::Words, children)],
+        vec![Doc::new_node(FlowWrap::Words, children)],
     )
 }
 

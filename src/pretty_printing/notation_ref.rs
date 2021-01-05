@@ -1,46 +1,9 @@
+use super::pretty_doc::PrettyDoc;
 use crate::notation::{Notation, RepeatInner};
 use std::fmt;
 
-/// A "document" that supports the necessary methods to be pretty-printed.
-pub trait Doc: Sized {
-    type Id: Eq + Copy;
-
-    fn id(&self) -> Self::Id;
-    fn notation(&self) -> &Notation;
-    fn contents(&self) -> DocContents<Self>;
-
-    fn unwrap_text(&self) -> &str {
-        match self.contents() {
-            DocContents::Text(text) => text,
-            DocContents::Children(_) => panic!("Doc: expected text"),
-        }
-    }
-
-    fn num_children(&self) -> Option<usize> {
-        match self.contents() {
-            DocContents::Text(_) => None,
-            DocContents::Children(children) => Some(children.len()),
-        }
-    }
-
-    fn unwrap_child(&self, i: usize) -> &Self {
-        match self.contents() {
-            DocContents::Text(_) => panic!("Doc: expected children"),
-            DocContents::Children(children) => {
-                children.get(i).expect("Doc: child index out of bounds")
-            }
-        }
-    }
-}
-
 #[derive(Debug)]
-pub enum DocContents<'d, D: Doc> {
-    Text(&'d str),
-    Children(&'d [D]),
-}
-
-#[derive(Debug)]
-pub struct NotationRef<'d, D: Doc> {
+pub struct NotationRef<'d, D: PrettyDoc> {
     doc: &'d D,
     notation: &'d Notation,
     repeat_pos: RepeatPos<'d>,
@@ -54,7 +17,7 @@ enum RepeatPos<'d> {
 }
 
 #[derive(Debug)]
-pub enum NotationCase<'d, D: Doc> {
+pub enum NotationCase<'d, D: PrettyDoc> {
     Empty,
     Literal(&'d str),
     Newline,
@@ -66,7 +29,7 @@ pub enum NotationCase<'d, D: Doc> {
     Child(usize, NotationRef<'d, D>),
 }
 
-impl<'d, D: Doc> Clone for NotationRef<'d, D> {
+impl<'d, D: PrettyDoc> Clone for NotationRef<'d, D> {
     fn clone(&self) -> NotationRef<'d, D> {
         NotationRef {
             doc: self.doc,
@@ -75,9 +38,9 @@ impl<'d, D: Doc> Clone for NotationRef<'d, D> {
         }
     }
 }
-impl<'d, D: Doc> Copy for NotationRef<'d, D> {}
+impl<'d, D: PrettyDoc> Copy for NotationRef<'d, D> {}
 
-impl<'d, D: Doc> NotationRef<'d, D> {
+impl<'d, D: PrettyDoc> NotationRef<'d, D> {
     pub fn case(self) -> NotationCase<'d, D> {
         match self.notation {
             Notation::Empty => NotationCase::Empty,
@@ -211,7 +174,7 @@ impl<'d, D: Doc> NotationRef<'d, D> {
     }
 }
 
-impl<'d, D: Doc> fmt::Display for NotationRef<'d, D> {
+impl<'d, D: PrettyDoc> fmt::Display for NotationRef<'d, D> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.notation)
     }

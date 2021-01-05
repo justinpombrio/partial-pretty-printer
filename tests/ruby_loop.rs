@@ -2,8 +2,8 @@ mod common;
 
 use common::assert_pp;
 use once_cell::sync::Lazy;
+use partial_pretty_printer::examples::{Doc, Sort};
 use partial_pretty_printer::notation_constructors::{child, flat, lit, text};
-use partial_pretty_printer::simple_doc::{SimpleDoc, Sort};
 use partial_pretty_printer::Notation;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -37,16 +37,16 @@ static DO_LOOP_NOTATION: Lazy<Notation> = Lazy::new(|| {
     single | multi
 });
 
-fn method_call(obj: SimpleDoc<Ruby>, method: &str, arg: SimpleDoc<Ruby>) -> SimpleDoc<Ruby> {
-    SimpleDoc::new_node(Ruby::MethodCall, vec![obj, var(method), arg])
+fn method_call(obj: Doc<Ruby>, method: &str, arg: Doc<Ruby>) -> Doc<Ruby> {
+    Doc::new_node(Ruby::MethodCall, vec![obj, var(method), arg])
 }
 
-fn do_loop(var_name: &str, body: SimpleDoc<Ruby>) -> SimpleDoc<Ruby> {
-    SimpleDoc::new_node(Ruby::DoLoop, vec![var(var_name), body])
+fn do_loop(var_name: &str, body: Doc<Ruby>) -> Doc<Ruby> {
+    Doc::new_node(Ruby::DoLoop, vec![var(var_name), body])
 }
 
-fn var(var_name: &str) -> SimpleDoc<Ruby> {
-    SimpleDoc::new_text(Ruby::Var, var_name.to_owned())
+fn var(var_name: &str) -> Doc<Ruby> {
+    Doc::new_text(Ruby::Var, var_name.to_owned())
 }
 
 #[test]

@@ -4,6 +4,7 @@ use std::ops::{Add, BitOr, BitXor, Shr};
 // ASSUMPTION:
 // In every choice `X | Y`, `min_first_line_len(Y) <= min_first_line_len(X)`.
 
+/// Describes how to display a syntactic construct.
 #[derive(Clone, Debug)]
 pub enum Notation {
     /// Display nothing. Identical to `Literal("")`.
@@ -36,12 +37,12 @@ pub enum Notation {
     /// Determines what to display based on the arity of this node.
     /// Used for syntactic constructs that have extendable arity.
     Repeat(Box<RepeatInner>),
-    /// Used in [`Repeat`](Repeat) to refer to the accumulated Notation
+    /// Used in [`Repeat`](Notation::Repeat) to refer to the accumulated Notation
     /// in `join`.
     Left,
-    /// Used in [`Repeat`](Repeat) to refer to the next child in `join`.
+    /// Used in [`Repeat`](Notation::Repeat) to refer to the next child in `join`.
     Right,
-    /// Used in [`Repeat`](Repeat) to refer to the Notation inside of
+    /// Used in [`Repeat`](Notation::Repeat) to refer to the Notation inside of
     /// `surround`.
     Surrounded,
 }
@@ -55,11 +56,11 @@ pub struct RepeatInner {
     /// If the sequence has length one, use this notation.
     pub lone: Notation,
     /// If the sequence has length 2 or more, (left-)fold elements together with
-    /// this notation. [`Left`](Left) holds the notation so far, while
-    /// [`Right`](Right) holds the next child to be folded.
+    /// this notation. [`Left`](Notation::Left) holds the notation so far, while
+    /// [`Right`](Notation::Right) holds the next child to be folded.
     pub join: Notation,
     /// If the sequence has length 2 or more, surround the folded notation with
-    /// this notation. [`Surrounded`](Surrounded) holds the folded notation.
+    /// this notation. [`Surrounded`](Notation::Surrounded) holds the folded notation.
     pub surround: Notation,
 }
 

@@ -1,4 +1,5 @@
-use crate::doc::{Doc, NotationCase, NotationRef};
+use super::notation_ref::{NotationCase, NotationRef};
+use super::pretty_doc::PrettyDoc;
 use std::iter::Iterator;
 
 type Chunk<'d, D> = (Option<usize>, NotationRef<'d, D>);
@@ -9,20 +10,20 @@ pub struct FirstLineLen {
     pub has_newline: bool,
 }
 
-struct Seeker<'d, D: Doc> {
+struct Seeker<'d, D: PrettyDoc> {
     width: usize,
     prev: Vec<Chunk<'d, D>>,
     next: Vec<Chunk<'d, D>>,
 }
 
-struct DownwardPrinter<'d, D: Doc> {
+struct DownwardPrinter<'d, D: PrettyDoc> {
     width: usize,
     next: Vec<Chunk<'d, D>>,
     spaces: usize,
     at_end: bool,
 }
 
-struct UpwardPrinter<'d, D: Doc> {
+struct UpwardPrinter<'d, D: PrettyDoc> {
     width: usize,
     prev: Vec<Chunk<'d, D>>,
     // INVARIANT: only ever contains `Literal` and `Choice` notations.
@@ -30,7 +31,7 @@ struct UpwardPrinter<'d, D: Doc> {
     at_beginning: bool,
 }
 
-pub fn pretty_print<'d, D: Doc>(
+pub fn pretty_print<'d, D: PrettyDoc>(
     doc: &'d D,
     width: usize,
     path: impl IntoIterator<Item = usize>,
@@ -43,7 +44,7 @@ pub fn pretty_print<'d, D: Doc>(
     seeker.seek(path)
 }
 
-impl<'d, D: Doc> Seeker<'d, D> {
+impl<'d, D: PrettyDoc> Seeker<'d, D> {
     fn new(notation: NotationRef<'d, D>, width: usize) -> Seeker<'d, D> {
         Seeker {
             width,
@@ -196,7 +197,7 @@ impl<'d, D: Doc> Seeker<'d, D> {
     }
 }
 
-impl<'d, D: Doc> DownwardPrinter<'d, D> {
+impl<'d, D: PrettyDoc> DownwardPrinter<'d, D> {
     fn print_first_line(&mut self) -> Option<(usize, String)> {
         use NotationCase::*;
 
@@ -251,7 +252,7 @@ impl<'d, D: Doc> DownwardPrinter<'d, D> {
     }
 }
 
-impl<'d, D: Doc> UpwardPrinter<'d, D> {
+impl<'d, D: PrettyDoc> UpwardPrinter<'d, D> {
     fn print_last_line(&mut self) -> Option<(usize, String)> {
         use NotationCase::*;
 
@@ -357,7 +358,7 @@ impl<'d, D: Doc> UpwardPrinter<'d, D> {
 }
 
 // Returns None if impossible.
-fn min_first_line_len<'d, D: Doc>(
+fn min_first_line_len<'d, D: PrettyDoc>(
     notation: NotationRef<'d, D>,
     flat: bool,
 ) -> Option<FirstLineLen> {
@@ -414,7 +415,7 @@ fn min_first_line_len<'d, D: Doc>(
     }
 }
 
-fn compute_suffix_len<'d, D: Doc>(next_chunks: &[Chunk<'d, D>]) -> usize {
+fn compute_suffix_len<'d, D: PrettyDoc>(next_chunks: &[Chunk<'d, D>]) -> usize {
     let mut len = 0;
     for (indent, notation) in next_chunks.iter().rev() {
         let flat = indent.is_none();
@@ -427,7 +428,7 @@ fn compute_suffix_len<'d, D: Doc>(next_chunks: &[Chunk<'d, D>]) -> usize {
     len
 }
 
-fn choose<'d, D: Doc>(
+fn choose<'d, D: PrettyDoc>(
     width: usize,
     indent: Option<usize>,
     prefix_len: usize,
@@ -458,7 +459,7 @@ fn choose<'d, D: Doc>(
     }
 }
 
-impl<'d, D: Doc> Iterator for DownwardPrinter<'d, D> {
+impl<'d, D: PrettyDoc> Iterator for DownwardPrinter<'d, D> {
     type Item = (usize, String);
 
     fn next(&mut self) -> Option<(usize, String)> {
@@ -466,7 +467,7 @@ impl<'d, D: Doc> Iterator for DownwardPrinter<'d, D> {
     }
 }
 
-impl<'d, D: Doc> Iterator for UpwardPrinter<'d, D> {
+impl<'d, D: PrettyDoc> Iterator for UpwardPrinter<'d, D> {
     type Item = (usize, String);
 
     fn next(&mut self) -> Option<(usize, String)> {

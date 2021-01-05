@@ -1,12 +1,8 @@
-mod doc;
 mod notation;
-mod pretty_print;
+mod pretty_printing;
 
-pub mod json_notation;
+pub mod examples;
 pub mod notation_constructors;
-pub mod simple_doc;
 
-// TODO: have an api
-pub use doc::{Doc, DocContents};
 pub use notation::{Notation, RepeatInner};
-pub use pretty_print::pretty_print;
+pub use pretty_printing::{pretty_print, PrettyDoc, PrettyDocContents};

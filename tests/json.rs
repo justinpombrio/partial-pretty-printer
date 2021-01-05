@@ -5,21 +5,21 @@ extern crate test;
 mod common;
 
 use common::{assert_pp, assert_pp_seek, print_region};
-use partial_pretty_printer::json_notation::{
+use partial_pretty_printer::examples::json::{
     json_dict, json_dict_entry, json_list, json_number, json_string, Json,
 };
-use partial_pretty_printer::simple_doc::SimpleDoc;
+use partial_pretty_printer::examples::Doc;
 use test::Bencher;
 
-fn entry_1() -> SimpleDoc<Json> {
+fn entry_1() -> Doc<Json> {
     json_dict_entry("Name", json_string("Alice"))
 }
 
-fn entry_2() -> SimpleDoc<Json> {
+fn entry_2() -> Doc<Json> {
     json_dict_entry("Age", json_number(42))
 }
 
-fn favorites_list() -> SimpleDoc<Json> {
+fn favorites_list() -> Doc<Json> {
     json_list(vec![
         json_string("chocolate"),
         json_string("lemon"),
@@ -27,11 +27,11 @@ fn favorites_list() -> SimpleDoc<Json> {
     ])
 }
 
-fn entry_3() -> SimpleDoc<Json> {
+fn entry_3() -> Doc<Json> {
     json_dict_entry("Favorites", favorites_list())
 }
 
-fn dictionary() -> SimpleDoc<Json> {
+fn dictionary() -> Doc<Json> {
     json_dict(vec![entry_1(), entry_2(), entry_3()])
 }
 
@@ -46,8 +46,8 @@ fn json_small_dict() {
         &[
             // force rustfmt
             "{",
-            "    'Name': 'Alice',",
-            "    'Age': 42",
+            "    \"Name\": \"Alice\",",
+            "    \"Age\": 42",
             "}",
         ],
     );
@@ -61,8 +61,8 @@ fn json_small_dict() {
         ],
         &[
             // force rustfmt
-            "    'Name': 'Alice',",
-            "    'Age': 42",
+            "    \"Name\": \"Alice\",",
+            "    \"Age\": 42",
             "}",
         ],
     );
@@ -76,8 +76,8 @@ fn json_small_dict() {
         ],
         &[
             // force rustfmt
-            "    'Name': 'Alice',",
-            "    'Age': 42",
+            "    \"Name\": \"Alice\",",
+            "    \"Age\": 42",
             "}",
         ],
     );
@@ -88,11 +88,11 @@ fn json_small_dict() {
         &[
             // force rustfmt
             "{",
-            "    'Name': 'Alice',",
+            "    \"Name\": \"Alice\",",
         ],
         &[
             // force rustfmt
-            "    'Age': 42",
+            "    \"Age\": 42",
             "}",
         ],
     );
@@ -103,11 +103,11 @@ fn json_small_dict() {
         &[
             // force rustfmt
             "{",
-            "    'Name': 'Alice',",
+            "    \"Name\": \"Alice\",",
         ],
         &[
             // force rustfmt
-            "    'Age': 42",
+            "    \"Age\": 42",
             "}",
         ],
     );
@@ -117,8 +117,8 @@ fn json_small_dict() {
         &[
             // force rustfmt
             "{",
-            "    'Name': 'Alice',",
-            "    'Age': 42",
+            "    \"Name\": \"Alice\",",
+            "    \"Age\": 42",
             "}",
         ],
     );
@@ -139,8 +139,8 @@ fn json_flow_wrapped_list() {
         &[
             // force rustfmt
             "[",
-            "    'chocolate',",
-            "    'lemon', 'almond'",
+            "    \"chocolate\",",
+            "    \"lemon\", \"almond\"",
             "]",
         ],
     );
@@ -149,9 +149,9 @@ fn json_flow_wrapped_list() {
         &entry_3(),
         27,
         &[
-            "'Favorites': [",
-            "    'chocolate', 'lemon',",
-            "    'almond'",
+            "\"Favorites\": [",
+            "    \"chocolate\", \"lemon\",",
+            "    \"almond\"",
             "]",
         ],
     );
@@ -164,11 +164,11 @@ fn json_big_dict() {
         27,
         &[
             "{",
-            "    'Name': 'Alice',",
-            "    'Age': 42,",
-            "    'Favorites': [",
-            "        'chocolate',",
-            "        'lemon', 'almond'",
+            "    \"Name\": \"Alice\",",
+            "    \"Age\": 42,",
+            "    \"Favorites\": [",
+            "        \"chocolate\",",
+            "        \"lemon\", \"almond\"",
             "    ]",
             "}",
         ],
@@ -179,9 +179,9 @@ fn json_big_dict() {
         60,
         &[
             "{",
-            "    'Name': 'Alice',",
-            "    'Age': 42,",
-            "    'Favorites': ['chocolate', 'lemon', 'almond']",
+            "    \"Name\": \"Alice\",",
+            "    \"Age\": 42,",
+            "    \"Favorites\": [\"chocolate\", \"lemon\", \"almond\"]",
             "}",
         ],
     );
@@ -191,10 +191,10 @@ fn json_big_dict() {
         40,
         &[
             "{",
-            "    'Name': 'Alice',",
-            "    'Age': 42,",
-            "    'Favorites': [",
-            "        'chocolate', 'lemon', 'almond'",
+            "    \"Name\": \"Alice\",",
+            "    \"Age\": 42,",
+            "    \"Favorites\": [",
+            "        \"chocolate\", \"lemon\", \"almond\"",
             "    ]",
             "}",
         ],

@@ -1,6 +1,6 @@
-use super::notation::{Notation, RepeatInner};
-use super::notation_constructors::{child, flat, left, lit, nl, repeat, right, surrounded, text};
-use super::simple_doc::{SimpleDoc, Sort};
+use super::doc::{Doc, Sort};
+use crate::notation::{Notation, RepeatInner};
+use crate::notation_constructors::{child, flat, left, lit, nl, repeat, right, surrounded, text};
 use once_cell::sync::Lazy;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -12,8 +12,7 @@ pub enum Json {
     DictEntry,
 }
 
-// Using single quote instead of double quote to avoid inconvenient escaping
-static JSON_STRING_NOTATION: Lazy<Notation> = Lazy::new(|| lit("'") + text() + lit("'"));
+static JSON_STRING_NOTATION: Lazy<Notation> = Lazy::new(|| lit("\"") + text() + lit("\""));
 static JSON_NUMBER_NOTATION: Lazy<Notation> = Lazy::new(|| text());
 static JSON_LIST_NOTATION: Lazy<Notation> = Lazy::new(|| {
     repeat(RepeatInner {
@@ -55,22 +54,22 @@ impl Sort for Json {
     }
 }
 
-pub fn json_string(s: &str) -> SimpleDoc<Json> {
-    SimpleDoc::new_text(Json::String, s.to_owned())
+pub fn json_string(s: &str) -> Doc<Json> {
+    Doc::new_text(Json::String, s.to_owned())
 }
 
-pub fn json_number(n: usize) -> SimpleDoc<Json> {
-    SimpleDoc::new_text(Json::Number, n.to_string())
+pub fn json_number(n: usize) -> Doc<Json> {
+    Doc::new_text(Json::Number, n.to_string())
 }
 
-pub fn json_dict_entry(key: &str, value: SimpleDoc<Json>) -> SimpleDoc<Json> {
-    SimpleDoc::new_node(Json::DictEntry, vec![json_string(key), value])
+pub fn json_dict_entry(key: &str, value: Doc<Json>) -> Doc<Json> {
+    Doc::new_node(Json::DictEntry, vec![json_string(key), value])
 }
 
-pub fn json_list(elements: Vec<SimpleDoc<Json>>) -> SimpleDoc<Json> {
-    SimpleDoc::new_node(Json::List, elements)
+pub fn json_list(elements: Vec<Doc<Json>>) -> Doc<Json> {
+    Doc::new_node(Json::List, elements)
 }
 
-pub fn json_dict(entries: Vec<SimpleDoc<Json>>) -> SimpleDoc<Json> {
-    SimpleDoc::new_node(Json::Dict, entries)
+pub fn json_dict(entries: Vec<Doc<Json>>) -> Doc<Json> {
+    Doc::new_node(Json::Dict, entries)
 }

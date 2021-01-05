@@ -2,10 +2,10 @@ mod common;
 
 use common::assert_pp;
 use once_cell::sync::Lazy;
+use partial_pretty_printer::examples::{Doc, Sort};
 use partial_pretty_printer::notation_constructors::{
     child, left, lit, nl, repeat, right, surrounded, text,
 };
-use partial_pretty_printer::simple_doc::{SimpleDoc, Sort};
 use partial_pretty_printer::{Notation, RepeatInner};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -49,25 +49,25 @@ impl Sort for LetList {
     }
 }
 
-fn list(elements: Vec<SimpleDoc<LetList>>) -> SimpleDoc<LetList> {
-    SimpleDoc::new_node(LetList::List, elements)
+fn list(elements: Vec<Doc<LetList>>) -> Doc<LetList> {
+    Doc::new_node(LetList::List, elements)
 }
 
-fn make_let(var_name: &str, defn: SimpleDoc<LetList>) -> SimpleDoc<LetList> {
-    SimpleDoc::new_node(LetList::Let, vec![var(var_name), defn])
+fn make_let(var_name: &str, defn: Doc<LetList>) -> Doc<LetList> {
+    Doc::new_node(LetList::Let, vec![var(var_name), defn])
 }
 
 // TODO: Add a way to get this to not share lines
-fn phi() -> SimpleDoc<LetList> {
-    SimpleDoc::new_node(LetList::Phi, vec![])
+fn phi() -> Doc<LetList> {
+    Doc::new_node(LetList::Phi, vec![])
 }
 
-fn num(n: &str) -> SimpleDoc<LetList> {
-    SimpleDoc::new_text(LetList::Num, n.to_owned())
+fn num(n: &str) -> Doc<LetList> {
+    Doc::new_text(LetList::Num, n.to_owned())
 }
 
-fn var(v: &str) -> SimpleDoc<LetList> {
-    SimpleDoc::new_text(LetList::Var, v.to_owned())
+fn var(v: &str) -> Doc<LetList> {
+    Doc::new_text(LetList::Var, v.to_owned())
 }
 
 #[test]
