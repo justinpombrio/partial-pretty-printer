@@ -5,6 +5,9 @@ use once_cell::sync::Lazy;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Json {
+    Null,
+    True,
+    False,
     String,
     Number,
     List,
@@ -12,6 +15,9 @@ pub enum Json {
     DictEntry,
 }
 
+static JSON_NULL_NOTATION: Lazy<Notation> = Lazy::new(|| lit("null"));
+static JSON_TRUE_NOTATION: Lazy<Notation> = Lazy::new(|| lit("true"));
+static JSON_FALSE_NOTATION: Lazy<Notation> = Lazy::new(|| lit("false"));
 static JSON_STRING_NOTATION: Lazy<Notation> = Lazy::new(|| lit("\"") + text() + lit("\""));
 static JSON_NUMBER_NOTATION: Lazy<Notation> = Lazy::new(|| text());
 static JSON_LIST_NOTATION: Lazy<Notation> = Lazy::new(|| {
@@ -45,12 +51,27 @@ impl Sort for Json {
         use Json::*;
 
         match self {
+            Null => &JSON_NULL_NOTATION,
+            True => &JSON_TRUE_NOTATION,
+            False => &JSON_FALSE_NOTATION,
             String => &JSON_STRING_NOTATION,
             Number => &JSON_NUMBER_NOTATION,
             List => &JSON_LIST_NOTATION,
             DictEntry => &JSON_DICT_ENTRY_NOTATION,
             Dict => &JSON_DICT_NOTATION,
         }
+    }
+}
+
+pub fn json_null() -> Doc<Json> {
+    Doc::new_node(Json::Null, vec![])
+}
+
+pub fn json_bool(b: bool) -> Doc<Json> {
+    if b {
+        Doc::new_node(Json::True, vec![])
+    } else {
+        Doc::new_node(Json::False, vec![])
     }
 }
 

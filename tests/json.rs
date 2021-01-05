@@ -6,7 +6,7 @@ mod common;
 
 use common::{assert_pp, assert_pp_seek, print_region};
 use partial_pretty_printer::examples::json::{
-    json_dict, json_dict_entry, json_list, json_number, json_string, Json,
+    json_bool, json_dict, json_dict_entry, json_list, json_null, json_number, json_string, Json,
 };
 use partial_pretty_printer::examples::Doc;
 use test::Bencher;
@@ -33,6 +33,12 @@ fn entry_3() -> Doc<Json> {
 
 fn dictionary() -> Doc<Json> {
     json_dict(vec![entry_1(), entry_2(), entry_3()])
+}
+
+#[test]
+fn json_constants() {
+    let doc = json_list(vec![json_bool(true), json_null(), json_bool(false)]);
+    assert_pp(&doc, 80, &["[true, null, false]"]);
 }
 
 #[test]
