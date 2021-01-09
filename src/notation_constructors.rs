@@ -13,7 +13,7 @@ pub fn text() -> Notation {
 }
 
 pub fn lit(s: &str) -> Notation {
-    Notation::Literal(Literal::new(s))
+    Notation::Literal(Box::new(Literal::new(s)))
 }
 
 pub fn flat(n: Notation) -> Notation {

@@ -14,7 +14,7 @@ pub enum Notation {
     /// Display a piece of text. Must be used on a texty node.
     Text,
     /// Literal text. Cannot contain a newline.
-    Literal(Literal),
+    Literal(Box<Literal>),
     /// Only consider single-line options of the contained notation.
     Flat(Box<Notation>),
     /// Indent all lines of the contained notation except the first to the right by the given
