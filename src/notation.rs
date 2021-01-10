@@ -1,3 +1,4 @@
+use crate::style::Style;
 use std::fmt;
 use std::ops::{Add, BitOr, BitXor, Shr};
 
@@ -12,7 +13,7 @@ pub enum Notation {
     /// Display a newline. If this is inside an `Indent`, the new line will be indented.
     Newline,
     /// Display a piece of text. Must be used on a texty node.
-    Text,
+    Text(Style),
     /// Literal text. Cannot contain a newline.
     Literal(Box<Literal>),
     /// Only consider single-line options of the contained notation.
@@ -51,6 +52,7 @@ pub enum Notation {
 pub struct Literal {
     string: String,
     len: usize,
+    style: Style,
 }
 
 /// Describes how to display the extra children of a syntactic
@@ -71,10 +73,11 @@ pub struct RepeatInner {
 }
 
 impl Literal {
-    pub fn new(s: &str) -> Literal {
+    pub fn new(s: &str, style: Style) -> Literal {
         Literal {
             string: s.to_owned(),
             len: s.chars().count(),
+            style,
         }
     }
 
@@ -85,6 +88,10 @@ impl Literal {
     pub fn str(&self) -> &str {
         &self.string
     }
+
+    pub fn style(&self) -> Style {
+        self.style
+    }
 }
 
 impl fmt::Display for Notation {
@@ -94,7 +101,7 @@ impl fmt::Display for Notation {
         match self {
             Empty => write!(f, "ε"),
             Newline => write!(f, "↵"),
-            Text => write!(f, "TEXT"),
+            Text(_) => write!(f, "TEXT"),
             Literal(lit) => write!(f, "{}", lit.string),
             Flat(note) => write!(f, "Flat({})", note),
             Indent(i, note) => write!(f, "⇒{}({})", i, note),

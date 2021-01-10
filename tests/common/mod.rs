@@ -1,4 +1,4 @@
-use partial_pretty_printer::{pretty_print, PrettyDoc};
+use partial_pretty_printer::{pretty_print, pretty_print_to_string, PrettyDoc};
 
 fn compare_lines(message: &str, actual: &[String], expected: &[&str]) {
     if actual != expected {
@@ -17,14 +17,13 @@ fn print_above_and_below<D: PrettyDoc>(
     width: usize,
     path: &[usize],
 ) -> (Vec<String>, Vec<String>) {
-    let path_iter = path.into_iter().map(|i| *i);
-    let (upward_printer, downward_printer) = pretty_print(doc, width, path_iter);
+    let (upward_printer, downward_printer) = pretty_print(doc, width, path);
     let mut lines_above = upward_printer
-        .map(|(spaces, line)| format!("{:spaces$}{}", "", line, spaces = spaces))
+        .map(|line| line.to_string())
         .collect::<Vec<_>>();
     lines_above.reverse();
     let lines_below = downward_printer
-        .map(|(spaces, line)| format!("{:spaces$}{}", "", line, spaces = spaces))
+        .map(|line| line.to_string())
         .collect::<Vec<_>>();
     (lines_above, lines_below)
 }
@@ -50,15 +49,14 @@ pub fn print_region<D: PrettyDoc>(
     path: &[usize],
     rows: usize,
 ) -> Vec<String> {
-    let path_iter = path.into_iter().map(|i| *i);
-    let (upward_printer, downward_printer) = pretty_print(doc, width, path_iter);
+    let (upward_printer, downward_printer) = pretty_print(doc, width, path);
     let mut lines = upward_printer
-        .map(|(spaces, line)| format!("{:spaces$}{}", "", line, spaces = spaces))
+        .map(|line| line.to_string())
         .take(rows / 2)
         .collect::<Vec<_>>();
     lines.reverse();
     let mut lines_below = downward_printer
-        .map(|(spaces, line)| format!("{:spaces$}{}", "", line, spaces = spaces))
+        .map(|line| line.to_string())
         .take(rows / 2)
         .collect::<Vec<_>>();
     lines.append(&mut lines_below);
@@ -67,6 +65,11 @@ pub fn print_region<D: PrettyDoc>(
 
 #[track_caller]
 pub fn assert_pp<D: PrettyDoc>(doc: &D, width: usize, expected_lines: &[&str]) {
+    let lines = pretty_print_to_string(doc, width)
+        .split('\n')
+        .map(|s| s.to_owned())
+        .collect::<Vec<_>>();
+    compare_lines("IN PRETTY PRINTING", &lines, expected_lines);
     for path in all_paths(doc) {
         let (lines_above, mut lines_below) = print_above_and_below(doc, width, &path);
         let mut lines = lines_above;

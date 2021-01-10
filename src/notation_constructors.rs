@@ -1,4 +1,5 @@
 use super::notation::{Literal, Notation, RepeatInner};
+use super::style::Style;
 
 pub fn nl() -> Notation {
     Notation::Newline
@@ -9,11 +10,12 @@ pub fn child(i: usize) -> Notation {
 }
 
 pub fn text() -> Notation {
-    Notation::Text
+    Notation::Text(Style::default())
 }
 
 pub fn lit(s: &str) -> Notation {
-    Notation::Literal(Box::new(Literal::new(s)))
+    let literal = Literal::new(s, Style::default());
+    Notation::Literal(Box::new(literal))
 }
 
 pub fn flat(n: Notation) -> Notation {

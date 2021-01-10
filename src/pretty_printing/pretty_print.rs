@@ -1,8 +1,14 @@
 use super::notation_ref::{NotationCase, NotationRef};
 use super::pretty_doc::PrettyDoc;
+use crate::style::Style;
 use std::iter::Iterator;
 
 type Chunk<'d, D> = (Option<usize>, NotationRef<'d, D>);
+
+pub struct LineContents<'d> {
+    pub spaces: usize,
+    pub contents: Vec<(&'d str, Style)>,
+}
 
 #[derive(Clone, Debug)]
 pub struct FirstLineLen {
@@ -34,14 +40,34 @@ struct UpwardPrinter<'d, D: PrettyDoc> {
 pub fn pretty_print<'d, D: PrettyDoc>(
     doc: &'d D,
     width: usize,
-    path: impl IntoIterator<Item = usize>,
+    path: &[usize],
 ) -> (
-    impl Iterator<Item = (usize, String)> + 'd,
-    impl Iterator<Item = (usize, String)> + 'd,
+    impl Iterator<Item = LineContents<'d>> + 'd,
+    impl Iterator<Item = LineContents<'d>> + 'd,
 ) {
     let notation = NotationRef::new(doc);
     let seeker = Seeker::new(notation, width);
     seeker.seek(path)
+}
+
+pub fn pretty_print_to_string<'d, D: PrettyDoc>(doc: &'d D, width: usize) -> String {
+    let (_, mut lines_iter) = pretty_print(doc, width, &[]);
+    let mut string = lines_iter.next().unwrap().to_string();
+    for line in lines_iter {
+        string.push('\n');
+        string.push_str(&line.to_string());
+    }
+    string
+}
+
+impl<'d> ToString for LineContents<'d> {
+    fn to_string(&self) -> String {
+        let mut string = format!("{:spaces$}", "", spaces = self.spaces);
+        for (text, _style) in &self.contents {
+            string.push_str(text);
+        }
+        string
+    }
 }
 
 impl<'d, D: PrettyDoc> Seeker<'d, D> {
@@ -53,16 +79,12 @@ impl<'d, D: PrettyDoc> Seeker<'d, D> {
         }
     }
 
-    fn seek(
-        mut self,
-        path: impl IntoIterator<Item = usize>,
-    ) -> (UpwardPrinter<'d, D>, DownwardPrinter<'d, D>) {
+    fn seek(mut self, path: &[usize]) -> (UpwardPrinter<'d, D>, DownwardPrinter<'d, D>) {
         use NotationCase::*;
 
-        let path = path.into_iter().collect::<Vec<_>>();
         let mut path = path.into_iter();
         while let Some(child_index) = path.next() {
-            self.seek_child(child_index);
+            self.seek_child(*child_index);
         }
 
         // Walk backward to the nearest Newline (or beginning of the doc).
@@ -74,7 +96,7 @@ impl<'d, D: PrettyDoc> Seeker<'d, D> {
                     unreachable!()
                 }
                 Literal(_) => self.next.push((indent, notation)),
-                Text(_) => self.next.push((indent, notation)),
+                Text(_, _) => self.next.push((indent, notation)),
                 Newline => {
                     // drop the newline, but take note of it by setting at_beginning=false.
                     at_beginning = false;
@@ -113,7 +135,7 @@ impl<'d, D: PrettyDoc> Seeker<'d, D> {
                     Empty => (),
                     Literal(_) => self.prev.push((indent, notation)),
                     Newline => self.prev.push((indent, notation)),
-                    Text(_) => self.prev.push((indent, notation)),
+                    Text(_, _) => self.prev.push((indent, notation)),
                     Indent(j, note) => self.next.push((indent.map(|i| i + j), note)),
                     Flat(note) => self.next.push((None, note)),
                     Concat(left, right) => {
@@ -138,7 +160,7 @@ impl<'d, D: PrettyDoc> Seeker<'d, D> {
             while let Some((indent, notation)) = self.prev.pop() {
                 match notation.case() {
                     Empty | Indent(_, _) | Flat(_) | Concat(_, _) => unreachable!(),
-                    Literal(_) | Text(_) | Choice(_, _) | Child(_, _) => {
+                    Literal(_) | Text(_, _) | Choice(_, _) | Child(_, _) => {
                         self.next.push((indent, notation))
                     }
                     Newline => {
@@ -159,7 +181,7 @@ impl<'d, D: PrettyDoc> Seeker<'d, D> {
                         prefix_len += lit.len();
                         self.prev.push((indent, notation))
                     }
-                    Text(text) => {
+                    Text(text, _style) => {
                         prefix_len += text.chars().count();
                         self.prev.push((indent, notation));
                     }
@@ -198,31 +220,33 @@ impl<'d, D: PrettyDoc> Seeker<'d, D> {
 }
 
 impl<'d, D: PrettyDoc> DownwardPrinter<'d, D> {
-    fn print_first_line(&mut self) -> Option<(usize, String)> {
+    fn print_first_line(&mut self) -> Option<LineContents<'d>> {
         use NotationCase::*;
 
         if self.at_end {
             return None;
         }
 
-        let mut string = String::new();
+        let mut contents = vec![];
         let mut prefix_len = self.spaces;
         while let Some((indent, notation)) = self.next.pop() {
             match notation.case() {
                 Empty => (),
                 Literal(lit) => {
-                    string.push_str(lit.str());
+                    contents.push((lit.str(), lit.style()));
                     prefix_len += lit.len();
                 }
-                Text(text) => {
-                    let text = text.as_ref();
-                    string.push_str(text);
+                Text(text, style) => {
+                    contents.push((text.as_ref(), style));
                     prefix_len += text_len(text);
                 }
                 Newline => {
-                    let line = (self.spaces, string);
+                    let contents = LineContents {
+                        spaces: self.spaces,
+                        contents: contents,
+                    };
                     self.spaces = indent.unwrap();
-                    return Some(line);
+                    return Some(contents);
                 }
                 Indent(j, note) => self.next.push((indent.map(|i| i + j), note)),
                 Flat(note) => self.next.push((None, note)),
@@ -240,7 +264,10 @@ impl<'d, D: PrettyDoc> DownwardPrinter<'d, D> {
         }
 
         self.at_end = true;
-        Some((self.spaces, string))
+        Some(LineContents {
+            spaces: self.spaces,
+            contents: contents,
+        })
     }
 
     #[allow(unused)]
@@ -253,7 +280,7 @@ impl<'d, D: PrettyDoc> DownwardPrinter<'d, D> {
 }
 
 impl<'d, D: PrettyDoc> UpwardPrinter<'d, D> {
-    fn print_last_line(&mut self) -> Option<(usize, String)> {
+    fn print_last_line(&mut self) -> Option<LineContents<'d>> {
         use NotationCase::*;
 
         if self.at_beginning {
@@ -268,7 +295,7 @@ impl<'d, D: PrettyDoc> UpwardPrinter<'d, D> {
                     prefix_len += lit.len();
                     self.prev.push((indent, notation));
                 }
-                Text(text) => {
+                Text(text, _style) => {
                     prefix_len += text_len(text);
                     self.prev.push((indent, notation));
                 }
@@ -295,15 +322,18 @@ impl<'d, D: PrettyDoc> UpwardPrinter<'d, D> {
             spaces = 0;
         }
 
-        let mut string = String::new();
+        let mut contents = vec![];
         while let Some((_, notation)) = self.next.pop() {
             match notation.case() {
-                NotationCase::Literal(lit) => string.push_str(lit.str()),
-                NotationCase::Text(text) => string.push_str(text),
+                NotationCase::Literal(lit) => contents.push((lit.str(), lit.style())),
+                NotationCase::Text(text, style) => contents.push((text.as_ref(), style)),
                 _ => panic!("display_line: expected only literals and text"),
             }
         }
-        Some((spaces, string))
+        Some(LineContents {
+            spaces,
+            contents: contents,
+        })
     }
 
     fn seek_end(&mut self) {
@@ -323,7 +353,7 @@ impl<'d, D: PrettyDoc> UpwardPrinter<'d, D> {
         while let Some((indent, notation)) = self.prev.pop() {
             match notation.case() {
                 Empty => (),
-                Text(_) => self.next.push((indent, notation)),
+                Text(_, _) => self.next.push((indent, notation)),
                 Literal(_) => self.next.push((indent, notation)),
                 Newline => {
                     if !delete_newline {
@@ -376,7 +406,7 @@ fn min_first_line_len<'d, D: PrettyDoc>(
                 has_newline: false,
             })
         }
-        Text(text) => {
+        Text(text, _style) => {
             let text_len = text_len(text);
             Some(FirstLineLen {
                 len: text_len,
@@ -464,17 +494,17 @@ fn text_len(text: &str) -> usize {
 }
 
 impl<'d, D: PrettyDoc> Iterator for DownwardPrinter<'d, D> {
-    type Item = (usize, String);
+    type Item = LineContents<'d>;
 
-    fn next(&mut self) -> Option<(usize, String)> {
+    fn next(&mut self) -> Option<LineContents<'d>> {
         self.print_first_line()
     }
 }
 
 impl<'d, D: PrettyDoc> Iterator for UpwardPrinter<'d, D> {
-    type Item = (usize, String);
+    type Item = LineContents<'d>;
 
-    fn next(&mut self) -> Option<(usize, String)> {
+    fn next(&mut self) -> Option<LineContents<'d>> {
         self.print_last_line()
     }
 }
