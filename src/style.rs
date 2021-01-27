@@ -121,6 +121,7 @@ impl Default for Style {
     }
 }
 
+/*
 impl ShadedStyle {
     pub fn new(style: Style, shade: Shade) -> Self {
         Self {
@@ -130,10 +131,12 @@ impl ShadedStyle {
             shade,
         }
     }
+
     pub fn plain() -> Self {
         Self::new(Style::plain(), Shade::background())
     }
 }
+*/
 
 impl Shade {
     /// Typically pure black, the most ordinary shade.

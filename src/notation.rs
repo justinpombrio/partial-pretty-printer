@@ -51,6 +51,7 @@ pub enum Notation {
 #[derive(Clone, Debug)]
 pub struct Literal {
     string: String,
+    /// Number of characters (*not* num bytes!)
     len: usize,
     style: Style,
 }

@@ -8,6 +8,7 @@ edition = "2018"
 
 [dependencies]
 once_cell = "*"
+thiserror = "*"
 
 [profile.release]
 debug = true

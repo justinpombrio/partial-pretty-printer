@@ -1,11 +1,12 @@
 use super::pretty_window::PrettyWindow;
-use crate::geometry::{Col, Line, Size};
-use crate::style::Shade;
-use crate::LineContents;
+use crate::geometry::{Col, Height, Line, Pos, Size, Width};
+use crate::pretty_printing::LineContents;
+use crate::style::{Shade, Style};
 use std::fmt;
-use std::mem;
+use std::iter;
 
 /// Render a document in plain text.
+#[derive(Debug)]
 pub struct PlainText {
     lines: Vec<String>,
     size: Size,
@@ -30,9 +31,9 @@ impl PlainText {
     }
 
     /// Construct a screen with the given width and unbounded height.
-    pub fn new_unbounded_height(width: Col) -> PlainText {
+    pub fn new_unbounded_height(width: Width) -> PlainText {
         let size = Size {
-            height: Line::max_value(),
+            height: Height::max_value(),
             width,
         };
         PlainText::new(size)
@@ -53,17 +54,35 @@ impl PrettyWindow for PlainText {
         Ok(self.size)
     }
 
-    fn print_line(
-        &mut self,
-        line_num: Line,
-        line_contents: LineContents,
-    ) -> Result<(), Self::Error> {
-        if line_num >= self.size.height {
+    fn print(&mut self, pos: Pos, string: &str, _style: Style) -> Result<(), Self::Error> {
+        if pos.line.0 >= self.size.height.0 {
             return Ok(());
         }
-        let line_mut = self.get_mut_line(line_num as usize);
-        let _ = mem::replace(line_mut, line_contents.to_string());
+        let line_mut = self.get_mut_line(pos.line.0 as usize);
+        let mut old_chars = line_mut.chars();
+        let mut new_line = String::new();
+
+        // Print out the old contents that are the to left of the start column.
+        for _ in 0..pos.col.0 {
+            new_line.push(old_chars.next().unwrap_or(' '));
+        }
+
+        // Print out the new contents.
+        new_line.push_str(string);
+
+        // Print out the old contents that are to the right of the end column.
+        let old_chars = old_chars.skip(string.chars().count());
+        for ch in old_chars {
+            new_line.push(ch);
+        }
+
+        *line_mut = new_line;
         Ok(())
+    }
+
+    fn fill(&mut self, pos: Pos, ch: char, len: usize, style: Style) -> Result<(), Self::Error> {
+        let string: String = iter::repeat(ch).take(len).collect();
+        self.print(pos, &string, style)
     }
 
     fn highlight(
