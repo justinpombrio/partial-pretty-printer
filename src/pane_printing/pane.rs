@@ -1,9 +1,9 @@
 use super::pane_notation::{PaneNotation, PaneSize};
 use super::pretty_window::PrettyWindow;
 use super::render_options::RenderOptions;
-use crate::geometry::{Line, Pos, Rectangle, Width};
-use crate::pretty_printing::{LineContents, PrettyDoc};
-use crate::style::Style;
+use crate::geometry::{Col, Line, Pos, Rectangle, Width};
+use crate::pretty_printing::{pretty_print, LineContents, PrettyDoc};
+use crate::style::{Shade, ShadedStyle, Style};
 use std::fmt;
 use std::hash::Hash;
 
@@ -59,17 +59,28 @@ where
         })
     }
 
-    fn print_line(&mut self, pos: Pos, contents: LineContents) -> Result<(), W::Error> {
-        let mut pos = pos;
+    fn print_line(
+        &mut self,
+        line: Line,
+        contents: LineContents,
+        highlight_cursor: bool,
+    ) -> Result<(), PaneError<W>> {
+        let mut pos = Pos { line, col: Col(0) };
         pos.col += Width(contents.spaces as u16);
-        for (string, style) in contents.contents {
-            self.print(pos, string, style)?;
+        for (string, style, hl) in contents.contents {
+            let shade = if highlight_cursor && hl {
+                Shade::highlight()
+            } else {
+                Shade::background()
+            };
+            let shaded_style = ShadedStyle::new(style, shade);
+            self.print(pos, string, shaded_style)?;
             pos.col += Width(string.chars().count() as u16);
         }
         Ok(())
     }
 
-    fn print(&mut self, pos: Pos, string: &str, style: Style) -> Result<(), W::Error> {
+    fn print(&mut self, pos: Pos, string: &str, style: ShadedStyle) -> Result<(), PaneError<W>> {
         if pos.col >= self.rect.max_col {
             // Trying to print outside the pane.
             return Ok(());
@@ -79,19 +90,25 @@ where
             let (last_index, last_char) = string.char_indices().take(max_len).last().unwrap();
             let end_index = last_index + last_char.len_utf8();
             let truncated_string = &string[0..end_index];
-            self.window.print(pos, truncated_string, style)
+            self.window
+                .print(pos, truncated_string, style)
+                .map_err(PaneError::PrettyWindowErr)
         } else {
-            self.window.print(pos, string, style)
+            self.window
+                .print(pos, string, style)
+                .map_err(PaneError::PrettyWindowErr)
         }
     }
 
-    fn fill(&mut self, pos: Pos, ch: char, style: Style) -> Result<(), W::Error> {
+    fn fill(&mut self, pos: Pos, ch: char, style: ShadedStyle) -> Result<(), PaneError<W>> {
         if pos.col >= self.rect.max_col {
             // Trying to print outside the pane.
             return Ok(());
         }
         let len = (self.rect.max_col - pos.col).0 as usize;
-        self.window.fill(pos, ch, len, style)
+        self.window
+            .fill(pos, ch, len, style)
+            .map_err(PaneError::PrettyWindowErr)
     }
 
     fn render_doc(
@@ -100,38 +117,28 @@ where
         path: &[usize],
         render_options: &RenderOptions,
     ) -> Result<(), PaneError<W>> {
-        unimplemented!();
-        /*
-        let width = render_options.width_strategy.choose(self.rect.width());
+        let doc_width = render_options.width_strategy.choose(self.rect.width()).0 as usize;
+        let focal_line = render_options
+            .scroll_strategy
+            .focal_line(self.rect.height());
 
-        ...
-
-        // Highlight the cursor region
-        // TODO handle multiple levels of cursor shading
-        match render_options.cursor_visibility {
-            CursorVisibility::Hide => (),
-            CursorVisibility::Show => {
-                // TODO
-                unimplemented!();
+        let (mut upward_printer, mut downward_printer) = pretty_print(&doc, doc_width, path);
+        let highlight_cursor = render_options.highlight_cursor;
+        for line in (0..focal_line.0).into_iter().rev() {
+            if let Some(contents) = upward_printer.next() {
+                self.print_line(Line(line), contents, highlight_cursor)?;
+            } else {
+                break;
             }
         }
-
-
-
-        // pretty_print(doc, width, path)
-        doc.pretty_print(self, *render_options)
-            .map_err(PaneError::from_pretty_window)?;
-        let root = self.root();
-
-        let layout = layout(&root, Pos::zero(), width);
-        let cursor_region = self.locate_cursor(width);
-        let doc_pos = render_options
-            .scroll_strategy
-            .choose(pane.rect.height(), cursor_region);
-
-        let doc_rect = Rect::new(doc_pos, pane.rect().size());
-        render(&root, pane, doc_rect, &layout)?;
-        */
+        for line in focal_line.0..self.rect.height().0 {
+            if let Some(contents) = downward_printer.next() {
+                self.print_line(Line(line), contents, highlight_cursor)?;
+            } else {
+                break;
+            }
+        }
+        Ok(())
     }
 
     /// Render to this pane according to the given [PaneNotation]. Use the `get_content` closure to
@@ -146,8 +153,8 @@ where
                 for line in 0..self.rect.height().0 {
                     let line = Line(line);
                     let col = self.rect.min_col;
-                    self.fill(Pos { line, col }, *ch, *style)
-                        .map_err(PaneError::PrettyWindowErr)?;
+                    let shaded_style = ShadedStyle::new(*style, Shade::background());
+                    self.fill(Pos { line, col }, *ch, shaded_style)?;
                 }
             }
             PaneNotation::Empty => (),

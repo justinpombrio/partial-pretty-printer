@@ -121,7 +121,6 @@ impl Default for Style {
     }
 }
 
-/*
 impl ShadedStyle {
     pub fn new(style: Style, shade: Shade) -> Self {
         Self {
@@ -136,12 +135,16 @@ impl ShadedStyle {
         Self::new(Style::plain(), Shade::background())
     }
 }
-*/
 
 impl Shade {
     /// Typically pure black, the most ordinary shade.
     pub fn background() -> Shade {
         Shade(usize::max_value())
+    }
+
+    /// Cursor highlight color; typically dark gray.
+    pub fn highlight() -> Shade {
+        Shade(0)
     }
 }
 

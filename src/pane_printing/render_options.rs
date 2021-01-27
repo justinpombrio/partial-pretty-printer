@@ -1,18 +1,11 @@
-use crate::geometry::Width;
+use crate::geometry::{Height, Line, Width};
 use std::cmp;
 
 #[derive(Debug, Clone, Copy)]
 pub struct RenderOptions {
-    pub cursor_visibility: CursorVisibility,
+    pub highlight_cursor: bool,
     pub scroll_strategy: ScrollStrategy,
     pub width_strategy: WidthStrategy,
-}
-
-/// The visibility of the cursor in some document.
-#[derive(Debug, Clone, Copy)]
-pub enum CursorVisibility {
-    Show,
-    Hide,
 }
 
 /// How to choose the document width, after learning the how much width is available.
@@ -42,4 +35,14 @@ pub struct ScrollStrategy {
     /// Position the document such that the top of the cursor is at this height,
     /// where 1 is the top line of the Pane and 0 is the bottom line.
     cursor_height: f32,
+}
+
+impl ScrollStrategy {
+    pub fn focal_line(self, available_height: Height) -> Line {
+        assert!(self.cursor_height >= 0.0);
+        assert!(self.cursor_height <= 1.0);
+        let offset_from_top =
+            f32::round((available_height.0 - 1) as f32 * (1.0 - self.cursor_height)) as u32;
+        Line(offset_from_top)
+    }
 }

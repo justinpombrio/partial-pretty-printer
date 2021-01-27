@@ -1,6 +1,6 @@
 use super::pretty_window::PrettyWindow;
-use crate::geometry::{Col, Height, Line, Pos, Size, Width};
-use crate::style::{Shade, Style};
+use crate::geometry::{Height, Pos, Size, Width};
+use crate::style::ShadedStyle;
 use std::fmt;
 use std::iter;
 
@@ -53,7 +53,7 @@ impl PrettyWindow for PlainText {
         Ok(self.size)
     }
 
-    fn print(&mut self, pos: Pos, string: &str, _style: Style) -> Result<(), Self::Error> {
+    fn print(&mut self, pos: Pos, string: &str, _style: ShadedStyle) -> Result<(), Self::Error> {
         if pos.line.0 >= self.size.height.0 {
             return Ok(());
         }
@@ -79,18 +79,14 @@ impl PrettyWindow for PlainText {
         Ok(())
     }
 
-    fn fill(&mut self, pos: Pos, ch: char, len: usize, style: Style) -> Result<(), Self::Error> {
+    fn fill(
+        &mut self,
+        pos: Pos,
+        ch: char,
+        len: usize,
+        style: ShadedStyle,
+    ) -> Result<(), Self::Error> {
         let string: String = iter::repeat(ch).take(len).collect();
         self.print(pos, &string, style)
-    }
-
-    fn highlight(
-        &mut self,
-        _line: Line,
-        _cols: (Col, Col),
-        _shade: Option<Shade>,
-        _reverse: bool,
-    ) -> Result<(), Self::Error> {
-        Ok(())
     }
 }
