@@ -50,15 +50,6 @@ impl Pos {
 }
 
 impl Rectangle {
-    fn new(min_col: Col, max_col: Col, min_line: Line, max_line: Line) -> Rectangle {
-        Rectangle {
-            min_col,
-            max_col,
-            min_line,
-            max_line,
-        }
-    }
-
     pub fn width(self) -> Width {
         self.max_col - self.min_col
     }
@@ -89,13 +80,6 @@ impl Rectangle {
         VertSplits {
             rect: self,
             heights,
-        }
-    }
-
-    pub fn upper_left(self) -> Pos {
-        Pos {
-            col: self.min_col,
-            line: self.min_line,
         }
     }
 }
