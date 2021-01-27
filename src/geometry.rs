@@ -40,7 +40,15 @@ pub struct Rectangle {
     pub max_col: Col,
 }
 
-/// Does this rectangle completely cover the other rectangle?
+impl Pos {
+    pub fn zero() -> Pos {
+        Pos {
+            line: Line(0),
+            col: Col(0),
+        }
+    }
+}
+
 impl Rectangle {
     fn new(min_col: Col, max_col: Col, min_line: Line, max_line: Line) -> Rectangle {
         Rectangle {
@@ -59,6 +67,7 @@ impl Rectangle {
         self.max_line - self.min_line
     }
 
+    /// Does this rectangle completely cover the other rectangle?
     pub fn covers(self, other: Rectangle) -> bool {
         self.min_line <= other.min_line
             && other.max_line <= self.max_line

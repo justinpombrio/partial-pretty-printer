@@ -32,7 +32,7 @@ struct DownwardPrinter<'d, D: PrettyDoc> {
 struct UpwardPrinter<'d, D: PrettyDoc> {
     width: usize,
     prev: Vec<Chunk<'d, D>>,
-    // INVARIANT: only ever contains `Literal` and `Choice` notations.
+    // INVARIANT: only ever contains `Literal`, `Text`, and `Choice` notations.
     next: Vec<Chunk<'d, D>>,
     at_beginning: bool,
 }

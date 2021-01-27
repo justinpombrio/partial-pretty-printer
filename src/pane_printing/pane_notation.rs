@@ -1,4 +1,4 @@
-use crate::geometry::Pos;
+use super::render_options::RenderOptions;
 use crate::style::Style;
 use std::hash::Hash;
 
@@ -22,8 +22,7 @@ pub enum PaneNotation<L: Copy + Eq + Hash> {
     /// is rendered.
     Doc {
         label: L,
-        cursor_visibility: CursorVisibility,
-        scroll_strategy: ScrollStrategy,
+        render_options: RenderOptions,
     },
     /// Fill the entire `Pane` by repeating the given character and style.
     Fill { ch: char, style: Style },
@@ -56,27 +55,6 @@ pub enum PaneSize {
     /// each subpane will be proportional to its weight, so that a subpane with
     /// weight 2 will be twice as large as one with weight 1, etc.
     Proportional(usize),
-}
-
-/// The visibility of the cursor in some document.
-#[derive(Debug, Clone, Copy)]
-pub enum CursorVisibility {
-    Show,
-    Hide,
-}
-
-/// What part of the document to show.
-#[derive(Debug, Clone, Copy)]
-pub enum ScrollStrategy {
-    /// Put this row and column of the document at the top left corner of the Pane.
-    Fixed(Pos),
-    /// Put the beginning of the document at the top left corner of the
-    /// Pane. Equivalent to `Fixed(Pos{line: 0, col: 0})`.
-    Beginning,
-    // TODO: Remember to swap 0&1.
-    /// Position the document such that the top of the cursor is at this height,
-    /// where 0 is the top line of the Pane and 1 is the bottom line.
-    CursorHeight { fraction: f32 },
 }
 
 impl PaneSize {

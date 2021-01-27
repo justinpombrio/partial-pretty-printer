@@ -1,9 +1,16 @@
 use super::pane_notation::{PaneNotation, PaneSize};
 use super::pretty_window::PrettyWindow;
-use crate::geometry::{Height, Line, Pos, Rectangle, Width};
-use crate::pretty_printing::LineContents;
+use super::render_options::RenderOptions;
+use crate::geometry::{Line, Pos, Rectangle, Width};
+use crate::pretty_printing::{LineContents, PrettyDoc};
 use crate::style::Style;
+use std::fmt;
 use std::hash::Hash;
+
+pub trait Label: Copy + Eq + Hash + fmt::Debug {}
+
+/// A list of child indices, describing the path from the root to a node in the document.
+pub type Path = Vec<usize>;
 
 /// A rectangular area of a window. You can pretty-print to it, or get sub-panes
 /// of it and pretty-print to those.
@@ -87,12 +94,52 @@ where
         self.window.fill(pos, ch, len, style)
     }
 
+    fn render_doc(
+        &mut self,
+        doc: impl PrettyDoc,
+        path: &[usize],
+        render_options: &RenderOptions,
+    ) -> Result<(), PaneError<W>> {
+        unimplemented!();
+        /*
+        let width = render_options.width_strategy.choose(self.rect.width());
+
+        ...
+
+        // Highlight the cursor region
+        // TODO handle multiple levels of cursor shading
+        match render_options.cursor_visibility {
+            CursorVisibility::Hide => (),
+            CursorVisibility::Show => {
+                // TODO
+                unimplemented!();
+            }
+        }
+
+
+
+        // pretty_print(doc, width, path)
+        doc.pretty_print(self, *render_options)
+            .map_err(PaneError::from_pretty_window)?;
+        let root = self.root();
+
+        let layout = layout(&root, Pos::zero(), width);
+        let cursor_region = self.locate_cursor(width);
+        let doc_pos = render_options
+            .scroll_strategy
+            .choose(pane.rect.height(), cursor_region);
+
+        let doc_rect = Rect::new(doc_pos, pane.rect().size());
+        render(&root, pane, doc_rect, &layout)?;
+        */
+    }
+
     /// Render to this pane according to the given [PaneNotation]. Use the `get_content` closure to
     /// map the document labels used in any `PaneNotation::Doc` variants to actual documents.
-    pub fn render<L: Copy + Eq + Hash, D>(
+    pub fn render<L: Label, D: PrettyDoc>(
         &mut self,
         note: &PaneNotation<L>,
-        get_content: impl Fn(L) -> Option<D>,
+        get_content: impl Fn(L) -> Option<(D, Path)>,
     ) -> Result<(), PaneError<W>> {
         match note {
             PaneNotation::Fill { ch, style } => {
@@ -104,6 +151,14 @@ where
                 }
             }
             PaneNotation::Empty => (),
+            PaneNotation::Doc {
+                label,
+                render_options,
+            } => {
+                let (doc, path) = get_content(*label)
+                    .ok_or_else(|| PaneError::MissingLabel(format!("{:?}", label)))?;
+                self.render_doc(doc, &path, render_options)?;
+            }
             _ => unimplemented!(),
         };
         Ok(())

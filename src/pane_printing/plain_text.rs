@@ -1,6 +1,5 @@
 use super::pretty_window::PrettyWindow;
 use crate::geometry::{Col, Height, Line, Pos, Size, Width};
-use crate::pretty_printing::LineContents;
 use crate::style::{Shade, Style};
 use std::fmt;
 use std::iter;
