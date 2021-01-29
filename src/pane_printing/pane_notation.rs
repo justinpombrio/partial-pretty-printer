@@ -37,19 +37,19 @@ pub enum PaneSize {
     /// `PaneNotation::Vert`) or columns of width (for `PaneNotation::Horz`).
     Fixed(usize),
 
-    /// Try to give the subpane exactly the amount of height needed to fit its
-    /// content. If that's not possible, give it all of the remaining height.
-    /// This means that if there are multiple DynHeight subpanes and not enough
-    /// height to satisfy all of them, the ones earlier in the list get
-    /// priority. `DynHeight` subpanes get priority over `Proportional`
+    /// Try to give the subpane exactly the amount of height or width needed to fit its content. If
+    /// that's not possible, give it all of the remaining height or width. Note that notations are
+    /// typically very greedy for width, so you should only use `Dynamic` width in specific
+    /// circumstances.
+    ///
+    /// If there are multiple Dynamic subpanes and not enough height to satisfy all of them, the
+    /// ones earlier in the list get priority. `Dynamic` subpanes get priority over `Proportional`
     /// subpanes, regardless of order.
     ///
-    /// There are restrictions on when you can use `DynHeight`:
-    ///  - `DynHeight` can only be applied to subpanes within a `PaneNotation::Vert`
-    ///  - a `DynHeight` subpane can only contain a `PaneNotation::Doc`, not more nested subpanes
-    DynHeight,
+    /// A `Dynamic` subpane can only contain a `PaneNotation::Doc`, not more nested subpanes.
+    Dynamic,
 
-    /// After `Fixed` and `DynHeight` subpanes have been assigned a
+    /// After `Fixed` and `Dynamic` subpanes have been assigned a
     /// width/height, divide up the remaining available width/height between the
     /// `Proportional` subpanes according to their given weights. The size of
     /// each subpane will be proportional to its weight, so that a subpane with

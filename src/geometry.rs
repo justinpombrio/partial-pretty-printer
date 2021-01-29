@@ -194,6 +194,14 @@ impl Add<Width> for Col {
     }
 }
 
+impl Add<Width> for Width {
+    type Output = Width;
+
+    fn add(self, width: Width) -> Width {
+        Width(self.0 + width.0)
+    }
+}
+
 impl AddAssign<Width> for Col {
     fn add_assign(&mut self, width: Width) {
         *self = *self + width
@@ -205,6 +213,14 @@ impl Add<Height> for Line {
 
     fn add(self, height: Height) -> Line {
         Line(self.0 + height.0)
+    }
+}
+
+impl Add<Height> for Height {
+    type Output = Height;
+
+    fn add(self, height: Height) -> Height {
+        Height(self.0 + height.0)
     }
 }
 

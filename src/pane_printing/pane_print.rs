@@ -66,14 +66,42 @@ fn pane_print_rec<L: Label, D: PrettyDoc, W: PrettyWindow>(
             }
         }
         PaneNotation::Horz { panes } => {
-            let child_notes: Vec<_> = panes.iter().map(|p| &p.1).collect();
-            let child_sizes: Vec<_> = panes.iter().map(|p| p.0).collect();
+            let child_notes: Vec<_> = panes.iter().map(|(_, note)| note).collect();
+            let total_fixed: usize = panes.iter().filter_map(|(size, _)| size.get_fixed()).sum();
             let total_width = pane.rect.width().0 as usize;
+            let mut available_width = total_width.saturating_sub(total_fixed);
+            let child_sizes = panes
+                .iter()
+                .map(|(size, notation)| match *size {
+                    PaneSize::Dynamic => {
+                        // Convert dynamic width into a fixed width, based on the currrent document.
+                        if let PaneNotation::Doc { label, .. } = notation {
+                            let (doc, path) = get_content(*label)
+                                .ok_or_else(|| PaneError::MissingLabel(format!("{:?}", label)))?;
+                            let width = doc_width(
+                                doc,
+                                &path,
+                                pane.rect.height(),
+                                Width(available_width as u16),
+                            );
+                            let width = width.0 as usize;
+                            available_width -= width;
+                            Ok(PaneSize::Fixed(width))
+                        } else {
+                            // Dynamic may only be used on Doc subpanes!
+                            Err(PaneError::InvalidNotation)
+                        }
+                    }
+                    size => Ok(size), // pass through all other pane sizes
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+
             let widths: Vec<_> = divvy(total_width, &child_sizes)
                 .ok_or(PaneError::ImpossibleDemands)?
                 .into_iter()
                 .map(|n| Width(n as u16))
                 .collect();
+
             let rects = pane.rect.horz_splits(&widths);
             for (rect, child_note) in rects.zip(child_notes.into_iter()) {
                 let mut child_pane = pane.sub_pane(rect).ok_or(PaneError::NotSubPane)?;
@@ -81,27 +109,29 @@ fn pane_print_rec<L: Label, D: PrettyDoc, W: PrettyWindow>(
             }
         }
         PaneNotation::Vert { panes } => {
-            let child_notes: Vec<_> = panes.iter().map(|p| &p.1).collect();
-            let total_fixed: usize = panes.iter().filter_map(|p| p.0.get_fixed()).sum();
+            let child_notes: Vec<_> = panes.iter().map(|(_, note)| note).collect();
+            let total_fixed: usize = panes.iter().filter_map(|(size, _)| size.get_fixed()).sum();
             let total_height = pane.rect.height().0 as usize;
             let mut available_height = total_height.saturating_sub(total_fixed);
             let child_sizes = panes
                 .iter()
-                .map(|p| match p.0 {
-                    PaneSize::DynHeight => {
+                .map(|(size, notation)| match *size {
+                    PaneSize::Dynamic => {
                         // Convert dynamic height into a fixed height, based on the currrent document.
-                        if let PaneNotation::Doc { label, .. } = &p.1 {
-                            let f = get_content.clone();
-                            let _doc = f(*label)
+                        if let PaneNotation::Doc { label, .. } = notation {
+                            let (doc, path) = get_content(*label)
                                 .ok_or_else(|| PaneError::MissingLabel(format!("{:?}", label)))?;
-                            // TODO
-                            unimplemented!();
-                            let height = 0;
-                            // let height = available_height.min(doc.required_height(pane.rect.width()));
+                            let height = doc_height(
+                                doc,
+                                &path,
+                                pane.rect.width(),
+                                Height(available_height as u32),
+                            );
+                            let height = height.0 as usize;
                             available_height -= height;
                             Ok(PaneSize::Fixed(height))
                         } else {
-                            // DynHeight is only implemented for Doc subpanes!
+                            // Dynamic may only be used on Doc subpanes!
                             Err(PaneError::InvalidNotation)
                         }
                     }
@@ -125,6 +155,21 @@ fn pane_print_rec<L: Label, D: PrettyDoc, W: PrettyWindow>(
     Ok(())
 }
 
+fn doc_height(doc: impl PrettyDoc, path: &[usize], width: Width, max_height: Height) -> Height {
+    let (_, downward_printer) = pretty_print(&doc, width.0 as usize, path);
+    Height(downward_printer.take(max_height.0 as usize).count() as u32)
+}
+
+fn doc_width(doc: impl PrettyDoc, path: &[usize], height: Height, max_width: Width) -> Width {
+    let (_, downward_printer) = pretty_print(&doc, max_width.0 as usize, path);
+    let lines = downward_printer.take(height.0 as usize);
+    let mut width = 0;
+    for line in lines {
+        width = width.max(line.to_string().chars().count() as u16);
+    }
+    Width(width)
+}
+
 fn divvy(cookies: usize, demands: &[PaneSize]) -> Option<Vec<usize>> {
     let total_fixed: usize = demands.iter().filter_map(|demand| demand.get_fixed()).sum();
     if total_fixed > cookies {
@@ -145,8 +190,8 @@ fn divvy(cookies: usize, demands: &[PaneSize]) -> Option<Vec<usize>> {
             .map(|demand| match demand {
                 PaneSize::Fixed(n) => *n,
                 PaneSize::Proportional(_) => proportional_allocation.next().expect("bug in divvy"),
-                PaneSize::DynHeight => {
-                    panic!("All DynHeight sizes should have been replaced by Fixed sizes by now!")
+                PaneSize::Dynamic => {
+                    panic!("All Dynamic sizes should have been replaced by Fixed sizes by now!")
                 }
             })
             .collect(),
