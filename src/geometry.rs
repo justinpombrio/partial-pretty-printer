@@ -50,6 +50,15 @@ impl Pos {
 }
 
 impl Rectangle {
+    pub const fn new(min_col: u16, max_col: u16, min_line: u32, max_line: u32) -> Rectangle {
+        Rectangle {
+            min_col: Col(min_col),
+            max_col: Col(max_col),
+            min_line: Line(min_line),
+            max_line: Line(max_line),
+        }
+    }
+
     pub fn width(self) -> Width {
         self.max_col - self.min_col
     }
@@ -279,23 +288,13 @@ impl Height {
 mod tests {
     use super::*;
 
-    static RECT: Rectangle = Rectangle {
-        min_col: 1,
-        max_col: 5,
-        min_line: 2,
-        max_line: 4,
-    };
+    const RECT: Rectangle = Rectangle::new(1, 5, 2, 4);
 
-    static BIG: Rectangle = Rectangle {
-        min_line: 1,
-        max_line: 4,
-        min_col: 1,
-        max_col: 5,
-    };
+    const BIG: Rectangle = Rectangle::new(1, 5, 1, 4);
 
     #[test]
     fn test_split_horz1() {
-        let mut it = RECT.horz_splits(&[1, 3]);
+        let mut it = RECT.horz_splits(&[Width(1), Width(3)]);
         assert_eq!(it.next(), Some(Rectangle::new(1, 2, 2, 4)));
         assert_eq!(it.next(), Some(Rectangle::new(2, 5, 2, 4)));
         assert_eq!(it.next(), None)
@@ -303,7 +302,17 @@ mod tests {
 
     #[test]
     fn test_split_horz2() {
-        let mut it = RECT.horz_splits(&[0, 1, 0, 1, 0, 1, 0, 1, 0]);
+        let mut it = RECT.horz_splits(&[
+            Width(0),
+            Width(1),
+            Width(0),
+            Width(1),
+            Width(0),
+            Width(1),
+            Width(0),
+            Width(1),
+            Width(0),
+        ]);
         assert_eq!(it.next(), Some(Rectangle::new(1, 1, 2, 4)));
         assert_eq!(it.next(), Some(Rectangle::new(1, 2, 2, 4)));
         assert_eq!(it.next(), Some(Rectangle::new(2, 2, 2, 4)));
@@ -319,14 +328,14 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_split_horz3() {
-        let mut it = RECT.horz_splits(&[5, 1]);
+        let mut it = RECT.horz_splits(&[Width(5), Width(1)]);
         it.next();
     }
 
     #[test]
     #[should_panic]
     fn test_split_horz4() {
-        let mut it = RECT.horz_splits(&[1, 5]);
+        let mut it = RECT.horz_splits(&[Width(1), Width(5)]);
         it.next();
         it.next();
     }
@@ -334,7 +343,7 @@ mod tests {
     #[test]
     fn test_split_horz5() {
         // It's ok to leave some leftover width
-        let mut it = RECT.horz_splits(&[1, 1]);
+        let mut it = RECT.horz_splits(&[Width(1), Width(1)]);
         assert_eq!(it.next(), Some(Rectangle::new(1, 2, 2, 4)));
         assert_eq!(it.next(), Some(Rectangle::new(2, 3, 2, 4)));
         assert_eq!(it.next(), None);
@@ -342,7 +351,7 @@ mod tests {
 
     #[test]
     fn test_split_vert1() {
-        let mut it = BIG.vert_splits(&[1, 2]);
+        let mut it = BIG.vert_splits(&[Height(1), Height(2)]);
         assert_eq!(it.next(), Some(Rectangle::new(1, 5, 1, 2)));
         assert_eq!(it.next(), Some(Rectangle::new(1, 5, 2, 4)));
         assert_eq!(it.next(), None)
@@ -350,7 +359,15 @@ mod tests {
 
     #[test]
     fn test_split_vert2() {
-        let mut it = BIG.vert_splits(&[0, 1, 0, 1, 0, 1, 0]);
+        let mut it = BIG.vert_splits(&[
+            Height(0),
+            Height(1),
+            Height(0),
+            Height(1),
+            Height(0),
+            Height(1),
+            Height(0),
+        ]);
         assert_eq!(it.next(), Some(Rectangle::new(1, 5, 1, 1)));
         assert_eq!(it.next(), Some(Rectangle::new(1, 5, 1, 2)));
         assert_eq!(it.next(), Some(Rectangle::new(1, 5, 2, 2)));
@@ -364,14 +381,14 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_split_vert3() {
-        let mut it = BIG.vert_splits(&[4, 1]);
+        let mut it = BIG.vert_splits(&[Height(4), Height(1)]);
         it.next();
     }
 
     #[test]
     #[should_panic]
     fn test_split_vert4() {
-        let mut it = BIG.vert_splits(&[1, 4]);
+        let mut it = BIG.vert_splits(&[Height(1), Height(4)]);
         it.next();
         it.next();
     }
@@ -379,7 +396,7 @@ mod tests {
     #[test]
     fn test_split_vert5() {
         // It's ok to leave some leftover height
-        let mut it = BIG.vert_splits(&[1, 1]);
+        let mut it = BIG.vert_splits(&[Height(1), Height(1)]);
         assert_eq!(it.next(), Some(Rectangle::new(1, 5, 1, 2)));
         assert_eq!(it.next(), Some(Rectangle::new(1, 5, 2, 3)));
         assert_eq!(it.next(), None);
