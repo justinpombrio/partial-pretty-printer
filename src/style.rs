@@ -9,26 +9,21 @@ use self::Color::*;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Style {
     pub color: Color,
-    pub emph: Emph,
+    pub bold: bool,
+    pub underlined: bool,
     pub reversed: bool,
 }
 
 /// The overall style to render text.
 /// If `reversed`, swap the foreground and background.
+// TODO: How widespread is terminal support for underlining?
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ShadedStyle {
     pub color: Color,
-    pub emph: Emph,
-    pub reversed: bool,
-    pub shade: Shade,
-}
-
-// TODO: How widespread is terminal support for underlining?
-/// Bold, underlined, or both?
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Emph {
     pub bold: bool,
     pub underlined: bool,
+    pub reversed: bool,
+    pub shade: Shade,
 }
 
 /// The foreground color of some text (or if reversed the background color).
@@ -75,40 +70,15 @@ pub enum Color {
 /// Only 0, 1, and 2+ are distinguished at the moment.
 /// 0 is lightest (most highlighted), and 2+ is black (least highlighted).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Shade(pub usize);
-
-impl Emph {
-    /// Neither bold nor underlined.
-    pub fn plain() -> Emph {
-        Emph {
-            underlined: false,
-            bold: false,
-        }
-    }
-
-    /// Just underlined.
-    pub fn underlined() -> Emph {
-        Emph {
-            underlined: true,
-            bold: false,
-        }
-    }
-
-    /// Just bold.
-    pub fn bold() -> Emph {
-        Emph {
-            underlined: false,
-            bold: true,
-        }
-    }
-}
+pub struct Shade(pub u8);
 
 impl Style {
     /// Typically, ordinary white on black.
     pub fn plain() -> Self {
         Style {
             color: Color::Base05,
-            emph: Emph::plain(),
+            bold: false,
+            underlined: false,
             reversed: false,
         }
     }
@@ -117,7 +87,8 @@ impl Style {
     pub fn color(color: Color) -> Style {
         Style {
             color,
-            emph: Emph::plain(),
+            bold: false,
+            underlined: false,
             reversed: false,
         }
     }
@@ -133,7 +104,8 @@ impl ShadedStyle {
     pub fn new(style: Style, shade: Shade) -> Self {
         Self {
             color: style.color,
-            emph: style.emph,
+            bold: style.bold,
+            underlined: style.underlined,
             reversed: style.reversed,
             shade,
         }
@@ -147,7 +119,7 @@ impl ShadedStyle {
 impl Shade {
     /// Typically pure black, the most ordinary shade.
     pub fn background() -> Shade {
-        Shade(usize::max_value())
+        Shade(u8::max_value())
     }
 
     /// Cursor highlight color; typically dark gray.

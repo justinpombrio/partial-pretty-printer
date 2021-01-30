@@ -1,7 +1,7 @@
 use super::doc::{Doc, Sort};
 use crate::notation::{Notation, RepeatInner};
 use crate::notation_constructors::{child, flat, left, lit, nl, repeat, right, surrounded, text};
-use crate::style::{Color, Emph, Style};
+use crate::style::{Color, Style};
 use once_cell::sync::Lazy;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -25,10 +25,8 @@ fn constant(s: &'static str) -> Notation {
         s,
         Style {
             color: Color::Base09,
-            emph: Emph {
-                bold: true,
-                underlined: false,
-            },
+            bold: true,
+            underlined: false,
             reversed: false,
         },
     )

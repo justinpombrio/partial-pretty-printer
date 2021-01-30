@@ -5,8 +5,8 @@ mod common;
 use common::SimpleDoc;
 use partial_pretty_printer::notation_constructors::{empty, lit};
 use partial_pretty_printer::{
-    pane_print, Color, Emph, Height, Label, Line, Notation, PaneNotation, Pos, PrettyDoc,
-    PrettyWindow, RenderOptions, ShadedStyle, Size, Style, Width, WidthStrategy,
+    pane_print, Color, Height, Label, Line, Notation, PaneNotation, Pos, PrettyDoc, PrettyWindow,
+    RenderOptions, ShadedStyle, Size, Style, Width, WidthStrategy,
 };
 use std::fmt;
 use std::fmt::Debug;
@@ -56,7 +56,7 @@ impl fmt::Display for RichText {
             }
             write!(f, "\n")?;
             for (_, style) in line {
-                let emph = match (style.emph.bold, style.emph.underlined) {
+                let emph = match (style.bold, style.underlined) {
                     (false, false) => ' ',
                     (true, false) => 'b',
                     (false, true) => 'u',
@@ -169,7 +169,8 @@ fn test_pane_styles() {
             "Hello",
             Style {
                 color: Color::Base09,
-                emph: Emph::underlined(),
+                bold: false,
+                underlined: true,
                 reversed: false,
             },
         ),
@@ -177,7 +178,8 @@ fn test_pane_styles() {
             ",",
             Style {
                 color: Color::Base0A,
-                emph: Emph::bold(),
+                bold: true,
+                underlined: false,
                 reversed: false,
             },
         ),
@@ -186,7 +188,8 @@ fn test_pane_styles() {
             "world",
             Style {
                 color: Color::Base0B,
-                emph: Emph::plain(),
+                bold: false,
+                underlined: false,
                 reversed: false,
             },
         ),
@@ -194,10 +197,8 @@ fn test_pane_styles() {
             "!",
             Style {
                 color: Color::Base0C,
-                emph: Emph {
-                    bold: true,
-                    underlined: true,
-                },
+                bold: true,
+                underlined: true,
                 reversed: true,
             },
         ),

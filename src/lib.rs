@@ -16,4 +16,4 @@ pub use pane_printing::{
 pub use pretty_printing::{
     pretty_print, pretty_print_to_string, LineContents, PrettyDoc, PrettyDocContents,
 };
-pub use style::{Color, Emph, ShadedStyle, Style};
+pub use style::{Color, ShadedStyle, Style};
