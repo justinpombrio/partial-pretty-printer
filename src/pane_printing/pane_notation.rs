@@ -1,25 +1,20 @@
 use super::render_options::RenderOptions;
 use crate::style::Style;
-use std::hash::Hash;
+use std::fmt;
+
+pub trait Label: Clone + fmt::Debug {}
 
 /// Specify the content of a `Pane`.
 #[derive(Clone, Debug)]
-pub enum PaneNotation<L: Copy + Eq + Hash> {
-    /// Split the pane horizontally into multiple subpanes, each with its own
-    /// `PaneNotation`. Each subpane has the same height as this `Pane`, and a
-    /// width determined by its `PaneSize`.
-    Horz {
-        panes: Vec<(PaneSize, PaneNotation<L>)>,
-    },
-    /// Split the pane vertically into multiple subpanes, each with its own
-    /// `PaneNotation`. Each subpane has the same width as this `Pane`, and a
-    /// height determined by its `PaneSize`.
-    Vert {
-        panes: Vec<(PaneSize, PaneNotation<L>)>,
-    },
-    /// Render a `PrettyDocument` into this `Pane`. The given `DocLabel` will
-    /// be used to dynamically look up a `PrettyDocument` every time the `Pane`
-    /// is rendered.
+pub enum PaneNotation<L: Label> {
+    /// Split the pane into multiple subpanes from left to right, each with its own `PaneNotation`.
+    /// Each subpane has the same height as this `Pane`, and a width determined by its `PaneSize`.
+    Horz(Vec<(PaneSize, PaneNotation<L>)>),
+    /// Split the pane into multiple subpanes from top to bottom, each with its own `PaneNotation`.
+    /// Each subpane has the same width as this `Pane`, and a height determined by its `PaneSize`.
+    Vert(Vec<(PaneSize, PaneNotation<L>)>),
+    /// Render a `PrettyDocument` into this `Pane`. The given `DocLabel` will be used to
+    /// dynamically look up a `PrettyDocument` every time the `Pane` is rendered.
     Doc {
         label: L,
         render_options: RenderOptions,

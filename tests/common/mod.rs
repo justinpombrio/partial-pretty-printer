@@ -1,4 +1,25 @@
-use partial_pretty_printer::{pretty_print, pretty_print_to_string, PrettyDoc};
+use partial_pretty_printer::{
+    pretty_print, pretty_print_to_string, Notation, PrettyDoc, PrettyDocContents,
+};
+
+#[derive(Debug, Clone)]
+pub struct SimpleDoc(pub Notation);
+
+impl PrettyDoc for SimpleDoc {
+    type Id = usize;
+
+    fn id(&self) -> usize {
+        0
+    }
+
+    fn notation(&self) -> &Notation {
+        &self.0
+    }
+
+    fn contents(&self) -> PrettyDocContents<SimpleDoc> {
+        PrettyDocContents::Children(&[])
+    }
+}
 
 fn compare_lines(message: &str, actual: &[String], expected: &[&str]) {
     if actual != expected {
@@ -28,7 +49,8 @@ fn print_above_and_below<D: PrettyDoc>(
     (lines_above, lines_below)
 }
 
-fn all_paths<D: PrettyDoc>(doc: &D) -> Vec<Vec<usize>> {
+#[allow(unused)]
+pub fn all_paths<D: PrettyDoc>(doc: &D) -> Vec<Vec<usize>> {
     fn recur<D: PrettyDoc>(doc: &D, path: &mut Vec<usize>, paths: &mut Vec<Vec<usize>>) {
         paths.push(path.clone());
         for i in 0..doc.num_children().unwrap_or(0) {
@@ -63,6 +85,7 @@ pub fn print_region<D: PrettyDoc>(
     lines
 }
 
+#[allow(unused)]
 #[track_caller]
 pub fn assert_pp<D: PrettyDoc>(doc: &D, width: usize, expected_lines: &[&str]) {
     let lines = pretty_print_to_string(doc, width)
@@ -118,32 +141,5 @@ pub fn assert_pp_region<D: PrettyDoc>(
         &format!("IN PRINTING {} ROWS AT PATH {:?}", rows, path),
         &lines,
         expected_lines,
-    );
-}
-
-#[test]
-fn test_all_paths_fn() {
-    use partial_pretty_printer::examples::json::{json_list, json_string};
-    let doc = json_list(vec![
-        json_list(vec![json_string("0.0"), json_string("0.1")]),
-        json_string("1"),
-        json_list(vec![
-            json_list(vec![json_string("2.0.0")]),
-            json_string("2.1"),
-        ]),
-    ]);
-    assert_eq!(
-        all_paths(&doc),
-        vec![
-            vec![],
-            vec![0],
-            vec![0, 0],
-            vec![0, 1],
-            vec![1],
-            vec![2],
-            vec![2, 0],
-            vec![2, 0, 0],
-            vec![2, 1]
-        ]
     );
 }

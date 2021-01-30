@@ -1,13 +1,9 @@
 use super::pane::{Pane, PaneError};
-use super::pane_notation::{PaneNotation, PaneSize};
+use super::pane_notation::{Label, PaneNotation, PaneSize};
 use super::pretty_window::PrettyWindow;
 use crate::geometry::{Height, Line, Pos, Width};
 use crate::pretty_printing::{pretty_print, PrettyDoc};
 use crate::style::{Shade, ShadedStyle};
-use std::fmt;
-use std::hash::Hash;
-
-pub trait Label: Copy + Eq + Hash + fmt::Debug {}
 
 /// A list of child indices, describing the path from the root to a node in the document.
 pub type Path = Vec<usize>;
@@ -15,11 +11,11 @@ pub type Path = Vec<usize>;
 /// Render to this pane according to the given [PaneNotation]. Use the `get_content` closure to
 /// map the document labels used in any `PaneNotation::Doc` variants to actual documents.
 pub fn pane_print<L: Label, D: PrettyDoc, W: PrettyWindow>(
-    mut window: W,
+    window: &mut W,
     note: &PaneNotation<L>,
     get_content: &impl Fn(L) -> Option<(D, Path)>,
 ) -> Result<(), PaneError<W>> {
-    let mut pane = Pane::new(&mut window)?;
+    let mut pane = Pane::new(window)?;
     pane_print_rec(&mut pane, note, get_content)
 }
 
@@ -31,7 +27,7 @@ fn pane_print_rec<L: Label, D: PrettyDoc, W: PrettyWindow>(
     match note {
         PaneNotation::Empty => (),
         PaneNotation::Fill { ch, style } => {
-            for line in 0..pane.rect.height().0 {
+            for line in pane.rect.min_line.0..pane.rect.max_line.0 {
                 let line = Line(line);
                 let col = pane.rect.min_col;
                 let shaded_style = ShadedStyle::new(*style, Shade::background());
@@ -42,12 +38,10 @@ fn pane_print_rec<L: Label, D: PrettyDoc, W: PrettyWindow>(
             label,
             render_options,
         } => {
-            let (doc, path) = get_content(*label)
+            let (doc, path) = get_content(label.clone())
                 .ok_or_else(|| PaneError::MissingLabel(format!("{:?}", label)))?;
-            let doc_width = render_options.width_strategy.choose(pane.rect.width()).0 as usize;
-            let focal_line = render_options
-                .scroll_strategy
-                .focal_line(pane.rect.height());
+            let doc_width = render_options.choose_width(pane.rect.width()).0 as usize;
+            let focal_line = render_options.focal_line(pane.rect.height());
             let (mut upward_printer, mut downward_printer) = pretty_print(&doc, doc_width, &path);
             let highlight_cursor = render_options.highlight_cursor;
             for line in (0..focal_line.0).into_iter().rev() {
@@ -65,7 +59,7 @@ fn pane_print_rec<L: Label, D: PrettyDoc, W: PrettyWindow>(
                 }
             }
         }
-        PaneNotation::Horz { panes } => {
+        PaneNotation::Horz(panes) => {
             let child_notes: Vec<_> = panes.iter().map(|(_, note)| note).collect();
             let total_fixed: usize = panes.iter().filter_map(|(size, _)| size.get_fixed()).sum();
             let total_width = pane.rect.width().0 as usize;
@@ -76,7 +70,7 @@ fn pane_print_rec<L: Label, D: PrettyDoc, W: PrettyWindow>(
                     PaneSize::Dynamic => {
                         // Convert dynamic width into a fixed width, based on the currrent document.
                         if let PaneNotation::Doc { label, .. } = notation {
-                            let (doc, path) = get_content(*label)
+                            let (doc, path) = get_content(label.clone())
                                 .ok_or_else(|| PaneError::MissingLabel(format!("{:?}", label)))?;
                             let width = doc_width(
                                 doc,
@@ -108,7 +102,7 @@ fn pane_print_rec<L: Label, D: PrettyDoc, W: PrettyWindow>(
                 pane_print_rec(&mut child_pane, child_note, get_content)?;
             }
         }
-        PaneNotation::Vert { panes } => {
+        PaneNotation::Vert(panes) => {
             let child_notes: Vec<_> = panes.iter().map(|(_, note)| note).collect();
             let total_fixed: usize = panes.iter().filter_map(|(size, _)| size.get_fixed()).sum();
             let total_height = pane.rect.height().0 as usize;
@@ -119,7 +113,7 @@ fn pane_print_rec<L: Label, D: PrettyDoc, W: PrettyWindow>(
                     PaneSize::Dynamic => {
                         // Convert dynamic height into a fixed height, based on the currrent document.
                         if let PaneNotation::Doc { label, .. } = notation {
-                            let (doc, path) = get_content(*label)
+                            let (doc, path) = get_content(label.clone())
                                 .ok_or_else(|| PaneError::MissingLabel(format!("{:?}", label)))?;
                             let height = doc_height(
                                 doc,

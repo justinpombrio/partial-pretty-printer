@@ -1,26 +1,8 @@
 mod common;
 
-use common::assert_pp;
+use common::{all_paths, assert_pp, SimpleDoc};
 use partial_pretty_printer::notation_constructors::{flat, lit};
-use partial_pretty_printer::{Notation, PrettyDoc, PrettyDocContents};
-
-struct SimpleDoc(Notation);
-
-impl PrettyDoc for SimpleDoc {
-    type Id = usize;
-
-    fn id(&self) -> usize {
-        0
-    }
-
-    fn notation(&self) -> &Notation {
-        &self.0
-    }
-
-    fn contents(&self) -> PrettyDocContents<SimpleDoc> {
-        PrettyDocContents::Children(&[])
-    }
-}
+use partial_pretty_printer::Notation;
 
 #[test]
 fn basics_empty() {
@@ -63,4 +45,31 @@ fn basics_choice() {
     let notation = lit("Hello world!") | lit("Hello") ^ lit("world!");
     assert_pp(&SimpleDoc(notation.clone()), 12, &["Hello world!"]);
     assert_pp(&SimpleDoc(notation), 11, &["Hello", "world!"]);
+}
+
+#[test]
+fn test_all_paths_fn() {
+    use partial_pretty_printer::examples::json::{json_list, json_string};
+    let doc = json_list(vec![
+        json_list(vec![json_string("0.0"), json_string("0.1")]),
+        json_string("1"),
+        json_list(vec![
+            json_list(vec![json_string("2.0.0")]),
+            json_string("2.1"),
+        ]),
+    ]);
+    assert_eq!(
+        all_paths(&doc),
+        vec![
+            vec![],
+            vec![0],
+            vec![0, 0],
+            vec![0, 1],
+            vec![1],
+            vec![2],
+            vec![2, 0],
+            vec![2, 0, 0],
+            vec![2, 1]
+        ]
+    );
 }

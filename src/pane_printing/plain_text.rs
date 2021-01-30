@@ -14,7 +14,7 @@ pub struct PlainText {
 impl fmt::Display for PlainText {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for line in &self.lines {
-            write!(f, "{}", line)?;
+            write!(f, "{}\n", line)?;
         }
         Ok(())
     }
@@ -22,20 +22,19 @@ impl fmt::Display for PlainText {
 
 impl PlainText {
     /// Construct a screen with the given width and height.
-    pub fn new(size: Size) -> PlainText {
+    pub fn new(width: u16, height: u32) -> PlainText {
         PlainText {
             lines: vec![],
-            size,
+            size: Size {
+                width: Width(width),
+                height: Height(height),
+            },
         }
     }
 
     /// Construct a screen with the given width and unbounded height.
-    pub fn new_unbounded_height(width: Width) -> PlainText {
-        let size = Size {
-            height: Height::max_value(),
-            width,
-        };
-        PlainText::new(size)
+    pub fn new_unbounded_height(width: u16) -> PlainText {
+        PlainText::new(width, u32::max_value())
     }
 
     fn get_mut_line(&mut self, line_num: usize) -> &mut String {

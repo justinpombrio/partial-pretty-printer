@@ -50,6 +50,7 @@ impl Pos {
 }
 
 impl Rectangle {
+    #[cfg(test)]
     pub const fn new(min_col: u16, max_col: u16, min_line: u32, max_line: u32) -> Rectangle {
         Rectangle {
             min_col: Col(min_col),
@@ -275,12 +276,6 @@ impl fmt::Display for Pos {
 impl fmt::Display for Size {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}:{}", self.height, self.width)
-    }
-}
-
-impl Height {
-    pub fn max_value() -> Height {
-        Height(u32::max_value())
     }
 }
 
