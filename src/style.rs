@@ -93,6 +93,14 @@ impl Emph {
             bold: false,
         }
     }
+
+    /// Just bold.
+    pub fn bold() -> Emph {
+        Emph {
+            underlined: false,
+            bold: true,
+        }
+    }
 }
 
 impl Style {

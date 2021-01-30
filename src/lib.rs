@@ -7,6 +7,7 @@ mod style;
 pub mod examples;
 pub mod notation_constructors;
 
+pub use geometry::{Col, Height, Line, Pos, Size, Width};
 pub use notation::{Notation, RepeatInner};
 pub use pane_printing::{
     pane_print, Label, PaneNotation, PaneSize, PlainText, PrettyWindow, RenderOptions,
@@ -15,4 +16,4 @@ pub use pane_printing::{
 pub use pretty_printing::{
     pretty_print, pretty_print_to_string, LineContents, PrettyDoc, PrettyDocContents,
 };
-pub use style::{Color, Emph, Style};
+pub use style::{Color, Emph, ShadedStyle, Style};

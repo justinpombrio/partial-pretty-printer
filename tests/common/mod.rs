@@ -1,6 +1,12 @@
+use partial_pretty_printer::notation_constructors::lit;
 use partial_pretty_printer::{
-    pretty_print, pretty_print_to_string, Notation, PrettyDoc, PrettyDocContents,
+    pretty_print, pretty_print_to_string, Notation, PrettyDoc, PrettyDocContents, Style,
 };
+
+#[allow(unused)]
+pub fn punct(s: &'static str) -> Notation {
+    lit(s, Style::plain())
+}
 
 #[derive(Debug, Clone)]
 pub struct SimpleDoc(pub Notation);

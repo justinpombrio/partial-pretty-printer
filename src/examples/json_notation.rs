@@ -1,6 +1,7 @@
 use super::doc::{Doc, Sort};
 use crate::notation::{Notation, RepeatInner};
 use crate::notation_constructors::{child, flat, left, lit, nl, repeat, right, surrounded, text};
+use crate::style::{Color, Emph, Style};
 use once_cell::sync::Lazy;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -15,34 +16,53 @@ pub enum Json {
     DictEntry,
 }
 
-static JSON_NULL_NOTATION: Lazy<Notation> = Lazy::new(|| lit("null"));
-static JSON_TRUE_NOTATION: Lazy<Notation> = Lazy::new(|| lit("true"));
-static JSON_FALSE_NOTATION: Lazy<Notation> = Lazy::new(|| lit("false"));
-static JSON_STRING_NOTATION: Lazy<Notation> = Lazy::new(|| lit("\"") + text() + lit("\""));
-static JSON_NUMBER_NOTATION: Lazy<Notation> = Lazy::new(|| text());
+fn punct(s: &'static str) -> Notation {
+    lit(s, Style::plain())
+}
+
+fn constant(s: &'static str) -> Notation {
+    lit(
+        s,
+        Style {
+            color: Color::Base09,
+            emph: Emph {
+                bold: true,
+                underlined: false,
+            },
+            reversed: false,
+        },
+    )
+}
+
+static JSON_NULL_NOTATION: Lazy<Notation> = Lazy::new(|| constant("null"));
+static JSON_TRUE_NOTATION: Lazy<Notation> = Lazy::new(|| constant("true"));
+static JSON_FALSE_NOTATION: Lazy<Notation> = Lazy::new(|| constant("false"));
+static JSON_STRING_NOTATION: Lazy<Notation> =
+    Lazy::new(|| punct("\"") + text(Style::color(Color::Base0B)) + punct("\""));
+static JSON_NUMBER_NOTATION: Lazy<Notation> = Lazy::new(|| text(Style::color(Color::Base09)));
 static JSON_LIST_NOTATION: Lazy<Notation> = Lazy::new(|| {
     repeat(RepeatInner {
-        empty: lit("[]"),
-        lone: lit("[") + child(0) + lit("]"),
-        join: left() + lit(",") + (lit(" ") | nl()) + right(),
+        empty: punct("[]"),
+        lone: punct("[") + child(0) + punct("]"),
+        join: left() + punct(",") + (punct(" ") | nl()) + right(),
         surround: {
-            let single = lit("[") + flat(surrounded()) + lit("]");
-            let multi = lit("[") + (4 >> surrounded()) ^ lit("]");
+            let single = punct("[") + flat(surrounded()) + punct("]");
+            let multi = punct("[") + (4 >> surrounded()) ^ punct("]");
             single | multi
         },
     })
 });
-static JSON_DICT_ENTRY_NOTATION: Lazy<Notation> = Lazy::new(|| child(0) + lit(": ") + child(1));
+static JSON_DICT_ENTRY_NOTATION: Lazy<Notation> = Lazy::new(|| child(0) + punct(": ") + child(1));
 static JSON_DICT_NOTATION: Lazy<Notation> = Lazy::new(|| {
     repeat(RepeatInner {
-        empty: lit("{}"),
+        empty: punct("{}"),
         lone: {
-            let single = lit("{") + left() + lit("}");
-            let multi = lit("{") + (4 >> left()) ^ lit("}");
+            let single = punct("{") + left() + punct("}");
+            let multi = punct("{") + (4 >> left()) ^ punct("}");
             single | multi
         },
-        join: left() + lit(",") + nl() + right(),
-        surround: lit("{") + (4 >> surrounded()) ^ lit("}"),
+        join: left() + punct(",") + nl() + right(),
+        surround: punct("{") + (4 >> surrounded()) ^ punct("}"),
     })
 });
 

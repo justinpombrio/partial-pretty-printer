@@ -1,10 +1,10 @@
 mod common;
 
-use common::assert_pp;
+use common::{assert_pp, punct};
 use once_cell::sync::Lazy;
 use partial_pretty_printer::examples::{Doc, Sort};
-use partial_pretty_printer::notation_constructors::{child, flat, lit, text};
-use partial_pretty_printer::Notation;
+use partial_pretty_printer::notation_constructors::{child, flat, text};
+use partial_pretty_printer::{Notation, Style};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Ruby {
@@ -24,16 +24,16 @@ impl Sort for Ruby {
     }
 }
 
-static VAR_NOTATION: Lazy<Notation> = Lazy::new(|| text());
+static VAR_NOTATION: Lazy<Notation> = Lazy::new(|| text(Style::plain()));
 static METHOD_CALL_NOTATION: Lazy<Notation> = Lazy::new(|| {
-    let single = lit(".") + child(1) + lit(" ") + child(2);
-    let two_lines = lit(".") + child(1) + lit(" ") + child(2);
-    let multi = lit(".") + child(1) + (4 >> child(2));
+    let single = punct(".") + child(1) + punct(" ") + child(2);
+    let two_lines = punct(".") + child(1) + punct(" ") + child(2);
+    let multi = punct(".") + child(1) + (4 >> child(2));
     child(0) + (single | (4 >> (two_lines | multi)))
 });
 static DO_LOOP_NOTATION: Lazy<Notation> = Lazy::new(|| {
-    let single = lit("do |") + child(0) + lit("| ") + flat(child(1)) + lit(" end");
-    let multi = lit("do |") + child(0) + lit("|") + (4 >> child(1)) ^ lit("end");
+    let single = punct("do |") + child(0) + punct("| ") + flat(child(1)) + punct(" end");
+    let multi = punct("do |") + child(0) + punct("|") + (4 >> child(1)) ^ punct("end");
     single | multi
 });
 

@@ -1,12 +1,12 @@
 mod common;
 
-use common::{assert_pp, assert_pp_seek};
+use common::{assert_pp, assert_pp_seek, punct};
 use once_cell::sync::Lazy;
 use partial_pretty_printer::examples::{Doc, Sort};
 use partial_pretty_printer::notation_constructors::{
-    child, left, lit, nl, repeat, right, surrounded, text,
+    child, left, nl, repeat, right, surrounded, text,
 };
-use partial_pretty_printer::{Notation, RepeatInner};
+use partial_pretty_printer::{Notation, RepeatInner, Style};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum FlowWrap {
@@ -15,17 +15,17 @@ enum FlowWrap {
     Paragraph,
 }
 
-static WORD_NOTATION: Lazy<Notation> = Lazy::new(|| text());
+static WORD_NOTATION: Lazy<Notation> = Lazy::new(|| text(Style::plain()));
 static WORDS_NOTATION: Lazy<Notation> = Lazy::new(|| {
-    let soft_break = || lit(" ") | nl();
+    let soft_break = || punct(" ") | nl();
     repeat(RepeatInner {
-        empty: lit(""),
-        lone: lit("    ") + child(0),
-        join: left() + lit(",") + soft_break() + right(),
-        surround: lit("    ") + surrounded(),
+        empty: punct(""),
+        lone: punct("    ") + child(0),
+        join: left() + punct(",") + soft_break() + right(),
+        surround: punct("    ") + surrounded(),
     })
 });
-static PARAGRAPH_NOTATION: Lazy<Notation> = Lazy::new(|| lit("¶") + child(0) + lit("□"));
+static PARAGRAPH_NOTATION: Lazy<Notation> = Lazy::new(|| punct("¶") + child(0) + punct("□"));
 
 impl Sort for FlowWrap {
     fn notation(self) -> &'static Notation {

@@ -1,12 +1,12 @@
 mod common;
 
-use common::assert_pp;
+use common::{assert_pp, punct};
 use once_cell::sync::Lazy;
 use partial_pretty_printer::examples::{Doc, Sort};
 use partial_pretty_printer::notation_constructors::{
-    child, left, lit, nl, repeat, right, surrounded, text,
+    child, left, nl, repeat, right, surrounded, text,
 };
-use partial_pretty_printer::{Notation, RepeatInner};
+use partial_pretty_printer::{Notation, RepeatInner, Style};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum LetList {
@@ -17,20 +17,21 @@ enum LetList {
     Let,
 }
 
-static VAR_NOTATION: Lazy<Notation> = Lazy::new(|| text());
-static NUM_NOTATION: Lazy<Notation> = Lazy::new(|| text());
+static VAR_NOTATION: Lazy<Notation> = Lazy::new(|| text(Style::plain()));
+static NUM_NOTATION: Lazy<Notation> = Lazy::new(|| text(Style::plain()));
 static PHI_NOTATION: Lazy<Notation> =
-    Lazy::new(|| lit("1 + sqrt(5)") ^ lit("-----------") ^ lit("     2"));
-static LET_NOTATION: Lazy<Notation> =
-    Lazy::new(|| lit("let ") + child(0) + lit(" =") + (lit(" ") | nl()) + child(1) + lit(";"));
+    Lazy::new(|| punct("1 + sqrt(5)") ^ punct("-----------") ^ punct("     2"));
+static LET_NOTATION: Lazy<Notation> = Lazy::new(|| {
+    punct("let ") + child(0) + punct(" =") + (punct(" ") | nl()) + child(1) + punct(";")
+});
 static LIST_NOTATION: Lazy<Notation> = Lazy::new(|| {
     repeat(RepeatInner {
-        empty: lit("[]"),
-        lone: lit("[") + child(0) + lit("]"),
-        join: left() + lit(",") + (lit(" ") | nl()) + right(),
+        empty: punct("[]"),
+        lone: punct("[") + child(0) + punct("]"),
+        join: left() + punct(",") + (punct(" ") | nl()) + right(),
         surround: {
-            let single = lit("[") + surrounded() + lit("]");
-            let multi = lit("[") + (4 >> surrounded()) ^ lit("]");
+            let single = punct("[") + surrounded() + punct("]");
+            let multi = punct("[") + (4 >> surrounded()) ^ punct("]");
             single | multi
         },
     })

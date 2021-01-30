@@ -204,6 +204,17 @@ impl Add<Width> for Col {
     }
 }
 
+impl Add<Width> for Pos {
+    type Output = Pos;
+
+    fn add(self, width: Width) -> Pos {
+        Pos {
+            line: self.line,
+            col: self.col + width,
+        }
+    }
+}
+
 impl Add<Width> for Width {
     type Output = Width;
 
@@ -223,6 +234,17 @@ impl Add<Height> for Line {
 
     fn add(self, height: Height) -> Line {
         Line(self.0 + height.0)
+    }
+}
+
+impl Add<Height> for Pos {
+    type Output = Pos;
+
+    fn add(self, height: Height) -> Pos {
+        Pos {
+            line: self.line + height,
+            col: self.col,
+        }
     }
 }
 

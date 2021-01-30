@@ -85,6 +85,7 @@ impl PrettyWindow for PlainText {
         len: usize,
         style: ShadedStyle,
     ) -> Result<(), Self::Error> {
+        // TODO: don't construct a string, be more efficient
         let string: String = iter::repeat(ch).take(len).collect();
         self.print(pos, &string, style)
     }
