@@ -2,26 +2,21 @@ mod common;
 
 use common::{assert_pp, punct};
 use once_cell::sync::Lazy;
-use partial_pretty_printer::examples::{Doc, Sort};
 use partial_pretty_printer::notation_constructors::{child, flat, text};
-use partial_pretty_printer::{Notation, Style};
+use partial_pretty_printer::{Notation, PrettyDoc, PrettyDocContents, Style};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Ruby {
-    Var,
-    MethodCall,
-    DoLoop,
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Ruby {
+    id: usize,
+    data: RubyData,
 }
 
-impl Sort for Ruby {
-    fn notation(self) -> &'static Notation {
-        use Ruby::*;
-        match self {
-            Var => &VAR_NOTATION,
-            MethodCall => &METHOD_CALL_NOTATION,
-            DoLoop => &DO_LOOP_NOTATION,
-        }
-    }
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum RubyData {
+    Var(String),
+    MethodCall(Box<[Ruby; 3]>),
+    DoLoop(Box<[Ruby; 2]>),
 }
 
 static VAR_NOTATION: Lazy<Notation> = Lazy::new(|| text(Style::plain()));
@@ -37,16 +32,54 @@ static DO_LOOP_NOTATION: Lazy<Notation> = Lazy::new(|| {
     single | multi
 });
 
-fn method_call(obj: Doc<Ruby>, method: &str, arg: Doc<Ruby>) -> Doc<Ruby> {
-    Doc::new_node(Ruby::MethodCall, vec![obj, var(method), arg])
+impl PrettyDoc for Ruby {
+    type Id = usize;
+
+    fn id(&self) -> usize {
+        self.id
+    }
+
+    fn notation(&self) -> &Notation {
+        use RubyData::*;
+
+        match self.data {
+            Var(_) => &VAR_NOTATION,
+            MethodCall(_) => &METHOD_CALL_NOTATION,
+            DoLoop(_) => &DO_LOOP_NOTATION,
+        }
+    }
+
+    fn contents<'d>(&'d self) -> PrettyDocContents<'d, Self> {
+        use PrettyDocContents::{Children, Text};
+        use RubyData::*;
+
+        match &self.data {
+            Var(txt) => Text(txt),
+            MethodCall(contents) => Children(&**contents),
+            DoLoop(contents) => Children(&**contents),
+        }
+    }
 }
 
-fn do_loop(var_name: &str, body: Doc<Ruby>) -> Doc<Ruby> {
-    Doc::new_node(Ruby::DoLoop, vec![var(var_name), body])
+static ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+fn new_node(data: RubyData) -> Ruby {
+    Ruby {
+        id: ID_COUNTER.fetch_add(1, Ordering::SeqCst),
+        data,
+    }
 }
 
-fn var(var_name: &str) -> Doc<Ruby> {
-    Doc::new_text(Ruby::Var, var_name.to_owned())
+fn var(var_name: &str) -> Ruby {
+    new_node(RubyData::Var(var_name.to_owned()))
+}
+
+fn method_call(obj: Ruby, method: &str, arg: Ruby) -> Ruby {
+    new_node(RubyData::MethodCall(Box::new([obj, var(method), arg])))
+}
+
+fn do_loop(var_name: &str, body: Ruby) -> Ruby {
+    new_node(RubyData::DoLoop(Box::new([var(var_name), body])))
 }
 
 #[test]

@@ -9,11 +9,14 @@ pub mod notation_constructors;
 
 pub use geometry::{Col, Height, Line, Pos, Size, Width};
 pub use notation::{Notation, RepeatInner};
-pub use pane_printing::{
-    pane_print, Label, PaneNotation, PaneSize, PlainText, PrettyWindow, RenderOptions,
-    WidthStrategy,
-};
 pub use pretty_printing::{
     pretty_print, pretty_print_to_string, LineContents, PrettyDoc, PrettyDocContents,
 };
 pub use style::{Color, ShadedStyle, Style};
+
+pub mod pane {
+    pub use super::pane_printing::{
+        pane_print, Label, PaneNotation, PaneSize, PlainText, PrettyWindow, RenderOptions,
+        WidthStrategy,
+    };
+}

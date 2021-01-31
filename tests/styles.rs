@@ -3,12 +3,11 @@
 mod common;
 
 use common::SimpleDoc;
-use partial_pretty_printer::examples::json::{json_list, json_number, Json};
-use partial_pretty_printer::examples::Doc;
-use partial_pretty_printer::notation_constructors::lit;
 use partial_pretty_printer::{
-    pane_print, Color, Label, Line, PaneNotation, Pos, PrettyDoc, PrettyWindow, RenderOptions,
-    ShadedStyle, Size, Style, Width, WidthStrategy,
+    examples::json::{json_list, json_number, Json},
+    notation_constructors::lit,
+    pane::{pane_print, Label, PaneNotation, PrettyWindow, RenderOptions, WidthStrategy},
+    Color, Line, Pos, PrettyDoc, ShadedStyle, Size, Style, Width,
 };
 use std::fmt;
 use std::fmt::Debug;
@@ -232,7 +231,7 @@ fn test_pane_highlighting() {
     // Expected highlighting:
     // [[[1, 2], [3, 4]], [[5, 6], [7, 8]]]
     // cccccccccccccccccccbaaaaaabbbbbbbbbc
-    fn num(n: usize) -> Doc<Json> {
+    fn num(n: usize) -> Json {
         json_number(n as f64)
     }
     let doc = json_list(vec![

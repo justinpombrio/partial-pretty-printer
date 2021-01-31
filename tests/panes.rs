@@ -1,10 +1,10 @@
 mod common;
 
 use common::SimpleDoc;
-use partial_pretty_printer::examples::json::{json_list, json_string};
 use partial_pretty_printer::{
-    pane_print, Label, PaneNotation, PaneSize, PlainText, PrettyDoc, RenderOptions, Style,
-    WidthStrategy,
+    examples::json::{json_list, json_string},
+    pane::{pane_print, Label, PaneNotation, PaneSize, PlainText, RenderOptions, WidthStrategy},
+    PrettyDoc, Style,
 };
 use std::fmt::Debug;
 

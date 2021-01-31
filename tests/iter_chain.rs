@@ -2,28 +2,22 @@ mod common;
 
 use common::{assert_pp, punct};
 use once_cell::sync::Lazy;
-use partial_pretty_printer::examples::{Doc, Sort};
 use partial_pretty_printer::notation_constructors::{child, flat, text};
-use partial_pretty_printer::{Notation, Style};
+use partial_pretty_printer::{Notation, PrettyDoc, PrettyDocContents, Style};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum IterChain {
-    Var,
-    MethodCall,
-    Closure,
-    Times,
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct IterChain {
+    id: usize,
+    data: IterChainData,
 }
 
-impl Sort for IterChain {
-    fn notation(self) -> &'static Notation {
-        use IterChain::*;
-        match self {
-            Var => &VAR_NOTATION,
-            MethodCall => &METHOD_CALL_NOTATION,
-            Closure => &CLOSURE_NOTATION,
-            Times => &TIMES_NOTATION,
-        }
-    }
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum IterChainData {
+    Var(String),
+    MethodCall(Box<[IterChain; 3]>),
+    Closure(Box<[IterChain; 2]>),
+    Times(Box<[IterChain; 2]>),
 }
 
 static VAR_NOTATION: Lazy<Notation> = Lazy::new(|| text(Style::plain()));
@@ -54,20 +48,60 @@ static CLOSURE_NOTATION: Lazy<Notation> = Lazy::new(|| {
 });
 static TIMES_NOTATION: Lazy<Notation> = Lazy::new(|| child(0) + punct(" * ") + child(1));
 
-fn method_call(obj: Doc<IterChain>, method: &str, arg: Doc<IterChain>) -> Doc<IterChain> {
-    Doc::new_node(IterChain::MethodCall, vec![obj, var(method), arg])
+impl PrettyDoc for IterChain {
+    type Id = usize;
+
+    fn id(&self) -> usize {
+        self.id
+    }
+
+    fn notation(&self) -> &Notation {
+        use IterChainData::*;
+
+        match self.data {
+            Var(_) => &VAR_NOTATION,
+            MethodCall(_) => &METHOD_CALL_NOTATION,
+            Closure(_) => &CLOSURE_NOTATION,
+            Times(_) => &TIMES_NOTATION,
+        }
+    }
+
+    fn contents<'d>(&'d self) -> PrettyDocContents<'d, Self> {
+        use IterChainData::*;
+        use PrettyDocContents::{Children, Text};
+
+        match &self.data {
+            Var(txt) => Text(txt),
+            MethodCall(contents) => Children(&**contents),
+            Closure(contents) => Children(&**contents),
+            Times(contents) => Children(&**contents),
+        }
+    }
 }
 
-fn closure(var_name: &str, body: Doc<IterChain>) -> Doc<IterChain> {
-    Doc::new_node(IterChain::Closure, vec![var(var_name), body])
+static ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+fn new_node(data: IterChainData) -> IterChain {
+    IterChain {
+        id: ID_COUNTER.fetch_add(1, Ordering::SeqCst),
+        data,
+    }
 }
 
-fn times(arg1: Doc<IterChain>, arg2: Doc<IterChain>) -> Doc<IterChain> {
-    Doc::new_node(IterChain::Times, vec![arg1, arg2])
+fn var(var_name: &str) -> IterChain {
+    new_node(IterChainData::Var(var_name.to_owned()))
 }
 
-fn var(var: &str) -> Doc<IterChain> {
-    Doc::new_text(IterChain::Var, var.to_owned())
+fn method_call(obj: IterChain, method: &str, arg: IterChain) -> IterChain {
+    new_node(IterChainData::MethodCall(Box::new([obj, var(method), arg])))
+}
+
+fn closure(var_name: &str, body: IterChain) -> IterChain {
+    new_node(IterChainData::Closure(Box::new([var(var_name), body])))
+}
+
+fn times(arg1: IterChain, arg2: IterChain) -> IterChain {
+    new_node(IterChainData::Times(Box::new([arg1, arg2])))
 }
 
 #[test]

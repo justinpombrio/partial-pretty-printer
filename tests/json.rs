@@ -8,7 +8,6 @@ use common::{assert_pp, assert_pp_region, assert_pp_seek, print_region};
 use partial_pretty_printer::examples::json::{
     json_bool, json_dict, json_dict_entry, json_list, json_null, json_number, json_string, Json,
 };
-use partial_pretty_printer::examples::Doc;
 use test::Bencher;
 
 static NUMERALS: &[&str] = &[
@@ -16,15 +15,15 @@ static NUMERALS: &[&str] = &[
     "twelve", "thirteen", "fourteen", "fifteen", "sixteen",
 ];
 
-fn entry_1() -> Doc<Json> {
+fn entry_1() -> Json {
     json_dict_entry("Name", json_string("Alice"))
 }
 
-fn entry_2() -> Doc<Json> {
+fn entry_2() -> Json {
     json_dict_entry("Age", json_number(42.0))
 }
 
-fn favorites_list() -> Doc<Json> {
+fn favorites_list() -> Json {
     json_list(vec![
         json_string("chocolate"),
         json_string("lemon"),
@@ -32,11 +31,11 @@ fn favorites_list() -> Doc<Json> {
     ])
 }
 
-fn entry_3() -> Doc<Json> {
+fn entry_3() -> Json {
     json_dict_entry("Favorites", favorites_list())
 }
 
-fn dictionary() -> Doc<Json> {
+fn dictionary() -> Json {
     json_dict(vec![entry_1(), entry_2(), entry_3()])
 }
 
@@ -212,7 +211,7 @@ fn json_big_dict() {
     );
 }
 
-fn make_json_tree(id: u32, size: usize) -> Doc<Json> {
+fn make_json_tree(id: u32, size: usize) -> Json {
     let children = (0..size)
         .map(|n| make_json_tree(2u32.pow(n as u32) + id, n))
         .collect::<Vec<_>>();

@@ -2,23 +2,29 @@ mod common;
 
 use common::{assert_pp, punct};
 use once_cell::sync::Lazy;
-use partial_pretty_printer::examples::{Doc, Sort};
 use partial_pretty_printer::notation_constructors::{
     child, left, nl, repeat, right, surrounded, text,
 };
-use partial_pretty_printer::{Notation, RepeatInner, Style};
+use partial_pretty_printer::{Notation, PrettyDoc, PrettyDocContents, RepeatInner, Style};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum LetList {
-    Num,
-    Var,
-    Phi,
-    List,
-    Let,
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct LetList {
+    id: usize,
+    data: LetListData,
 }
 
-static VAR_NOTATION: Lazy<Notation> = Lazy::new(|| text(Style::plain()));
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum LetListData {
+    Num(String),
+    Var(String),
+    Phi,
+    Let(Box<[LetList; 2]>),
+    List(Vec<LetList>),
+}
+
 static NUM_NOTATION: Lazy<Notation> = Lazy::new(|| text(Style::plain()));
+static VAR_NOTATION: Lazy<Notation> = Lazy::new(|| text(Style::plain()));
 static PHI_NOTATION: Lazy<Notation> =
     Lazy::new(|| punct("1 + sqrt(5)") ^ punct("-----------") ^ punct("     2"));
 static LET_NOTATION: Lazy<Notation> = Lazy::new(|| {
@@ -37,38 +43,67 @@ static LIST_NOTATION: Lazy<Notation> = Lazy::new(|| {
     })
 });
 
-impl Sort for LetList {
-    fn notation(self) -> &'static Notation {
-        use LetList::*;
-        match self {
-            Var => &VAR_NOTATION,
-            Num => &NUM_NOTATION,
+impl PrettyDoc for LetList {
+    type Id = usize;
+
+    fn id(&self) -> usize {
+        self.id
+    }
+
+    fn notation(&self) -> &Notation {
+        use LetListData::*;
+
+        match &self.data {
+            Num(_) => &NUM_NOTATION,
+            Var(_) => &VAR_NOTATION,
             Phi => &PHI_NOTATION,
-            Let => &LET_NOTATION,
-            List => &LIST_NOTATION,
+            List(_) => &LIST_NOTATION,
+            Let(_) => &LET_NOTATION,
+        }
+    }
+
+    fn contents(&self) -> PrettyDocContents<Self> {
+        use LetListData::*;
+        use PrettyDocContents::{Children, Text};
+
+        match &self.data {
+            Num(txt) => Text(txt),
+            Var(txt) => Text(txt),
+            Phi => Children(&[]),
+            List(elems) => Children(elems),
+            Let(bind) => Children(&**bind),
         }
     }
 }
 
-fn list(elements: Vec<Doc<LetList>>) -> Doc<LetList> {
-    Doc::new_node(LetList::List, elements)
+static ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+fn new_node(data: LetListData) -> LetList {
+    LetList {
+        id: ID_COUNTER.fetch_add(1, Ordering::SeqCst),
+        data,
+    }
 }
 
-fn make_let(var_name: &str, defn: Doc<LetList>) -> Doc<LetList> {
-    Doc::new_node(LetList::Let, vec![var(var_name), defn])
+fn list(elements: Vec<LetList>) -> LetList {
+    new_node(LetListData::List(elements))
+}
+
+fn make_let(var_name: &str, defn: LetList) -> LetList {
+    new_node(LetListData::Let(Box::new([var(var_name), defn])))
 }
 
 // TODO: Add a way to get this to not share lines
-fn phi() -> Doc<LetList> {
-    Doc::new_node(LetList::Phi, vec![])
+fn phi() -> LetList {
+    new_node(LetListData::Phi)
 }
 
-fn num(n: &str) -> Doc<LetList> {
-    Doc::new_text(LetList::Num, n.to_owned())
+fn num(n: f64) -> LetList {
+    new_node(LetListData::Num(n.to_string()))
 }
 
-fn var(v: &str) -> Doc<LetList> {
-    Doc::new_text(LetList::Var, v.to_owned())
+fn var(v: &str) -> LetList {
+    new_node(LetListData::Var(v.to_owned()))
 }
 
 #[test]
@@ -77,12 +112,12 @@ fn let_list() {
     let doc = make_let(
         "best_numbers",
         list(vec![
-            num("1025"),
-            num("-58"),
-            num("33297"),
+            num(1025.0),
+            num(-58.0),
+            num(33297.0),
             phi(),
-            num("1.618281828"),
-            num("23"),
+            num(1.618281828),
+            num(23.0),
         ]),
     );
 
