@@ -1,6 +1,6 @@
-use partial_pretty_printer::notation_constructors::lit;
 use partial_pretty_printer::{
-    pretty_print, pretty_print_to_string, Notation, PrettyDoc, PrettyDocContents, Style,
+    notation_constructors::lit, pretty_print, pretty_print_to_string, Notation, PrettyDoc,
+    PrettyDocContents, Style, Width,
 };
 
 #[allow(unused)]
@@ -41,7 +41,7 @@ fn compare_lines(message: &str, actual: &[String], expected: &[&str]) {
 
 fn print_above_and_below<D: PrettyDoc>(
     doc: &D,
-    width: usize,
+    width: Width,
     path: &[usize],
 ) -> (Vec<String>, Vec<String>) {
     let (upward_printer, downward_printer) = pretty_print(doc, width, path);
@@ -73,7 +73,7 @@ pub fn all_paths<D: PrettyDoc>(doc: &D) -> Vec<Vec<usize>> {
 #[allow(unused)]
 pub fn print_region<D: PrettyDoc>(
     doc: &D,
-    width: usize,
+    width: Width,
     path: &[usize],
     rows: usize,
 ) -> Vec<String> {
@@ -93,7 +93,7 @@ pub fn print_region<D: PrettyDoc>(
 
 #[allow(unused)]
 #[track_caller]
-pub fn assert_pp<D: PrettyDoc>(doc: &D, width: usize, expected_lines: &[&str]) {
+pub fn assert_pp<D: PrettyDoc>(doc: &D, width: Width, expected_lines: &[&str]) {
     let lines = pretty_print_to_string(doc, width)
         .split('\n')
         .map(|s| s.to_owned())
@@ -115,7 +115,7 @@ pub fn assert_pp<D: PrettyDoc>(doc: &D, width: usize, expected_lines: &[&str]) {
 #[track_caller]
 pub fn assert_pp_seek<D: PrettyDoc>(
     doc: &D,
-    width: usize,
+    width: Width,
     path: &[usize],
     expected_lines_above: &[&str],
     expected_lines_below: &[&str],
@@ -137,7 +137,7 @@ pub fn assert_pp_seek<D: PrettyDoc>(
 #[track_caller]
 pub fn assert_pp_region<D: PrettyDoc>(
     doc: &D,
-    width: usize,
+    width: Width,
     path: &[usize],
     rows: usize,
     expected_lines: &[&str],

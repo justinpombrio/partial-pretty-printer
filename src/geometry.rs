@@ -1,18 +1,25 @@
+//! Types for working with positions and sizes.
+//!
+//! A character position [`Pos`] has a [`Line`] and [`Col`].
+//!
+//! A size [`Size`] has a [`Width`] and [`Height`].
+//!
+//! Everything is measured in characters and 0-indexed.
+
 use std::fmt;
-use std::ops::{Add, AddAssign, Sub};
+use std::ops::Add;
 
 /// Line number
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Line(pub u32);
+pub type Line = u32;
+
 /// Column, measured in characters
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Col(pub u16);
+pub type Col = u16;
+
 /// Height, measured in lines
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Height(pub u32);
+pub type Height = u32;
+
 /// Width, measured in characters
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Width(pub u16);
+pub type Width = u16;
 
 /// A character position, relative to the screen or the document.
 ///
@@ -33,7 +40,7 @@ pub struct Size {
 /// A rectangle, either on the screen, or on the document.
 /// Includes its upper-left, but excludes its lower-right.
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
-pub struct Rectangle {
+pub(crate) struct Rectangle {
     pub min_line: Line,
     pub max_line: Line,
     pub min_col: Col,
@@ -42,10 +49,7 @@ pub struct Rectangle {
 
 impl Pos {
     pub fn zero() -> Pos {
-        Pos {
-            line: Line(0),
-            col: Col(0),
-        }
+        Pos { line: 0, col: 0 }
     }
 }
 
@@ -53,10 +57,10 @@ impl Rectangle {
     #[cfg(test)]
     pub const fn new(min_col: u16, max_col: u16, min_line: u32, max_line: u32) -> Rectangle {
         Rectangle {
-            min_col: Col(min_col),
-            max_col: Col(max_col),
-            min_line: Line(min_line),
-            max_line: Line(max_line),
+            min_col,
+            max_col,
+            min_line,
+            max_line,
         }
     }
 
@@ -152,132 +156,6 @@ impl<'a> Iterator for VertSplits<'a> {
     }
 }
 
-impl fmt::Display for Line {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-impl fmt::Debug for Line {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl fmt::Display for Col {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-impl fmt::Debug for Col {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl fmt::Display for Width {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-impl fmt::Debug for Width {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl fmt::Display for Height {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-impl fmt::Debug for Height {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl Add<Width> for Col {
-    type Output = Col;
-
-    fn add(self, width: Width) -> Col {
-        Col(self.0 + width.0)
-    }
-}
-
-impl Add<Width> for Pos {
-    type Output = Pos;
-
-    fn add(self, width: Width) -> Pos {
-        Pos {
-            line: self.line,
-            col: self.col + width,
-        }
-    }
-}
-
-impl Add<Width> for Width {
-    type Output = Width;
-
-    fn add(self, width: Width) -> Width {
-        Width(self.0 + width.0)
-    }
-}
-
-impl AddAssign<Width> for Col {
-    fn add_assign(&mut self, width: Width) {
-        *self = *self + width
-    }
-}
-
-impl Add<Height> for Line {
-    type Output = Line;
-
-    fn add(self, height: Height) -> Line {
-        Line(self.0 + height.0)
-    }
-}
-
-impl Add<Height> for Pos {
-    type Output = Pos;
-
-    fn add(self, height: Height) -> Pos {
-        Pos {
-            line: self.line + height,
-            col: self.col,
-        }
-    }
-}
-
-impl Add<Height> for Height {
-    type Output = Height;
-
-    fn add(self, height: Height) -> Height {
-        Height(self.0 + height.0)
-    }
-}
-
-impl AddAssign<Height> for Line {
-    fn add_assign(&mut self, height: Height) {
-        *self = *self + height
-    }
-}
-
-impl Sub<Col> for Col {
-    type Output = Width;
-
-    fn sub(self, other: Col) -> Width {
-        Width(self.0 - other.0)
-    }
-}
-
-impl Sub<Line> for Line {
-    type Output = Height;
-
-    fn sub(self, other: Line) -> Height {
-        Height(self.0 - other.0)
-    }
-}
-
 impl Add<Size> for Pos {
     type Output = Pos;
 
@@ -311,7 +189,7 @@ mod tests {
 
     #[test]
     fn test_split_horz1() {
-        let mut it = RECT.horz_splits(&[Width(1), Width(3)]);
+        let mut it = RECT.horz_splits(&[1, 3]);
         assert_eq!(it.next(), Some(Rectangle::new(1, 2, 2, 4)));
         assert_eq!(it.next(), Some(Rectangle::new(2, 5, 2, 4)));
         assert_eq!(it.next(), None)
@@ -319,17 +197,7 @@ mod tests {
 
     #[test]
     fn test_split_horz2() {
-        let mut it = RECT.horz_splits(&[
-            Width(0),
-            Width(1),
-            Width(0),
-            Width(1),
-            Width(0),
-            Width(1),
-            Width(0),
-            Width(1),
-            Width(0),
-        ]);
+        let mut it = RECT.horz_splits(&[0, 1, 0, 1, 0, 1, 0, 1, 0]);
         assert_eq!(it.next(), Some(Rectangle::new(1, 1, 2, 4)));
         assert_eq!(it.next(), Some(Rectangle::new(1, 2, 2, 4)));
         assert_eq!(it.next(), Some(Rectangle::new(2, 2, 2, 4)));
@@ -345,14 +213,14 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_split_horz3() {
-        let mut it = RECT.horz_splits(&[Width(5), Width(1)]);
+        let mut it = RECT.horz_splits(&[5, 1]);
         it.next();
     }
 
     #[test]
     #[should_panic]
     fn test_split_horz4() {
-        let mut it = RECT.horz_splits(&[Width(1), Width(5)]);
+        let mut it = RECT.horz_splits(&[1, 5]);
         it.next();
         it.next();
     }
@@ -360,7 +228,7 @@ mod tests {
     #[test]
     fn test_split_horz5() {
         // It's ok to leave some leftover width
-        let mut it = RECT.horz_splits(&[Width(1), Width(1)]);
+        let mut it = RECT.horz_splits(&[1, 1]);
         assert_eq!(it.next(), Some(Rectangle::new(1, 2, 2, 4)));
         assert_eq!(it.next(), Some(Rectangle::new(2, 3, 2, 4)));
         assert_eq!(it.next(), None);
@@ -368,7 +236,7 @@ mod tests {
 
     #[test]
     fn test_split_vert1() {
-        let mut it = BIG.vert_splits(&[Height(1), Height(2)]);
+        let mut it = BIG.vert_splits(&[1, 2]);
         assert_eq!(it.next(), Some(Rectangle::new(1, 5, 1, 2)));
         assert_eq!(it.next(), Some(Rectangle::new(1, 5, 2, 4)));
         assert_eq!(it.next(), None)
@@ -376,15 +244,7 @@ mod tests {
 
     #[test]
     fn test_split_vert2() {
-        let mut it = BIG.vert_splits(&[
-            Height(0),
-            Height(1),
-            Height(0),
-            Height(1),
-            Height(0),
-            Height(1),
-            Height(0),
-        ]);
+        let mut it = BIG.vert_splits(&[0, 1, 0, 1, 0, 1, 0]);
         assert_eq!(it.next(), Some(Rectangle::new(1, 5, 1, 1)));
         assert_eq!(it.next(), Some(Rectangle::new(1, 5, 1, 2)));
         assert_eq!(it.next(), Some(Rectangle::new(1, 5, 2, 2)));
@@ -398,14 +258,14 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_split_vert3() {
-        let mut it = BIG.vert_splits(&[Height(4), Height(1)]);
+        let mut it = BIG.vert_splits(&[4, 1]);
         it.next();
     }
 
     #[test]
     #[should_panic]
     fn test_split_vert4() {
-        let mut it = BIG.vert_splits(&[Height(1), Height(4)]);
+        let mut it = BIG.vert_splits(&[1, 4]);
         it.next();
         it.next();
     }
@@ -413,7 +273,7 @@ mod tests {
     #[test]
     fn test_split_vert5() {
         // It's ok to leave some leftover height
-        let mut it = BIG.vert_splits(&[Height(1), Height(1)]);
+        let mut it = BIG.vert_splits(&[1, 1]);
         assert_eq!(it.next(), Some(Rectangle::new(1, 5, 1, 2)));
         assert_eq!(it.next(), Some(Rectangle::new(1, 5, 2, 3)));
         assert_eq!(it.next(), None);

@@ -1,3 +1,4 @@
+use crate::geometry::Width;
 use crate::style::Style;
 use std::fmt;
 use std::ops::{Add, BitOr, BitXor, Shr};
@@ -20,7 +21,7 @@ pub enum Notation {
     Flat(Box<Notation>),
     /// Indent all lines of the contained notation except the first to the right by the given
     /// number of spaces.
-    Indent(usize, Box<Notation>),
+    Indent(Width, Box<Notation>),
     /// Display both notations. The first character of the right notation immediately follows the
     /// last character of the left notation. The right notation's indentation level is not
     /// affected.
@@ -52,7 +53,7 @@ pub enum Notation {
 pub struct Literal {
     string: String,
     /// Number of characters (*not* num bytes!)
-    len: usize,
+    len: Width,
     style: Style,
 }
 
@@ -77,12 +78,12 @@ impl Literal {
     pub fn new(s: &str, style: Style) -> Literal {
         Literal {
             string: s.to_owned(),
-            len: s.chars().count(),
+            len: s.chars().count() as Width,
             style,
         }
     }
 
-    pub fn len(&self) -> usize {
+    pub fn len(&self) -> Width {
         self.len
     }
 
@@ -149,7 +150,7 @@ impl BitXor<Notation> for Notation {
     }
 }
 
-impl Shr<Notation> for usize {
+impl Shr<Notation> for Width {
     type Output = Notation;
 
     /// Shorthand for nesting (indented newline)

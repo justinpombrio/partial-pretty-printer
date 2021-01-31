@@ -1,4 +1,5 @@
 use super::pretty_doc::PrettyDoc;
+use crate::geometry::Width;
 use crate::notation::{Literal, Notation, RepeatInner};
 use crate::style::Style;
 use std::fmt;
@@ -24,7 +25,7 @@ pub enum NotationCase<'d, D: PrettyDoc> {
     Newline,
     Text(&'d str, Style),
     Flat(NotationRef<'d, D>),
-    Indent(usize, NotationRef<'d, D>),
+    Indent(Width, NotationRef<'d, D>),
     Concat(NotationRef<'d, D>, NotationRef<'d, D>),
     Choice(NotationRef<'d, D>, NotationRef<'d, D>),
     Child(usize, NotationRef<'d, D>),

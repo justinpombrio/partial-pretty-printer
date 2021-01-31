@@ -1,11 +1,11 @@
 use super::pretty_window::PrettyWindow;
-use crate::geometry::{Col, Line, Pos, Rectangle, Size, Width};
+use crate::geometry::{Line, Pos, Rectangle, Size, Width};
 use crate::pretty_printing::LineContents;
 use crate::style::{Shade, ShadedStyle, Style};
 
 /// A rectangular area of a window. You can pretty-print to it, or get sub-panes
 /// of it and pretty-print to those.
-pub struct Pane<'w, W>
+pub(crate) struct Pane<'w, W>
 where
     W: PrettyWindow,
 {
@@ -39,10 +39,10 @@ where
     pub fn new(window: &mut W) -> Result<Pane<W>, PaneError<W>> {
         let Size { width, height } = window.size().map_err(PaneError::PrettyWindowErr)?;
         let rect = Rectangle {
-            min_line: Line(0),
-            min_col: Col(0),
-            max_line: Line(0) + height,
-            max_col: Col(0) + width,
+            min_line: 0,
+            min_col: 0,
+            max_line: height,
+            max_col: width,
         };
         Ok(Pane { window, rect })
     }
@@ -67,17 +67,17 @@ where
         contents: LineContents,
         highlight_cursor: bool,
     ) -> Result<(), PaneError<W>> {
-        let mut pos = Pos { line, col: Col(0) };
+        let mut pos = Pos { line, col: 0 };
         let spaces_style = ShadedStyle::new(Style::plain(), contents.spaces_shade);
-        self.fill(pos, ' ', Width(contents.spaces as u16), spaces_style)?;
-        pos.col += Width(contents.spaces as u16);
+        self.fill(pos, ' ', contents.spaces as Width, spaces_style)?;
+        pos.col += contents.spaces as Width;
         for (string, style, mut shade) in contents.contents {
             if !highlight_cursor {
                 shade = Shade::background();
             }
             let shaded_style = ShadedStyle::new(style, shade);
             self.print(pos, string, shaded_style)?;
-            pos.col += Width(string.chars().count() as u16);
+            pos.col += string.chars().count() as Width;
         }
         Ok(())
     }
@@ -87,7 +87,7 @@ where
             // Trying to print outside the pane.
             return Ok(());
         }
-        let max_len = (self.rect.max_col - pos.col).0 as usize;
+        let max_len = (self.rect.max_col - pos.col) as usize;
         if string.chars().count() > max_len {
             let (last_index, last_char) = string.char_indices().take(max_len).last().unwrap();
             let end_index = last_index + last_char.len_utf8();

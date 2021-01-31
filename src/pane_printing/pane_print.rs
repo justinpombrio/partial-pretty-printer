@@ -1,7 +1,7 @@
 use super::pane::{Pane, PaneError};
 use super::pane_notation::{Label, PaneNotation, PaneSize};
 use super::pretty_window::PrettyWindow;
-use crate::geometry::{Height, Line, Pos, Width};
+use crate::geometry::{Height, Pos, Width};
 use crate::pretty_printing::{pretty_print, PrettyDoc};
 use crate::style::{Shade, ShadedStyle};
 
@@ -27,8 +27,7 @@ fn pane_print_rec<L: Label, D: PrettyDoc, W: PrettyWindow>(
     match note {
         PaneNotation::Empty => (),
         PaneNotation::Fill { ch, style } => {
-            for line in pane.rect.min_line.0..pane.rect.max_line.0 {
-                let line = Line(line);
+            for line in pane.rect.min_line..pane.rect.max_line {
                 let col = pane.rect.min_col;
                 let shaded_style = ShadedStyle::new(*style, Shade::background());
                 let len = pane.rect.max_col - col;
@@ -41,20 +40,20 @@ fn pane_print_rec<L: Label, D: PrettyDoc, W: PrettyWindow>(
         } => {
             let (doc, path) = get_content(label.clone())
                 .ok_or_else(|| PaneError::MissingLabel(format!("{:?}", label)))?;
-            let doc_width = render_options.choose_width(pane.rect.width()).0 as usize;
+            let doc_width = render_options.choose_width(pane.rect.width());
             let focal_line = render_options.focal_line(pane.rect.height());
             let (mut upward_printer, mut downward_printer) = pretty_print(&doc, doc_width, &path);
             let highlight_cursor = render_options.highlight_cursor;
-            for line in (0..focal_line.0).into_iter().rev() {
+            for line in (0..focal_line).into_iter().rev() {
                 if let Some(contents) = upward_printer.next() {
-                    pane.print_line(Line(line), contents, highlight_cursor)?;
+                    pane.print_line(line, contents, highlight_cursor)?;
                 } else {
                     break;
                 }
             }
-            for line in focal_line.0..pane.rect.height().0 {
+            for line in focal_line..pane.rect.height() {
                 if let Some(contents) = downward_printer.next() {
-                    pane.print_line(Line(line), contents, highlight_cursor)?;
+                    pane.print_line(line, contents, highlight_cursor)?;
                 } else {
                     break;
                 }
@@ -63,7 +62,7 @@ fn pane_print_rec<L: Label, D: PrettyDoc, W: PrettyWindow>(
         PaneNotation::Horz(panes) => {
             let child_notes: Vec<_> = panes.iter().map(|(_, note)| note).collect();
             let total_fixed: usize = panes.iter().filter_map(|(size, _)| size.get_fixed()).sum();
-            let total_width = pane.rect.width().0 as usize;
+            let total_width = pane.rect.width() as usize;
             let mut available_width = total_width.saturating_sub(total_fixed);
             let child_sizes = panes
                 .iter()
@@ -73,13 +72,9 @@ fn pane_print_rec<L: Label, D: PrettyDoc, W: PrettyWindow>(
                         if let PaneNotation::Doc { label, .. } = notation {
                             let (doc, path) = get_content(label.clone())
                                 .ok_or_else(|| PaneError::MissingLabel(format!("{:?}", label)))?;
-                            let width = doc_width(
-                                doc,
-                                &path,
-                                pane.rect.height(),
-                                Width(available_width as u16),
-                            );
-                            let width = width.0 as usize;
+                            let width =
+                                doc_width(doc, &path, pane.rect.height(), available_width as Width);
+                            let width = width as usize;
                             available_width -= width;
                             Ok(PaneSize::Fixed(width))
                         } else {
@@ -94,7 +89,7 @@ fn pane_print_rec<L: Label, D: PrettyDoc, W: PrettyWindow>(
             let widths: Vec<_> = divvy(total_width, &child_sizes)
                 .ok_or(PaneError::ImpossibleDemands)?
                 .into_iter()
-                .map(|n| Width(n as u16))
+                .map(|n| n as Width)
                 .collect();
 
             let rects = pane.rect.horz_splits(&widths);
@@ -106,7 +101,7 @@ fn pane_print_rec<L: Label, D: PrettyDoc, W: PrettyWindow>(
         PaneNotation::Vert(panes) => {
             let child_notes: Vec<_> = panes.iter().map(|(_, note)| note).collect();
             let total_fixed: usize = panes.iter().filter_map(|(size, _)| size.get_fixed()).sum();
-            let total_height = pane.rect.height().0 as usize;
+            let total_height = pane.rect.height() as usize;
             let mut available_height = total_height.saturating_sub(total_fixed);
             let child_sizes = panes
                 .iter()
@@ -120,9 +115,9 @@ fn pane_print_rec<L: Label, D: PrettyDoc, W: PrettyWindow>(
                                 doc,
                                 &path,
                                 pane.rect.width(),
-                                Height(available_height as u32),
+                                available_height as Height,
                             );
-                            let height = height.0 as usize;
+                            let height = height as usize;
                             available_height -= height;
                             Ok(PaneSize::Fixed(height))
                         } else {
@@ -137,7 +132,7 @@ fn pane_print_rec<L: Label, D: PrettyDoc, W: PrettyWindow>(
             let heights: Vec<_> = divvy(total_height, &child_sizes)
                 .ok_or(PaneError::ImpossibleDemands)?
                 .into_iter()
-                .map(|n| Height(n as u32))
+                .map(|n| n as Height)
                 .collect();
 
             let rects = pane.rect.vert_splits(&heights);
@@ -151,18 +146,18 @@ fn pane_print_rec<L: Label, D: PrettyDoc, W: PrettyWindow>(
 }
 
 fn doc_height(doc: impl PrettyDoc, path: &[usize], width: Width, max_height: Height) -> Height {
-    let (_, downward_printer) = pretty_print(&doc, width.0 as usize, path);
-    Height(downward_printer.take(max_height.0 as usize).count() as u32)
+    let (_, downward_printer) = pretty_print(&doc, width, path);
+    downward_printer.take(max_height as usize).count() as Height
 }
 
 fn doc_width(doc: impl PrettyDoc, path: &[usize], height: Height, max_width: Width) -> Width {
-    let (_, downward_printer) = pretty_print(&doc, max_width.0 as usize, path);
-    let lines = downward_printer.take(height.0 as usize);
+    let (_, downward_printer) = pretty_print(&doc, max_width, path);
+    let lines = downward_printer.take(height as usize);
     let mut width = 0;
     for line in lines {
-        width = width.max(line.to_string().chars().count() as u16);
+        width = width.max(line.to_string().chars().count() as Width);
     }
-    Width(width)
+    width
 }
 
 fn divvy(cookies: usize, demands: &[PaneSize]) -> Option<Vec<usize>> {

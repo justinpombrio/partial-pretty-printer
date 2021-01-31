@@ -1,5 +1,4 @@
 use crate::geometry::{Height, Line, Width};
-use std::cmp;
 
 #[derive(Debug, Clone, Copy)]
 pub struct RenderOptions {
@@ -16,9 +15,9 @@ pub enum WidthStrategy {
     /// Use all available width in the pane.
     Full,
     /// Use the given width.
-    Fixed(u16),
+    Fixed(Width),
     /// Try to use the given width. But if the pane width is smaller, use that width instead.
-    NoMoreThan(u16),
+    NoMoreThan(Width),
 }
 
 impl RenderOptions {
@@ -26,15 +25,15 @@ impl RenderOptions {
         assert!(self.cursor_height >= 0.0);
         assert!(self.cursor_height <= 1.0);
         let offset_from_top =
-            f32::round((available_height.0 - 1) as f32 * (1.0 - self.cursor_height)) as u32;
-        Line(offset_from_top)
+            f32::round((available_height - 1) as f32 * (1.0 - self.cursor_height)) as u32;
+        offset_from_top
     }
 
     pub fn choose_width(self, available_width: Width) -> Width {
         match self.width_strategy {
             WidthStrategy::Full => available_width,
-            WidthStrategy::Fixed(width) => Width(width),
-            WidthStrategy::NoMoreThan(width) => cmp::min(Width(width), available_width),
+            WidthStrategy::Fixed(width) => width,
+            WidthStrategy::NoMoreThan(width) => width.min(available_width),
         }
     }
 }

@@ -1,13 +1,14 @@
 use super::notation_ref::{NotationCase, NotationRef};
 use super::pretty_doc::PrettyDoc;
+use crate::geometry::Width;
 use crate::style::{Shade, Style};
 use std::iter::Iterator;
 
 /// (indent, is_in_cursor, notation)
-type Chunk<'d, D> = (Option<usize>, Shade, NotationRef<'d, D>);
+type Chunk<'d, D> = (Option<Width>, Shade, NotationRef<'d, D>);
 
 pub struct LineContents<'d> {
-    pub spaces: usize,
+    pub spaces: Width,
     pub spaces_shade: Shade,
     /// (string, style, highlighting)
     pub contents: Vec<(&'d str, Style, Shade)>,
@@ -15,26 +16,26 @@ pub struct LineContents<'d> {
 
 #[derive(Clone, Debug)]
 pub struct FirstLineLen {
-    pub len: usize,
+    pub len: Width,
     pub has_newline: bool,
 }
 
 struct Seeker<'d, D: PrettyDoc> {
-    width: usize,
+    width: Width,
     prev: Vec<Chunk<'d, D>>,
     next: Vec<Chunk<'d, D>>,
 }
 
 struct DownwardPrinter<'d, D: PrettyDoc> {
-    width: usize,
+    width: Width,
     next: Vec<Chunk<'d, D>>,
-    spaces: usize,
+    spaces: Width,
     spaces_shade: Shade,
     at_end: bool,
 }
 
 struct UpwardPrinter<'d, D: PrettyDoc> {
-    width: usize,
+    width: Width,
     prev: Vec<Chunk<'d, D>>,
     // INVARIANT: only ever contains `Literal`, `Text`, and `Choice` notations.
     next: Vec<Chunk<'d, D>>,
@@ -43,7 +44,7 @@ struct UpwardPrinter<'d, D: PrettyDoc> {
 
 pub fn pretty_print<'d, D: PrettyDoc>(
     doc: &'d D,
-    width: usize,
+    width: Width,
     path: &[usize],
 ) -> (
     impl Iterator<Item = LineContents<'d>> + 'd,
@@ -54,7 +55,7 @@ pub fn pretty_print<'d, D: PrettyDoc>(
     seeker.seek(path)
 }
 
-pub fn pretty_print_to_string<'d, D: PrettyDoc>(doc: &'d D, width: usize) -> String {
+pub fn pretty_print_to_string<'d, D: PrettyDoc>(doc: &'d D, width: Width) -> String {
     let (_, mut lines_iter) = pretty_print(doc, width, &[]);
     let mut string = lines_iter.next().unwrap().to_string();
     for line in lines_iter {
@@ -66,7 +67,7 @@ pub fn pretty_print_to_string<'d, D: PrettyDoc>(doc: &'d D, width: usize) -> Str
 
 impl<'d> ToString for LineContents<'d> {
     fn to_string(&self) -> String {
-        let mut string = format!("{:spaces$}", "", spaces = self.spaces);
+        let mut string = format!("{:spaces$}", "", spaces = self.spaces as usize);
         for (text, _style, _hl) in &self.contents {
             string.push_str(text);
         }
@@ -75,7 +76,7 @@ impl<'d> ToString for LineContents<'d> {
 }
 
 impl<'d, D: PrettyDoc> Seeker<'d, D> {
-    fn new(notation: NotationRef<'d, D>, width: usize) -> Seeker<'d, D> {
+    fn new(notation: NotationRef<'d, D>, width: Width) -> Seeker<'d, D> {
         Seeker {
             width,
             prev: vec![],
@@ -193,7 +194,7 @@ impl<'d, D: PrettyDoc> Seeker<'d, D> {
                         self.prev.push((indent, hl, notation))
                     }
                     Text(text, _style) => {
-                        prefix_len += text.chars().count();
+                        prefix_len += text.chars().count() as Width;
                         self.prev.push((indent, hl, notation));
                     }
                     Child(i, child) if notation.doc_id() == parent_doc_id && i == child_index => {
@@ -389,7 +390,7 @@ impl<'d, D: PrettyDoc> UpwardPrinter<'d, D> {
     /// preceding newline, return the indentation and shade. Otherwise -- i.e., if this is the last
     /// remaining line -- return None.
     // Maintains the invariant that `next` only ever contains `Literal` and `Choice` notations.
-    fn seek_start_of_last_line(&mut self, delete_newline: bool) -> Option<(usize, Shade)> {
+    fn seek_start_of_last_line(&mut self, delete_newline: bool) -> Option<(Width, Shade)> {
         use NotationCase::*;
 
         assert!(self.next.is_empty());
@@ -488,7 +489,7 @@ fn min_first_line_len<'d, D: PrettyDoc>(
     }
 }
 
-fn compute_suffix_len<'d, D: PrettyDoc>(next_chunks: &[Chunk<'d, D>]) -> usize {
+fn compute_suffix_len<'d, D: PrettyDoc>(next_chunks: &[Chunk<'d, D>]) -> Width {
     let mut len = 0;
     for (indent, _, notation) in next_chunks.iter().rev() {
         let flat = indent.is_none();
@@ -502,12 +503,12 @@ fn compute_suffix_len<'d, D: PrettyDoc>(next_chunks: &[Chunk<'d, D>]) -> usize {
 }
 
 fn choose<'d, D: PrettyDoc>(
-    width: usize,
-    indent: Option<usize>,
-    prefix_len: usize,
+    width: Width,
+    indent: Option<Width>,
+    prefix_len: Width,
     note1: NotationRef<'d, D>,
     note2: NotationRef<'d, D>,
-    suffix_len: usize,
+    suffix_len: Width,
 ) -> NotationRef<'d, D> {
     // Print note1 if it fits, or if it's possible but note2 isn't.
     let flat = indent.is_none();
@@ -532,8 +533,8 @@ fn choose<'d, D: PrettyDoc>(
     }
 }
 
-fn text_len(text: &str) -> usize {
-    text.chars().count()
+fn text_len(text: &str) -> Width {
+    text.chars().count() as Width
 }
 
 impl<'d, D: PrettyDoc> Iterator for DownwardPrinter<'d, D> {

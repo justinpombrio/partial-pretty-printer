@@ -22,19 +22,16 @@ impl fmt::Display for PlainText {
 
 impl PlainText {
     /// Construct a screen with the given width and height.
-    pub fn new(width: u16, height: u32) -> PlainText {
+    pub fn new(width: Width, height: Height) -> PlainText {
         PlainText {
             lines: vec![],
-            size: Size {
-                width: Width(width),
-                height: Height(height),
-            },
+            size: Size { width, height },
         }
     }
 
     /// Construct a screen with the given width and unbounded height.
-    pub fn new_unbounded_height(width: u16) -> PlainText {
-        PlainText::new(width, u32::max_value())
+    pub fn new_unbounded_height(width: Width) -> PlainText {
+        PlainText::new(width, Height::max_value())
     }
 
     fn get_mut_line(&mut self, line_num: usize) -> &mut String {
@@ -53,15 +50,15 @@ impl PrettyWindow for PlainText {
     }
 
     fn print(&mut self, pos: Pos, string: &str, _style: ShadedStyle) -> Result<(), Self::Error> {
-        if pos.line.0 >= self.size.height.0 {
+        if pos.line >= self.size.height {
             return Ok(());
         }
-        let line_mut = self.get_mut_line(pos.line.0 as usize);
+        let line_mut = self.get_mut_line(pos.line as usize);
         let mut old_chars = line_mut.chars();
         let mut new_line = String::new();
 
         // Print out the old contents that are the to left of the start column.
-        for _ in 0..pos.col.0 {
+        for _ in 0..pos.col {
             new_line.push(old_chars.next().unwrap_or(' '));
         }
 
@@ -86,7 +83,7 @@ impl PrettyWindow for PlainText {
         style: ShadedStyle,
     ) -> Result<(), Self::Error> {
         // TODO: don't construct a string, be more efficient
-        let string: String = iter::repeat(ch).take(len.0 as usize).collect();
+        let string: String = iter::repeat(ch).take(len as usize).collect();
         self.print(pos, &string, style)
     }
 }

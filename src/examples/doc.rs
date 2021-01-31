@@ -1,4 +1,5 @@
-use crate::{Notation, PrettyDoc, PrettyDocContents};
+use crate::notation::Notation;
+use crate::pretty_printing::{PrettyDoc, PrettyDocContents};
 use std::fmt::Debug;
 use std::sync::atomic::{AtomicUsize, Ordering};
 

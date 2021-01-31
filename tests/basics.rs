@@ -1,8 +1,7 @@
 mod common;
 
 use common::{all_paths, assert_pp, punct, SimpleDoc};
-use partial_pretty_printer::notation_constructors::flat;
-use partial_pretty_printer::Notation;
+use partial_pretty_printer::{notation_constructors::flat, Notation};
 
 #[test]
 fn basics_empty() {

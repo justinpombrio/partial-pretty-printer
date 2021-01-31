@@ -7,8 +7,8 @@ use partial_pretty_printer::examples::json::{json_list, json_number, Json};
 use partial_pretty_printer::examples::Doc;
 use partial_pretty_printer::notation_constructors::lit;
 use partial_pretty_printer::{
-    pane_print, Color, Height, Label, Line, PaneNotation, Pos, PrettyDoc, PrettyWindow,
-    RenderOptions, ShadedStyle, Size, Style, Width, WidthStrategy,
+    pane_print, Color, Label, Line, PaneNotation, Pos, PrettyDoc, PrettyWindow, RenderOptions,
+    ShadedStyle, Size, Style, Width, WidthStrategy,
 };
 use std::fmt;
 use std::fmt::Debug;
@@ -110,19 +110,18 @@ impl RichText {
     }
 
     fn get_mut_line(&mut self, line_num: Line) -> &mut Vec<(char, ShadedStyle)> {
-        if self.lines.len() < line_num.0 as usize + 1 {
-            self.lines
-                .resize_with(line_num.0 as usize + 1, || Vec::new());
+        if self.lines.len() < line_num as usize + 1 {
+            self.lines.resize_with(line_num as usize + 1, || Vec::new());
         }
-        &mut self.lines[line_num.0 as usize]
+        &mut self.lines[line_num as usize]
     }
 
     fn get_mut_char(&mut self, pos: Pos) -> &mut (char, ShadedStyle) {
         let line = self.get_mut_line(pos.line);
-        if line.len() < pos.col.0 as usize + 1 {
-            line.resize_with(pos.col.0 as usize + 1, || (' ', ShadedStyle::plain()));
+        if line.len() < pos.col as usize + 1 {
+            line.resize_with(pos.col as usize + 1, || (' ', ShadedStyle::plain()));
         }
-        &mut line[pos.col.0 as usize]
+        &mut line[pos.col as usize]
     }
 }
 
@@ -133,9 +132,10 @@ impl PrettyWindow for RichText {
         Ok(self.size)
     }
 
-    fn print(&mut self, pos: Pos, string: &str, style: ShadedStyle) -> Result<(), Self::Error> {
-        for (i, ch) in string.chars().enumerate() {
-            *self.get_mut_char(pos + Width(i as u16)) = (ch, style);
+    fn print(&mut self, mut pos: Pos, string: &str, style: ShadedStyle) -> Result<(), Self::Error> {
+        for ch in string.chars() {
+            *self.get_mut_char(pos) = (ch, style);
+            pos.col += 1;
         }
         Ok(())
     }
@@ -147,7 +147,7 @@ impl PrettyWindow for RichText {
         len: Width,
         style: ShadedStyle,
     ) -> Result<(), Self::Error> {
-        let string: String = iter::repeat(ch).take(len.0 as usize).collect();
+        let string: String = iter::repeat(ch).take(len as usize).collect();
         self.print(pos, &string, style)
     }
 }
@@ -159,10 +159,7 @@ fn pane_test(doc: impl PrettyDoc + Clone + Debug, path: Vec<usize>, width: u16, 
         cursor_height: 1.0,
         width_strategy: WidthStrategy::Full,
     };
-    let mut screen = RichText::new(Size {
-        width: Width(width),
-        height: Height(100),
-    });
+    let mut screen = RichText::new(Size { width, height: 100 });
     let label = SimpleLabel(Some((doc, path)));
     let pane_notation = PaneNotation::Doc {
         label,
