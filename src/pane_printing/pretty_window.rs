@@ -1,4 +1,4 @@
-use crate::geometry::{Pos, Size};
+use crate::geometry::{Pos, Size, Width};
 use crate::style::ShadedStyle;
 use std::fmt;
 
@@ -21,7 +21,7 @@ pub trait PrettyWindow: Sized + fmt::Debug {
         &mut self,
         pos: Pos,
         ch: char,
-        len: usize,
+        len: Width,
         style: ShadedStyle,
     ) -> Result<(), Self::Error>;
 }

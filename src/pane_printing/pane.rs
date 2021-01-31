@@ -1,7 +1,7 @@
 use super::pretty_window::PrettyWindow;
 use crate::geometry::{Col, Line, Pos, Rectangle, Size, Width};
 use crate::pretty_printing::LineContents;
-use crate::style::{Shade, ShadedStyle};
+use crate::style::{Shade, ShadedStyle, Style};
 
 /// A rectangular area of a window. You can pretty-print to it, or get sub-panes
 /// of it and pretty-print to those.
@@ -68,13 +68,13 @@ where
         highlight_cursor: bool,
     ) -> Result<(), PaneError<W>> {
         let mut pos = Pos { line, col: Col(0) };
+        let spaces_style = ShadedStyle::new(Style::plain(), contents.spaces_shade);
+        self.fill(pos, ' ', Width(contents.spaces as u16), spaces_style)?;
         pos.col += Width(contents.spaces as u16);
-        for (string, style, hl) in contents.contents {
-            let shade = if highlight_cursor && hl {
-                Shade::highlight()
-            } else {
-                Shade::background()
-            };
+        for (string, style, mut shade) in contents.contents {
+            if !highlight_cursor {
+                shade = Shade::background();
+            }
             let shaded_style = ShadedStyle::new(style, shade);
             self.print(pos, string, shaded_style)?;
             pos.col += Width(string.chars().count() as u16);
@@ -83,7 +83,7 @@ where
     }
 
     fn print(&mut self, pos: Pos, string: &str, style: ShadedStyle) -> Result<(), PaneError<W>> {
-        if pos.col >= self.rect.max_col {
+        if !self.may_be_in_pane(pos) {
             // Trying to print outside the pane.
             return Ok(());
         }
@@ -102,14 +102,25 @@ where
         }
     }
 
-    pub fn fill(&mut self, pos: Pos, ch: char, style: ShadedStyle) -> Result<(), PaneError<W>> {
-        if pos.col >= self.rect.max_col {
+    pub fn fill(
+        &mut self,
+        pos: Pos,
+        ch: char,
+        len: Width,
+        style: ShadedStyle,
+    ) -> Result<(), PaneError<W>> {
+        if !self.may_be_in_pane(pos) {
             // Trying to print outside the pane.
             return Ok(());
         }
-        let len = (self.rect.max_col - pos.col).0 as usize;
         self.window
             .fill(pos, ch, len, style)
             .map_err(PaneError::PrettyWindowErr)
+    }
+
+    fn may_be_in_pane(&self, start_pos: Pos) -> bool {
+        start_pos.line >= self.rect.min_line
+            && start_pos.line < self.rect.max_line
+            && start_pos.col < self.rect.max_col
     }
 }

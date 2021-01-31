@@ -31,7 +31,8 @@ fn pane_print_rec<L: Label, D: PrettyDoc, W: PrettyWindow>(
                 let line = Line(line);
                 let col = pane.rect.min_col;
                 let shaded_style = ShadedStyle::new(*style, Shade::background());
-                pane.fill(Pos { line, col }, *ch, shaded_style)?;
+                let len = pane.rect.max_col - col;
+                pane.fill(Pos { line, col }, *ch, len, shaded_style)?;
             }
         }
         PaneNotation::Doc {

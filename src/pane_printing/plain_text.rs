@@ -82,11 +82,11 @@ impl PrettyWindow for PlainText {
         &mut self,
         pos: Pos,
         ch: char,
-        len: usize,
+        len: Width,
         style: ShadedStyle,
     ) -> Result<(), Self::Error> {
         // TODO: don't construct a string, be more efficient
-        let string: String = iter::repeat(ch).take(len).collect();
+        let string: String = iter::repeat(ch).take(len.0 as usize).collect();
         self.print(pos, &string, style)
     }
 }

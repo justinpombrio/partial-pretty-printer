@@ -3,9 +3,11 @@
 mod common;
 
 use common::SimpleDoc;
-use partial_pretty_printer::notation_constructors::{empty, lit};
+use partial_pretty_printer::examples::json::{json_list, json_number, Json};
+use partial_pretty_printer::examples::Doc;
+use partial_pretty_printer::notation_constructors::lit;
 use partial_pretty_printer::{
-    pane_print, Color, Height, Label, Line, Notation, PaneNotation, Pos, PrettyDoc, PrettyWindow,
+    pane_print, Color, Height, Label, Line, PaneNotation, Pos, PrettyDoc, PrettyWindow,
     RenderOptions, ShadedStyle, Size, Style, Width, WidthStrategy,
 };
 use std::fmt;
@@ -29,10 +31,15 @@ struct RichText {
 impl fmt::Display for RichText {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for line in &self.lines {
+            // Print the line
+            write!(f, "|")?;
             for (ch, _) in line {
                 write!(f, "{}", ch)?;
             }
             write!(f, "\n")?;
+
+            // Print the colors
+            write!(f, "|")?;
             for (_, style) in line {
                 let color = match style.color {
                     Color::Base00 => '0',
@@ -55,9 +62,12 @@ impl fmt::Display for RichText {
                 write!(f, "{}", color)?;
             }
             write!(f, "\n")?;
+
+            // Print the bold & underlined styles
+            write!(f, "|")?;
             for (_, style) in line {
                 let emph = match (style.bold, style.underlined) {
-                    (false, false) => ' ',
+                    (false, false) => '.',
                     (true, false) => 'b',
                     (false, true) => 'u',
                     (true, true) => '!',
@@ -65,6 +75,9 @@ impl fmt::Display for RichText {
                 write!(f, "{}", emph)?;
             }
             write!(f, "\n")?;
+
+            // Print the shade & reversed styles
+            write!(f, "|")?;
             for (_, style) in line {
                 let shade_and_rev = match (style.shade.0, style.reversed) {
                     (0, false) => 'a',
@@ -73,12 +86,16 @@ impl fmt::Display for RichText {
                     (1, true) => 'B',
                     (2, false) => 'c',
                     (2, true) => 'C',
-                    (_, false) => 'd',
-                    (_, true) => 'D',
+                    (255, false) => 'x',
+                    (255, true) => 'X',
+                    (_, _) => unimplemented!(),
                 };
                 write!(f, "{}", shade_and_rev)?;
             }
-            write!(f, "\n\n")?;
+            write!(f, "\n")?;
+
+            // Print a blank line for legibility
+            write!(f, "\n")?;
         }
         Ok(())
     }
@@ -127,26 +144,26 @@ impl PrettyWindow for RichText {
         &mut self,
         pos: Pos,
         ch: char,
-        len: usize,
+        len: Width,
         style: ShadedStyle,
     ) -> Result<(), Self::Error> {
-        let string: String = iter::repeat(ch).take(len).collect();
+        let string: String = iter::repeat(ch).take(len.0 as usize).collect();
         self.print(pos, &string, style)
     }
 }
 
 #[track_caller]
-fn pane_test(notation: Notation, expected: &str) {
+fn pane_test(doc: impl PrettyDoc + Clone + Debug, path: Vec<usize>, width: u16, expected: &str) {
     let render_options = RenderOptions {
         highlight_cursor: true,
         cursor_height: 1.0,
         width_strategy: WidthStrategy::Full,
     };
     let mut screen = RichText::new(Size {
-        width: Width(80),
-        height: Height(10),
+        width: Width(width),
+        height: Height(100),
     });
-    let label = SimpleLabel(Some((SimpleDoc(notation), vec![])));
+    let label = SimpleLabel(Some((doc, path)));
     let pane_notation = PaneNotation::Doc {
         label,
         render_options,
@@ -162,8 +179,6 @@ fn pane_test(notation: Notation, expected: &str) {
 
 #[test]
 fn test_pane_styles() {
-    pane_test(empty(), "");
-
     let words = vec![
         lit(
             "Hello",
@@ -205,10 +220,62 @@ fn test_pane_styles() {
     ];
     let note = words.into_iter().fold_first(|n1, n2| n1 + n2).unwrap();
     pane_test(
-        note,
-        "Hello, world!\n\
-         99999A5BBBBBC\n\
-         uuuuub      !\n\
-         ddddddddddddD\n\n",
+        SimpleDoc(note),
+        vec![],
+        80,
+        "|Hello, world!\n\
+         |99999A5BBBBBC\n\
+         |uuuuub......!\n\
+         |aaaaaaaaaaaaA\n\n",
+    );
+}
+
+#[test]
+fn test_pane_highlighting() {
+    // Expected highlighting:
+    // [[[1, 2], [3, 4]], [[5, 6], [7, 8]]]
+    // cccccccccccccccccccbaaaaaabbbbbbbbbc
+    fn num(n: usize) -> Doc<Json> {
+        json_number(n as f64)
+    }
+    let doc = json_list(vec![
+        json_list(vec![
+            json_list(vec![num(1), num(2)]),
+            json_list(vec![num(3), num(4)]),
+        ]),
+        json_list(vec![
+            json_list(vec![num(5), num(6)]),
+            json_list(vec![num(7), num(8)]),
+        ]),
+    ]);
+    pane_test(
+        doc,
+        vec![1, 0],
+        20,
+        "|        [5, 6], [\n\
+         |55555555595595555\n\
+         |.................\n\
+         |bbbbbbbbaaaaaabbb\n\
+                           \n\
+         |            7, 8\n\
+         |5555555555559559\n\
+         |................\n\
+         |bbbbbbbbbbbbbbbb\n\
+                          \n\
+         |        ]\n\
+         |555555555\n\
+         |.........\n\
+         |bbbbbbbbb\n\
+                   \n\
+         |    ]\n\
+         |55555\n\
+         |.....\n\
+         |bbbbb\n\
+               \n\
+         |]\n\
+         |5\n\
+         |.\n\
+         |c\n\
+           \n",
     );
 }

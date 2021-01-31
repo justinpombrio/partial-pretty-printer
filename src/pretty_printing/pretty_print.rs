@@ -1,14 +1,16 @@
 use super::notation_ref::{NotationCase, NotationRef};
 use super::pretty_doc::PrettyDoc;
-use crate::style::Style;
+use crate::style::{Shade, Style};
 use std::iter::Iterator;
 
 /// (indent, is_in_cursor, notation)
-type Chunk<'d, D> = (Option<usize>, bool, NotationRef<'d, D>);
+type Chunk<'d, D> = (Option<usize>, Shade, NotationRef<'d, D>);
 
 pub struct LineContents<'d> {
     pub spaces: usize,
-    pub contents: Vec<(&'d str, Style, bool)>,
+    pub spaces_shade: Shade,
+    /// (string, style, highlighting)
+    pub contents: Vec<(&'d str, Style, Shade)>,
 }
 
 #[derive(Clone, Debug)]
@@ -27,6 +29,7 @@ struct DownwardPrinter<'d, D: PrettyDoc> {
     width: usize,
     next: Vec<Chunk<'d, D>>,
     spaces: usize,
+    spaces_shade: Shade,
     at_end: bool,
 }
 
@@ -76,20 +79,25 @@ impl<'d, D: PrettyDoc> Seeker<'d, D> {
         Seeker {
             width,
             prev: vec![],
-            next: vec![(Some(0), false, notation)],
+            next: vec![(Some(0), Shade::background(), notation)],
         }
     }
 
     fn seek(mut self, path: &[usize]) -> (UpwardPrinter<'d, D>, DownwardPrinter<'d, D>) {
         use NotationCase::*;
 
+        // Seek to the descendant given by `path`.
+        // Highlight the descendency chain as we go.
         let mut path = path.into_iter();
+        self.highlight(path.len());
         while let Some(child_index) = path.next() {
             self.seek_child(*child_index);
+            self.highlight(path.len());
         }
 
         // Walk backward to the nearest Newline (or beginning of the doc).
         let mut spaces = 0;
+        let mut spaces_shade = Shade::background();
         let mut at_beginning = true;
         while let Some((indent, hl, notation)) = self.prev.pop() {
             match notation.case() {
@@ -102,6 +110,7 @@ impl<'d, D: PrettyDoc> Seeker<'d, D> {
                     // drop the newline, but take note of it by setting at_beginning=false.
                     at_beginning = false;
                     spaces = indent.unwrap();
+                    spaces_shade = hl;
                     break;
                 }
             }
@@ -117,6 +126,7 @@ impl<'d, D: PrettyDoc> Seeker<'d, D> {
             width: self.width,
             next: self.next,
             spaces,
+            spaces_shade,
             at_end: false,
         };
         (upward_printer, downward_printer)
@@ -188,7 +198,7 @@ impl<'d, D: PrettyDoc> Seeker<'d, D> {
                     }
                     Child(i, child) if notation.doc_id() == parent_doc_id && i == child_index => {
                         // Found!
-                        self.next.push((indent, true, child));
+                        self.next.push((indent, hl, child));
                         return;
                     }
                     Child(_, child) => {
@@ -208,6 +218,11 @@ impl<'d, D: PrettyDoc> Seeker<'d, D> {
         }
     }
 
+    fn highlight(&mut self, shade: usize) {
+        // TODO: longer paths?
+        self.next.last_mut().unwrap().1 = Shade(shade as u8);
+    }
+
     #[allow(unused)]
     fn display(&self) {
         for (_, _, notation) in &self.prev {
@@ -216,6 +231,18 @@ impl<'d, D: PrettyDoc> Seeker<'d, D> {
         print!(" / ");
         for (_, _, notation) in self.next.iter().rev() {
             print!("{} ", notation);
+        }
+        println!();
+    }
+
+    #[allow(unused)]
+    fn display_shades(&self) {
+        for (_, shade, _) in &self.prev {
+            print!("{} ", shade.0);
+        }
+        print!(" / ");
+        for (_, shade, _) in self.next.iter().rev() {
+            print!("{} ", shade.0);
         }
         println!();
     }
@@ -245,9 +272,11 @@ impl<'d, D: PrettyDoc> DownwardPrinter<'d, D> {
                 Newline => {
                     let contents = LineContents {
                         spaces: self.spaces,
+                        spaces_shade: self.spaces_shade,
                         contents: contents,
                     };
                     self.spaces = indent.unwrap();
+                    self.spaces_shade = hl;
                     return Some(contents);
                 }
                 Indent(j, note) => self.next.push((indent.map(|i| i + j), hl, note)),
@@ -268,6 +297,7 @@ impl<'d, D: PrettyDoc> DownwardPrinter<'d, D> {
         self.at_end = true;
         Some(LineContents {
             spaces: self.spaces,
+            spaces_shade: self.spaces_shade,
             contents: contents,
         })
     }
@@ -289,8 +319,12 @@ impl<'d, D: PrettyDoc> UpwardPrinter<'d, D> {
             return None;
         }
 
-        let spaces = self.seek_start_of_last_line(false);
-        let mut prefix_len = spaces.unwrap_or(0);
+        // TODO: This is really a separate fn, if the arg is false?
+        let newline_info = self.seek_start_of_last_line(false);
+        let mut prefix_len = match newline_info {
+            None => 0,
+            Some((spaces, _)) => spaces,
+        };
         while let Some((indent, hl, notation)) = self.next.pop() {
             match notation.case() {
                 Literal(lit) => {
@@ -306,8 +340,11 @@ impl<'d, D: PrettyDoc> UpwardPrinter<'d, D> {
                     let choice = choose(self.width, indent, prefix_len, opt1, opt2, suffix_len);
                     self.prev.push((indent, hl, choice));
                     self.seek_end();
-                    let spaces = self.seek_start_of_last_line(false);
-                    prefix_len = spaces.unwrap_or(0);
+                    let newline_info = self.seek_start_of_last_line(false);
+                    prefix_len = match newline_info {
+                        None => 0,
+                        Some((spaces, _)) => spaces,
+                    };
                 }
                 Empty | Newline | Indent(_, _) | Flat(_) | Concat(_, _) | Child(_, _) => {
                     unreachable!()
@@ -316,12 +353,15 @@ impl<'d, D: PrettyDoc> UpwardPrinter<'d, D> {
         }
 
         let spaces;
-        if let Some(indent) = self.seek_start_of_last_line(true) {
+        let spaces_shade;
+        if let Some((indent, hl)) = self.seek_start_of_last_line(true) {
             self.at_beginning = false;
             spaces = indent;
+            spaces_shade = hl;
         } else {
             self.at_beginning = true;
             spaces = 0;
+            spaces_shade = Shade::background();
         }
 
         let mut contents = vec![];
@@ -334,6 +374,7 @@ impl<'d, D: PrettyDoc> UpwardPrinter<'d, D> {
         }
         Some(LineContents {
             spaces,
+            spaces_shade,
             contents: contents,
         })
     }
@@ -345,10 +386,10 @@ impl<'d, D: PrettyDoc> UpwardPrinter<'d, D> {
     }
 
     /// Move the "printing cursor" from the very end to the start of the last line. If there is a
-    /// preceding newline, return the indentation. Otherwise -- i.e., if this is the last remaining
-    /// line -- return None.
+    /// preceding newline, return the indentation and shade. Otherwise -- i.e., if this is the last
+    /// remaining line -- return None.
     // Maintains the invariant that `next` only ever contains `Literal` and `Choice` notations.
-    fn seek_start_of_last_line(&mut self, delete_newline: bool) -> Option<usize> {
+    fn seek_start_of_last_line(&mut self, delete_newline: bool) -> Option<(usize, Shade)> {
         use NotationCase::*;
 
         assert!(self.next.is_empty());
@@ -361,7 +402,7 @@ impl<'d, D: PrettyDoc> UpwardPrinter<'d, D> {
                     if !delete_newline {
                         self.prev.push((indent, hl, notation));
                     }
-                    return Some(indent.unwrap());
+                    return Some((indent.unwrap(), hl));
                 }
                 Indent(j, note) => self.prev.push((indent.map(|i| i + j), hl, note)),
                 Flat(note) => self.prev.push((None, hl, note)),
