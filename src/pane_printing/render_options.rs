@@ -25,9 +25,7 @@ impl RenderOptions {
     pub fn focal_line(self, available_height: Height) -> Line {
         assert!(self.cursor_height >= 0.0);
         assert!(self.cursor_height <= 1.0);
-        let offset_from_top =
-            f32::round((available_height - 1) as f32 * (1.0 - self.cursor_height)) as Line;
-        offset_from_top
+        f32::round((available_height - 1) as f32 * (1.0 - self.cursor_height)) as Line
     }
 
     pub fn choose_width(self, available_width: Width) -> Width {

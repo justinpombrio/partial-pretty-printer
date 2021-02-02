@@ -155,6 +155,12 @@ impl Shr<Notation> for Width {
 
     /// Shorthand for nesting (indented newline)
     fn shr(self, notation: Notation) -> Notation {
-        Notation::Indent(self, Box::new(Notation::Newline + notation))
+        Notation::Indent(
+            self,
+            Box::new(Notation::Concat(
+                Box::new(Notation::Newline),
+                Box::new(notation),
+            )),
+        )
     }
 }

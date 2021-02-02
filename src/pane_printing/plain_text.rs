@@ -14,7 +14,7 @@ pub struct PlainText {
 impl fmt::Display for PlainText {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for line in &self.lines {
-            write!(f, "{}\n", line)?;
+            writeln!(f, "{}", line)?;
         }
         Ok(())
     }
@@ -36,7 +36,7 @@ impl PlainText {
 
     fn get_mut_line(&mut self, line_num: usize) -> &mut String {
         if self.lines.len() < line_num + 1 {
-            self.lines.resize_with(line_num + 1, || String::new());
+            self.lines.resize_with(line_num + 1, String::new);
         }
         &mut self.lines[line_num as usize]
     }

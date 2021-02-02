@@ -37,7 +37,7 @@ static LIST_NOTATION: Lazy<Notation> = Lazy::new(|| {
         join: left() + punct(",") + (punct(" ") | nl()) + right(),
         surround: {
             let single = punct("[") + surrounded() + punct("]");
-            let multi = punct("[") + (4 >> surrounded()) ^ punct("]");
+            let multi = (punct("[") + (4 >> surrounded())) ^ punct("]");
             single | multi
         },
     })

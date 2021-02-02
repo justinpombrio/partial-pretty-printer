@@ -35,7 +35,7 @@ impl fmt::Display for RichText {
             for (ch, _) in line {
                 write!(f, "{}", ch)?;
             }
-            write!(f, "\n")?;
+            writeln!(f)?;
 
             // Print the colors
             write!(f, "|")?;
@@ -60,7 +60,7 @@ impl fmt::Display for RichText {
                 };
                 write!(f, "{}", color)?;
             }
-            write!(f, "\n")?;
+            writeln!(f)?;
 
             // Print the bold & underlined styles
             write!(f, "|")?;
@@ -73,7 +73,7 @@ impl fmt::Display for RichText {
                 };
                 write!(f, "{}", emph)?;
             }
-            write!(f, "\n")?;
+            writeln!(f)?;
 
             // Print the shade & reversed styles
             write!(f, "|")?;
@@ -91,10 +91,10 @@ impl fmt::Display for RichText {
                 };
                 write!(f, "{}", shade_and_rev)?;
             }
-            write!(f, "\n")?;
+            writeln!(f)?;
 
             // Print a blank line for legibility
-            write!(f, "\n")?;
+            writeln!(f)?;
         }
         Ok(())
     }
@@ -110,7 +110,7 @@ impl RichText {
 
     fn get_mut_line(&mut self, line_num: Line) -> &mut Vec<(char, ShadedStyle)> {
         if self.lines.len() < line_num as usize + 1 {
-            self.lines.resize_with(line_num as usize + 1, || Vec::new());
+            self.lines.resize_with(line_num as usize + 1, Vec::new);
         }
         &mut self.lines[line_num as usize]
     }

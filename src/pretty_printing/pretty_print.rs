@@ -106,7 +106,7 @@ impl<'d, D: PrettyDoc> Seeker<'d, D> {
 
         // Seek to the descendant given by `path`.
         // Highlight the descendency chain as we go.
-        let mut path = path.into_iter();
+        let mut path = path.iter();
         self.highlight(path.len());
         while let Some(child_index) = path.next() {
             self.seek_child(*child_index);
@@ -281,13 +281,13 @@ impl<'d, D: PrettyDoc> DownwardPrinter<'d, D> {
                     prefix_len += lit.len();
                 }
                 Text(text, style) => {
-                    contents.push((text.as_ref(), style, hl));
+                    contents.push((text, style, hl));
                     prefix_len += text_len(text);
                 }
                 Newline => {
                     let contents = LineContents {
                         spaces: self.spaces,
-                        contents: contents,
+                        contents,
                     };
                     self.spaces = (indent.unwrap(), hl);
                     return Some(contents);
@@ -310,7 +310,7 @@ impl<'d, D: PrettyDoc> DownwardPrinter<'d, D> {
         self.at_end = true;
         Some(LineContents {
             spaces: self.spaces,
-            contents: contents,
+            contents,
         })
     }
 
@@ -377,14 +377,11 @@ impl<'d, D: PrettyDoc> UpwardPrinter<'d, D> {
         while let Some((_indent, hl, notation)) = self.next.pop() {
             match notation.case() {
                 NotationCase::Literal(lit) => contents.push((lit.str(), lit.style(), hl)),
-                NotationCase::Text(text, style) => contents.push((text.as_ref(), style, hl)),
+                NotationCase::Text(text, style) => contents.push((text, style, hl)),
                 _ => panic!("display_line: expected only literals and text"),
             }
         }
-        Some(LineContents {
-            spaces,
-            contents: contents,
-        })
+        Some(LineContents { spaces, contents })
     }
 
     fn seek_end(&mut self) {
@@ -439,10 +436,7 @@ impl<'d, D: PrettyDoc> UpwardPrinter<'d, D> {
 }
 
 // Returns None if impossible.
-fn min_first_line_len<'d, D: PrettyDoc>(
-    notation: NotationRef<'d, D>,
-    flat: bool,
-) -> Option<FirstLineLen> {
+fn min_first_line_len<D: PrettyDoc>(notation: NotationRef<D>, flat: bool) -> Option<FirstLineLen> {
     use NotationCase::*;
 
     match notation.case() {
@@ -484,11 +478,9 @@ fn min_first_line_len<'d, D: PrettyDoc>(
             if len1.has_newline {
                 Some(len1)
             } else {
-                min_first_line_len(note2, flat).and_then(|len2| {
-                    Some(FirstLineLen {
-                        len: len1.len + len2.len,
-                        has_newline: len2.has_newline,
-                    })
+                min_first_line_len(note2, flat).map(|len2| FirstLineLen {
+                    len: len1.len + len2.len,
+                    has_newline: len2.has_newline,
                 })
             }
         }),

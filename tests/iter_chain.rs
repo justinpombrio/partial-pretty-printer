@@ -36,14 +36,14 @@ static METHOD_CALL_NOTATION: Lazy<Notation> = Lazy::new(|| {
     //     .bar(
     //         arg
     //      )
-    let single = punct(".") + child(1) + punct("(") + flat(child(2).clone()) + punct(")");
-    let two_lines = punct(".") + child(1) + punct("(") + flat(child(2).clone()) + punct(")");
-    let multi = punct(".") + child(1) + punct("(") + (4 >> child(2)) ^ punct(")");
+    let single = punct(".") + child(1) + punct("(") + flat(child(2)) + punct(")");
+    let two_lines = punct(".") + child(1) + punct("(") + flat(child(2)) + punct(")");
+    let multi = (punct(".") + child(1) + punct("(") + (4 >> child(2))) ^ punct(")");
     child(0) + (single | (4 >> (two_lines | multi)))
 });
 static CLOSURE_NOTATION: Lazy<Notation> = Lazy::new(|| {
     let single = punct("|") + child(0) + punct("| { ") + child(1) + punct(" }");
-    let multi = punct("|") + child(0) + punct("| {") + (4 >> child(1)) ^ punct("}");
+    let multi = (punct("|") + child(0) + punct("| {") + (4 >> child(1))) ^ punct("}");
     single | multi
 });
 static TIMES_NOTATION: Lazy<Notation> = Lazy::new(|| child(0) + punct(" * ") + child(1));
@@ -66,7 +66,7 @@ impl PrettyDoc for IterChain {
         }
     }
 
-    fn contents<'d>(&'d self) -> PrettyDocContents<'d, Self> {
+    fn contents(&self) -> PrettyDocContents<Self> {
         use IterChainData::*;
         use PrettyDocContents::{Children, Text};
 

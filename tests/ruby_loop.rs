@@ -28,7 +28,7 @@ static METHOD_CALL_NOTATION: Lazy<Notation> = Lazy::new(|| {
 });
 static DO_LOOP_NOTATION: Lazy<Notation> = Lazy::new(|| {
     let single = punct("do |") + child(0) + punct("| ") + flat(child(1)) + punct(" end");
-    let multi = punct("do |") + child(0) + punct("|") + (4 >> child(1)) ^ punct("end");
+    let multi = (punct("do |") + child(0) + punct("|") + (4 >> child(1))) ^ punct("end");
     single | multi
 });
 
@@ -49,7 +49,7 @@ impl PrettyDoc for Ruby {
         }
     }
 
-    fn contents<'d>(&'d self) -> PrettyDocContents<'d, Self> {
+    fn contents(&self) -> PrettyDocContents<Self> {
         use PrettyDocContents::{Children, Text};
         use RubyData::*;
 

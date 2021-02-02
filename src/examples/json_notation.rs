@@ -55,7 +55,7 @@ static JSON_LIST_NOTATION: Lazy<Notation> = Lazy::new(|| {
         join: left() + punct(",") + (punct(" ") | nl()) + right(),
         surround: {
             let single = punct("[") + flat(surrounded()) + punct("]");
-            let multi = punct("[") + (4 >> surrounded()) ^ punct("]");
+            let multi = (punct("[") + (4 >> surrounded())) ^ punct("]");
             single | multi
         },
     })
@@ -66,11 +66,11 @@ static JSON_DICT_NOTATION: Lazy<Notation> = Lazy::new(|| {
         empty: punct("{}"),
         lone: {
             let single = punct("{") + left() + punct("}");
-            let multi = punct("{") + (4 >> left()) ^ punct("}");
+            let multi = (punct("{") + (4 >> left())) ^ punct("}");
             single | multi
         },
         join: left() + punct(",") + nl() + right(),
-        surround: punct("{") + (4 >> surrounded()) ^ punct("}"),
+        surround: (punct("{") + (4 >> surrounded())) ^ punct("}"),
     })
 });
 

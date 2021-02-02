@@ -52,7 +52,7 @@ impl PrettyDoc for FlowWrap {
         }
     }
 
-    fn contents<'d>(&'d self) -> PrettyDocContents<'d, Self> {
+    fn contents(&self) -> PrettyDocContents<Self> {
         use FlowWrapData::*;
         use PrettyDocContents::{Children, Text};
 
@@ -77,7 +77,7 @@ fn paragraph(words: &[&str]) -> FlowWrap {
     use FlowWrapData::*;
 
     let children = words
-        .into_iter()
+        .iter()
         .map(|w| new_node(Word((*w).to_owned())))
         .collect::<Vec<_>>();
     new_node(Paragraph(Box::new([new_node(Words(children))])))
