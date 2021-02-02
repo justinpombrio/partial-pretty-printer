@@ -8,8 +8,14 @@ use crate::style::{Shade, ShadedStyle};
 /// A list of child indices, describing the path from the root to a node in the document.
 pub type Path = Vec<usize>;
 
-/// Render to this pane according to the given [PaneNotation]. Use the `get_content` closure to
-/// map the document labels used in any `PaneNotation::Doc` variants to actual documents.
+/// Render to this pane according to the given [PaneNotation].
+///
+/// - `window` is the `PrettyWindow` to display to.
+/// - `note` is the `PaneNotation` to render. It says how to break up the screen into rectangular
+///   "panes", and which document to display in each pane. It does not contain the Documents
+///   directly, instead it references them by `Label`.
+/// - `get_content` is a function to look up a document by label. It returns both the document, and
+///   the path to the node in the document to focus on.
 pub fn pane_print<L: Label, D: PrettyDoc, W: PrettyWindow>(
     window: &mut W,
     note: &PaneNotation<L>,

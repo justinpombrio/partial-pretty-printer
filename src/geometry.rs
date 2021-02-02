@@ -1,11 +1,3 @@
-//! Types for working with positions and sizes.
-//!
-//! A character position [`Pos`] has a [`Line`] and [`Col`].
-//!
-//! A size [`Size`] has a [`Width`] and [`Height`].
-//!
-//! Everything is measured in characters and 0-indexed.
-
 use std::fmt;
 use std::ops::Add;
 
@@ -55,7 +47,7 @@ impl Pos {
 
 impl Rectangle {
     #[cfg(test)]
-    pub const fn new(min_col: u16, max_col: u16, min_line: u32, max_line: u32) -> Rectangle {
+    pub const fn new(min_col: Col, max_col: Col, min_line: Line, max_line: Line) -> Rectangle {
         Rectangle {
             min_col,
             max_col,

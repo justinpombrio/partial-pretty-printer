@@ -26,8 +26,8 @@ pub enum Notation {
     /// last character of the left notation. The right notation's indentation level is not
     /// affected.
     Concat(Box<Notation>, Box<Notation>),
-    /// Display the left notation if it fits on one line within the required width; otherwise the
-    /// right.
+    /// Display the left notation if its first line fits within the required width; otherwise
+    /// display the right.
     Choice(Box<Notation>, Box<Notation>),
     /// Display the first notation in case this tree has empty text,
     /// otherwise show the second notation.

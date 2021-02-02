@@ -2,7 +2,7 @@ use crate::geometry::{Pos, Size, Width};
 use crate::style::ShadedStyle;
 use std::fmt;
 
-/// A "window" that supports the methods necessary to render a set of [PrettyDocument](crate::PrettyDocument)s.
+/// A "window" that supports the methods necessary to render a set of [PrettyDocument](crate::PrettyDoc)s.
 pub trait PrettyWindow: Sized + fmt::Debug {
     // Forbid the Error type from containing non-static references so we can use
     // `PrettyWindow` as a trait object.

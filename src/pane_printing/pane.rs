@@ -68,9 +68,10 @@ where
         highlight_cursor: bool,
     ) -> Result<(), PaneError<W>> {
         let mut pos = Pos { line, col: 0 };
-        let spaces_style = ShadedStyle::new(Style::plain(), contents.spaces_shade);
-        self.fill(pos, ' ', contents.spaces as Width, spaces_style)?;
-        pos.col += contents.spaces as Width;
+        let spaces = contents.spaces.0 as Width;
+        let spaces_style = ShadedStyle::new(Style::plain(), contents.spaces.1);
+        self.fill(pos, ' ', spaces, spaces_style)?;
+        pos.col += spaces;
         for (string, style, mut shade) in contents.contents {
             if !highlight_cursor {
                 shade = Shade::background();

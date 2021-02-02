@@ -2,6 +2,7 @@ use super::render_options::RenderOptions;
 use crate::style::Style;
 use std::fmt;
 
+/// Document ids, used to look up documents.
 pub trait Label: Clone + fmt::Debug {}
 
 /// Specify the content of a `Pane`.
@@ -34,10 +35,10 @@ pub enum PaneSize {
 
     /// Try to give the subpane exactly the amount of height or width needed to fit its content. If
     /// that's not possible, give it all of the remaining height or width. Note that notations are
-    /// typically very greedy for width, so you should only use `Dynamic` width in specific
+    /// typically very greedy for width, so you should only use `Dynamic` width only in unusual
     /// circumstances.
     ///
-    /// If there are multiple Dynamic subpanes and not enough height to satisfy all of them, the
+    /// If there are multiple Dynamic subpanes and not enough space to satisfy all of them, the
     /// ones earlier in the list get priority. `Dynamic` subpanes get priority over `Proportional`
     /// subpanes, regardless of order.
     ///

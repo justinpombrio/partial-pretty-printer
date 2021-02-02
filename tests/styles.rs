@@ -152,7 +152,7 @@ impl PrettyWindow for RichText {
 }
 
 #[track_caller]
-fn pane_test(doc: impl PrettyDoc + Clone + Debug, path: Vec<usize>, width: u16, expected: &str) {
+fn pane_test(doc: impl PrettyDoc + Clone + Debug, path: Vec<usize>, width: Width, expected: &str) {
     let render_options = RenderOptions {
         highlight_cursor: true,
         cursor_height: 1.0,

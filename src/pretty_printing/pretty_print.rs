@@ -7,10 +7,12 @@ use std::iter::Iterator;
 /// (indent, is_in_cursor, notation)
 type Chunk<'d, D> = (Option<Width>, Shade, NotationRef<'d, D>);
 
+/// The contents of a single pretty printed line.
 pub struct LineContents<'d> {
-    pub spaces: Width,
-    pub spaces_shade: Shade,
-    /// (string, style, highlighting)
+    /// The indentation of this line in spaces, and the shade of those spaces.
+    pub spaces: (Width, Shade),
+    /// A sequence of (string, style, shade) triples, to be displayed after `spaces`, in order from
+    /// left to right, with no spacing in between.
     pub contents: Vec<(&'d str, Style, Shade)>,
 }
 
@@ -29,8 +31,7 @@ struct Seeker<'d, D: PrettyDoc> {
 struct DownwardPrinter<'d, D: PrettyDoc> {
     width: Width,
     next: Vec<Chunk<'d, D>>,
-    spaces: Width,
-    spaces_shade: Shade,
+    spaces: (Width, Shade),
     at_end: bool,
 }
 
@@ -42,6 +43,18 @@ struct UpwardPrinter<'d, D: PrettyDoc> {
     at_beginning: bool,
 }
 
+/// Pretty print a document, focused at the node found by traversing `path` from the root.
+///
+/// `width` is the desired line width. The algorithm will attempt to, but is not guaranteed to,
+/// find a layout that fits withing that width.
+///
+/// Returns a pair of iterators:
+///
+/// - the first prints lines above the focused node going up
+/// - the second prints lines from the first line of the focused node going down
+///
+/// It is expected that you will take only as many lines as you need from the iterators; doing so
+/// will save computation time.
 pub fn pretty_print<'d, D: PrettyDoc>(
     doc: &'d D,
     width: Width,
@@ -55,7 +68,11 @@ pub fn pretty_print<'d, D: PrettyDoc>(
     seeker.seek(path)
 }
 
-pub fn pretty_print_to_string<'d, D: PrettyDoc>(doc: &'d D, width: Width) -> String {
+/// Print the entirety of the document to a single string, ignoring styles and shading.
+///
+/// `width` is the desired line width. The algorithm will attempt to, but is not guaranteed to,
+/// find a layout that fits withing that width.
+pub fn pretty_print_to_string<D: PrettyDoc>(doc: &D, width: Width) -> String {
     let (_, mut lines_iter) = pretty_print(doc, width, &[]);
     let mut string = lines_iter.next().unwrap().to_string();
     for line in lines_iter {
@@ -67,7 +84,7 @@ pub fn pretty_print_to_string<'d, D: PrettyDoc>(doc: &'d D, width: Width) -> Str
 
 impl<'d> ToString for LineContents<'d> {
     fn to_string(&self) -> String {
-        let mut string = format!("{:spaces$}", "", spaces = self.spaces as usize);
+        let mut string = format!("{:spaces$}", "", spaces = self.spaces.0 as usize);
         for (text, _style, _hl) in &self.contents {
             string.push_str(text);
         }
@@ -97,8 +114,7 @@ impl<'d, D: PrettyDoc> Seeker<'d, D> {
         }
 
         // Walk backward to the nearest Newline (or beginning of the doc).
-        let mut spaces = 0;
-        let mut spaces_shade = Shade::background();
+        let mut spaces = (0, Shade::background());
         let mut at_beginning = true;
         while let Some((indent, hl, notation)) = self.prev.pop() {
             match notation.case() {
@@ -110,8 +126,7 @@ impl<'d, D: PrettyDoc> Seeker<'d, D> {
                 Newline => {
                     // drop the newline, but take note of it by setting at_beginning=false.
                     at_beginning = false;
-                    spaces = indent.unwrap();
-                    spaces_shade = hl;
+                    spaces = (indent.unwrap(), hl);
                     break;
                 }
             }
@@ -127,7 +142,6 @@ impl<'d, D: PrettyDoc> Seeker<'d, D> {
             width: self.width,
             next: self.next,
             spaces,
-            spaces_shade,
             at_end: false,
         };
         (upward_printer, downward_printer)
@@ -258,7 +272,7 @@ impl<'d, D: PrettyDoc> DownwardPrinter<'d, D> {
         }
 
         let mut contents = vec![];
-        let mut prefix_len = self.spaces;
+        let mut prefix_len = self.spaces.0;
         while let Some((indent, hl, notation)) = self.next.pop() {
             match notation.case() {
                 Empty => (),
@@ -273,11 +287,9 @@ impl<'d, D: PrettyDoc> DownwardPrinter<'d, D> {
                 Newline => {
                     let contents = LineContents {
                         spaces: self.spaces,
-                        spaces_shade: self.spaces_shade,
                         contents: contents,
                     };
-                    self.spaces = indent.unwrap();
-                    self.spaces_shade = hl;
+                    self.spaces = (indent.unwrap(), hl);
                     return Some(contents);
                 }
                 Indent(j, note) => self.next.push((indent.map(|i| i + j), hl, note)),
@@ -298,7 +310,6 @@ impl<'d, D: PrettyDoc> DownwardPrinter<'d, D> {
         self.at_end = true;
         Some(LineContents {
             spaces: self.spaces,
-            spaces_shade: self.spaces_shade,
             contents: contents,
         })
     }
@@ -354,15 +365,12 @@ impl<'d, D: PrettyDoc> UpwardPrinter<'d, D> {
         }
 
         let spaces;
-        let spaces_shade;
         if let Some((indent, hl)) = self.seek_start_of_last_line(true) {
             self.at_beginning = false;
-            spaces = indent;
-            spaces_shade = hl;
+            spaces = (indent, hl);
         } else {
             self.at_beginning = true;
-            spaces = 0;
-            spaces_shade = Shade::background();
+            spaces = (0, Shade::background());
         }
 
         let mut contents = vec![];
@@ -375,7 +383,6 @@ impl<'d, D: PrettyDoc> UpwardPrinter<'d, D> {
         }
         Some(LineContents {
             spaces,
-            spaces_shade,
             contents: contents,
         })
     }

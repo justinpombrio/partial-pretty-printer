@@ -1,5 +1,6 @@
 use crate::geometry::{Height, Line, Width};
 
+/// Options for how to display a document within a `Pane`.
 #[derive(Debug, Clone, Copy)]
 pub struct RenderOptions {
     pub highlight_cursor: bool,
@@ -25,7 +26,7 @@ impl RenderOptions {
         assert!(self.cursor_height >= 0.0);
         assert!(self.cursor_height <= 1.0);
         let offset_from_top =
-            f32::round((available_height - 1) as f32 * (1.0 - self.cursor_height)) as u32;
+            f32::round((available_height - 1) as f32 * (1.0 - self.cursor_height)) as Line;
         offset_from_top
     }
 
