@@ -3,7 +3,7 @@ mod common;
 use common::{assert_pp, punct};
 use once_cell::sync::Lazy;
 use partial_pretty_printer::notation_constructors::{child, flat, text};
-use partial_pretty_printer::{Notation, PrettyDoc, PrettyDocContents, Style};
+use partial_pretty_printer::{Notation, PrettyDoc, Style};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -48,14 +48,33 @@ static CLOSURE_NOTATION: Lazy<Notation> = Lazy::new(|| {
 });
 static TIMES_NOTATION: Lazy<Notation> = Lazy::new(|| child(0) + punct(" * ") + child(1));
 
-impl PrettyDoc for IterChain {
+enum Contents<'d> {
+    Text(&'d str),
+    Children(&'d [IterChain]),
+}
+
+impl IterChain {
+    fn contents(&self) -> Contents {
+        use Contents::{Children, Text};
+        use IterChainData::*;
+
+        match &self.data {
+            Var(txt) => Text(txt),
+            MethodCall(contents) => Children(&**contents),
+            Closure(contents) => Children(&**contents),
+            Times(contents) => Children(&**contents),
+        }
+    }
+}
+
+impl<'d> PrettyDoc<'d> for &'d IterChain {
     type Id = usize;
 
-    fn id(&self) -> usize {
+    fn id(self) -> usize {
         self.id
     }
 
-    fn notation(&self) -> &Notation {
+    fn notation(self) -> &'d Notation {
         use IterChainData::*;
 
         match self.data {
@@ -66,15 +85,24 @@ impl PrettyDoc for IterChain {
         }
     }
 
-    fn contents(&self) -> PrettyDocContents<Self> {
-        use IterChainData::*;
-        use PrettyDocContents::{Children, Text};
+    fn num_children(self) -> Option<usize> {
+        match self.contents() {
+            Contents::Text(_) => None,
+            Contents::Children(slice) => Some(slice.len()),
+        }
+    }
 
-        match &self.data {
-            Var(txt) => Text(txt),
-            MethodCall(contents) => Children(&**contents),
-            Closure(contents) => Children(&**contents),
-            Times(contents) => Children(&**contents),
+    fn unwrap_text(self) -> &'d str {
+        match self.contents() {
+            Contents::Text(txt) => txt,
+            Contents::Children(_) => unreachable!(),
+        }
+    }
+
+    fn unwrap_child(self, i: usize) -> Self {
+        match self.contents() {
+            Contents::Text(_) => unreachable!(),
+            Contents::Children(slice) => &slice[i],
         }
     }
 }

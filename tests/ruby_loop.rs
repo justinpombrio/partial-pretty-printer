@@ -3,7 +3,7 @@ mod common;
 use common::{assert_pp, punct};
 use once_cell::sync::Lazy;
 use partial_pretty_printer::notation_constructors::{child, flat, text};
-use partial_pretty_printer::{Notation, PrettyDoc, PrettyDocContents, Style};
+use partial_pretty_printer::{Notation, PrettyDoc, Style};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -32,14 +32,32 @@ static DO_LOOP_NOTATION: Lazy<Notation> = Lazy::new(|| {
     single | multi
 });
 
-impl PrettyDoc for Ruby {
+enum Contents<'d> {
+    Text(&'d str),
+    Children(&'d [Ruby]),
+}
+
+impl Ruby {
+    fn contents(&self) -> Contents {
+        use Contents::{Children, Text};
+        use RubyData::*;
+
+        match &self.data {
+            Var(txt) => Text(txt),
+            MethodCall(contents) => Children(&**contents),
+            DoLoop(contents) => Children(&**contents),
+        }
+    }
+}
+
+impl<'d> PrettyDoc<'d> for &'d Ruby {
     type Id = usize;
 
-    fn id(&self) -> usize {
+    fn id(self) -> usize {
         self.id
     }
 
-    fn notation(&self) -> &Notation {
+    fn notation(self) -> &'d Notation {
         use RubyData::*;
 
         match self.data {
@@ -49,14 +67,24 @@ impl PrettyDoc for Ruby {
         }
     }
 
-    fn contents(&self) -> PrettyDocContents<Self> {
-        use PrettyDocContents::{Children, Text};
-        use RubyData::*;
+    fn num_children(self) -> Option<usize> {
+        match self.contents() {
+            Contents::Text(_) => None,
+            Contents::Children(slice) => Some(slice.len()),
+        }
+    }
 
-        match &self.data {
-            Var(txt) => Text(txt),
-            MethodCall(contents) => Children(&**contents),
-            DoLoop(contents) => Children(&**contents),
+    fn unwrap_text(self) -> &'d str {
+        match self.contents() {
+            Contents::Text(txt) => txt,
+            Contents::Children(_) => unreachable!(),
+        }
+    }
+
+    fn unwrap_child(self, i: usize) -> Self {
+        match self.contents() {
+            Contents::Text(_) => unreachable!(),
+            Contents::Children(slice) => &slice[i],
         }
     }
 }

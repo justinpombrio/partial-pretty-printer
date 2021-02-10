@@ -1,6 +1,6 @@
 use crate::notation::{Notation, RepeatInner};
 use crate::notation_constructors::{child, flat, left, lit, nl, repeat, right, surrounded, text};
-use crate::pretty_printing::{PrettyDoc, PrettyDocContents};
+use crate::pretty_printing::PrettyDoc;
 use crate::style::{Color, Style};
 use once_cell::sync::Lazy;
 use std::fmt::Debug;
@@ -74,14 +74,37 @@ static JSON_DICT_NOTATION: Lazy<Notation> = Lazy::new(|| {
     })
 });
 
-impl PrettyDoc for Json {
+enum JsonContents<'a> {
+    Text(&'a str),
+    Children(&'a [Json]),
+}
+
+impl Json {
+    fn contents(&self) -> JsonContents {
+        use JsonContents::{Children, Text};
+        use JsonData::*;
+
+        match &self.data {
+            Null => Children(&[]),
+            True => Children(&[]),
+            False => Children(&[]),
+            String(txt) => Text(txt),
+            Number(txt) => Text(txt),
+            List(children) => Children(children),
+            DictEntry(entry) => Children(&**entry),
+            Dict(children) => Children(children),
+        }
+    }
+}
+
+impl<'a> PrettyDoc<'a> for &'a Json {
     type Id = usize;
 
-    fn id(&self) -> usize {
+    fn id(self) -> usize {
         self.id
     }
 
-    fn notation(&self) -> &Notation {
+    fn notation(self) -> &'a Notation {
         use JsonData::*;
 
         match &self.data {
@@ -96,19 +119,24 @@ impl PrettyDoc for Json {
         }
     }
 
-    fn contents(&self) -> PrettyDocContents<Self> {
-        use JsonData::*;
-        use PrettyDocContents::{Children, Text};
+    fn num_children(self) -> Option<usize> {
+        match self.contents() {
+            JsonContents::Text(_) => None,
+            JsonContents::Children(slice) => Some(slice.len()),
+        }
+    }
 
-        match &self.data {
-            Null => Children(&[]),
-            True => Children(&[]),
-            False => Children(&[]),
-            String(txt) => Text(txt),
-            Number(txt) => Text(txt),
-            List(children) => Children(children),
-            DictEntry(entry) => Children(&**entry),
-            Dict(children) => Children(children),
+    fn unwrap_text(self) -> &'a str {
+        match self.contents() {
+            JsonContents::Text(txt) => txt,
+            JsonContents::Children(_) => panic!("Json: not text"),
+        }
+    }
+
+    fn unwrap_child(self, i: usize) -> Self {
+        match self.contents() {
+            JsonContents::Text(_) => panic!("Json: no children"),
+            JsonContents::Children(slice) => &slice[i],
         }
     }
 }

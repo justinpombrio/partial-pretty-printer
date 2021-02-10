@@ -5,8 +5,8 @@ use crate::style::Style;
 use std::fmt;
 
 #[derive(Debug)]
-pub struct NotationRef<'d, D: PrettyDoc> {
-    doc: &'d D,
+pub struct NotationRef<'d, D: PrettyDoc<'d>> {
+    doc: D,
     notation: &'d Notation,
     repeat_pos: RepeatPos<'d>,
 }
@@ -19,7 +19,7 @@ enum RepeatPos<'d> {
 }
 
 #[derive(Debug)]
-pub enum NotationCase<'d, D: PrettyDoc> {
+pub enum NotationCase<'d, D: PrettyDoc<'d>> {
     Empty,
     Literal(&'d Literal),
     Newline,
@@ -31,7 +31,7 @@ pub enum NotationCase<'d, D: PrettyDoc> {
     Child(usize, NotationRef<'d, D>),
 }
 
-impl<'d, D: PrettyDoc> Clone for NotationRef<'d, D> {
+impl<'d, D: PrettyDoc<'d>> Clone for NotationRef<'d, D> {
     fn clone(&self) -> NotationRef<'d, D> {
         NotationRef {
             doc: self.doc,
@@ -40,9 +40,9 @@ impl<'d, D: PrettyDoc> Clone for NotationRef<'d, D> {
         }
     }
 }
-impl<'d, D: PrettyDoc> Copy for NotationRef<'d, D> {}
+impl<'d, D: PrettyDoc<'d>> Copy for NotationRef<'d, D> {}
 
-impl<'d, D: PrettyDoc> NotationRef<'d, D> {
+impl<'d, D: PrettyDoc<'d>> NotationRef<'d, D> {
     pub fn case(self) -> NotationCase<'d, D> {
         match self.notation {
             Notation::Empty => NotationCase::Empty,
@@ -78,7 +78,7 @@ impl<'d, D: PrettyDoc> NotationRef<'d, D> {
         }
     }
 
-    pub fn new(doc: &'d D) -> NotationRef<'d, D> {
+    pub fn new(doc: D) -> NotationRef<'d, D> {
         NotationRef::from_parts(doc, doc.notation(), RepeatPos::None)
     }
 
@@ -87,7 +87,7 @@ impl<'d, D: PrettyDoc> NotationRef<'d, D> {
     }
 
     fn from_parts(
-        doc: &'d D,
+        doc: D,
         notation: &'d Notation,
         parent_repeat_pos: RepeatPos<'d>,
     ) -> NotationRef<'d, D> {
@@ -176,7 +176,7 @@ impl<'d, D: PrettyDoc> NotationRef<'d, D> {
     }
 }
 
-impl<'d, D: PrettyDoc> fmt::Display for NotationRef<'d, D> {
+impl<'d, D: PrettyDoc<'d>> fmt::Display for NotationRef<'d, D> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.notation)
     }

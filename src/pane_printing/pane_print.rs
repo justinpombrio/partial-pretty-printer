@@ -16,7 +16,7 @@ pub type Path = Vec<usize>;
 ///   directly, instead it references them by `Label`.
 /// - `get_content` is a function to look up a document by label. It returns both the document, and
 ///   the path to the node in the document to focus on.
-pub fn pane_print<L: Label, D: PrettyDoc, W: PrettyWindow>(
+pub fn pane_print<'d, L: Label, D: PrettyDoc<'d>, W: PrettyWindow>(
     window: &mut W,
     note: &PaneNotation<L>,
     get_content: &impl Fn(L) -> Option<(D, Path)>,
@@ -25,7 +25,7 @@ pub fn pane_print<L: Label, D: PrettyDoc, W: PrettyWindow>(
     pane_print_rec(&mut pane, note, get_content)
 }
 
-fn pane_print_rec<L: Label, D: PrettyDoc, W: PrettyWindow>(
+fn pane_print_rec<'d, L: Label, D: PrettyDoc<'d>, W: PrettyWindow>(
     pane: &mut Pane<W>,
     note: &PaneNotation<L>,
     get_content: &impl Fn(L) -> Option<(D, Path)>,
@@ -48,7 +48,7 @@ fn pane_print_rec<L: Label, D: PrettyDoc, W: PrettyWindow>(
                 .ok_or_else(|| PaneError::MissingLabel(format!("{:?}", label)))?;
             let doc_width = render_options.choose_width(pane.rect.width());
             let focal_line = render_options.focal_line(pane.rect.height());
-            let (mut upward_printer, mut downward_printer) = pretty_print(&doc, doc_width, &path);
+            let (mut upward_printer, mut downward_printer) = pretty_print(doc, doc_width, &path);
             let highlight_cursor = render_options.highlight_cursor;
             for line in (0..focal_line).into_iter().rev() {
                 if let Some(contents) = upward_printer.next() {
@@ -151,13 +151,23 @@ fn pane_print_rec<L: Label, D: PrettyDoc, W: PrettyWindow>(
     Ok(())
 }
 
-fn doc_height(doc: impl PrettyDoc, path: &[usize], width: Width, max_height: Height) -> Height {
-    let (_, downward_printer) = pretty_print(&doc, width, path);
+fn doc_height<'d>(
+    doc: impl PrettyDoc<'d>,
+    path: &[usize],
+    width: Width,
+    max_height: Height,
+) -> Height {
+    let (_, downward_printer) = pretty_print(doc, width, path);
     downward_printer.take(max_height as usize).count() as Height
 }
 
-fn doc_width(doc: impl PrettyDoc, path: &[usize], height: Height, max_width: Width) -> Width {
-    let (_, downward_printer) = pretty_print(&doc, max_width, path);
+fn doc_width<'d>(
+    doc: impl PrettyDoc<'d>,
+    path: &[usize],
+    height: Height,
+    max_width: Width,
+) -> Width {
+    let (_, downward_printer) = pretty_print(doc, max_width, path);
     let lines = downward_printer.take(height as usize);
     let mut width = 0;
     for line in lines {

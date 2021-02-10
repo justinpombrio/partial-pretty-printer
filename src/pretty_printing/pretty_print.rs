@@ -22,20 +22,20 @@ pub struct FirstLineLen {
     pub has_newline: bool,
 }
 
-struct Seeker<'d, D: PrettyDoc> {
+struct Seeker<'d, D: PrettyDoc<'d>> {
     width: Width,
     prev: Vec<Chunk<'d, D>>,
     next: Vec<Chunk<'d, D>>,
 }
 
-struct DownwardPrinter<'d, D: PrettyDoc> {
+struct DownwardPrinter<'d, D: PrettyDoc<'d>> {
     width: Width,
     next: Vec<Chunk<'d, D>>,
     spaces: (Width, Shade),
     at_end: bool,
 }
 
-struct UpwardPrinter<'d, D: PrettyDoc> {
+struct UpwardPrinter<'d, D: PrettyDoc<'d>> {
     width: Width,
     prev: Vec<Chunk<'d, D>>,
     // INVARIANT: only ever contains `Literal`, `Text`, and `Choice` notations.
@@ -55,13 +55,13 @@ struct UpwardPrinter<'d, D: PrettyDoc> {
 ///
 /// It is expected that you will take only as many lines as you need from the iterators; doing so
 /// will save computation time.
-pub fn pretty_print<'d, D: PrettyDoc>(
-    doc: &'d D,
+pub fn pretty_print<'d, D: PrettyDoc<'d>>(
+    doc: D,
     width: Width,
     path: &[usize],
 ) -> (
-    impl Iterator<Item = LineContents<'d>> + 'd,
-    impl Iterator<Item = LineContents<'d>> + 'd,
+    impl Iterator<Item = LineContents<'d>>,
+    impl Iterator<Item = LineContents<'d>>,
 ) {
     let notation = NotationRef::new(doc);
     let seeker = Seeker::new(notation, width);
@@ -72,7 +72,7 @@ pub fn pretty_print<'d, D: PrettyDoc>(
 ///
 /// `width` is the desired line width. The algorithm will attempt to, but is not guaranteed to,
 /// find a layout that fits withing that width.
-pub fn pretty_print_to_string<D: PrettyDoc>(doc: &D, width: Width) -> String {
+pub fn pretty_print_to_string<'d, D: PrettyDoc<'d>>(doc: D, width: Width) -> String {
     let (_, mut lines_iter) = pretty_print(doc, width, &[]);
     let mut string = lines_iter.next().unwrap().to_string();
     for line in lines_iter {
@@ -92,7 +92,7 @@ impl<'d> ToString for LineContents<'d> {
     }
 }
 
-impl<'d, D: PrettyDoc> Seeker<'d, D> {
+impl<'d, D: PrettyDoc<'d>> Seeker<'d, D> {
     fn new(notation: NotationRef<'d, D>, width: Width) -> Seeker<'d, D> {
         Seeker {
             width,
@@ -263,7 +263,7 @@ impl<'d, D: PrettyDoc> Seeker<'d, D> {
     }
 }
 
-impl<'d, D: PrettyDoc> DownwardPrinter<'d, D> {
+impl<'d, D: PrettyDoc<'d>> DownwardPrinter<'d, D> {
     fn print_first_line(&mut self) -> Option<LineContents<'d>> {
         use NotationCase::*;
 
@@ -323,7 +323,7 @@ impl<'d, D: PrettyDoc> DownwardPrinter<'d, D> {
     }
 }
 
-impl<'d, D: PrettyDoc> UpwardPrinter<'d, D> {
+impl<'d, D: PrettyDoc<'d>> UpwardPrinter<'d, D> {
     fn print_last_line(&mut self) -> Option<LineContents<'d>> {
         use NotationCase::*;
 
@@ -436,7 +436,10 @@ impl<'d, D: PrettyDoc> UpwardPrinter<'d, D> {
 }
 
 // Returns None if impossible.
-fn min_first_line_len<D: PrettyDoc>(notation: NotationRef<D>, flat: bool) -> Option<FirstLineLen> {
+fn min_first_line_len<'d, D: PrettyDoc<'d>>(
+    notation: NotationRef<'d, D>,
+    flat: bool,
+) -> Option<FirstLineLen> {
     use NotationCase::*;
 
     match notation.case() {
@@ -488,7 +491,7 @@ fn min_first_line_len<D: PrettyDoc>(notation: NotationRef<D>, flat: bool) -> Opt
     }
 }
 
-fn compute_suffix_len<'d, D: PrettyDoc>(next_chunks: &[Chunk<'d, D>]) -> Width {
+fn compute_suffix_len<'d, D: PrettyDoc<'d>>(next_chunks: &[Chunk<'d, D>]) -> Width {
     let mut len = 0;
     for (indent, _, notation) in next_chunks.iter().rev() {
         let flat = indent.is_none();
@@ -501,7 +504,7 @@ fn compute_suffix_len<'d, D: PrettyDoc>(next_chunks: &[Chunk<'d, D>]) -> Width {
     len
 }
 
-fn choose<'d, D: PrettyDoc>(
+fn choose<'d, D: PrettyDoc<'d>>(
     width: Width,
     indent: Option<Width>,
     prefix_len: Width,
@@ -536,7 +539,7 @@ fn text_len(text: &str) -> Width {
     text.chars().count() as Width
 }
 
-impl<'d, D: PrettyDoc> Iterator for DownwardPrinter<'d, D> {
+impl<'d, D: PrettyDoc<'d>> Iterator for DownwardPrinter<'d, D> {
     type Item = LineContents<'d>;
 
     fn next(&mut self) -> Option<LineContents<'d>> {
@@ -544,7 +547,7 @@ impl<'d, D: PrettyDoc> Iterator for DownwardPrinter<'d, D> {
     }
 }
 
-impl<'d, D: PrettyDoc> Iterator for UpwardPrinter<'d, D> {
+impl<'d, D: PrettyDoc<'d>> Iterator for UpwardPrinter<'d, D> {
     type Item = LineContents<'d>;
 
     fn next(&mut self) -> Option<LineContents<'d>> {

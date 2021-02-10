@@ -26,17 +26,14 @@
 //! In order to pretty print a document, it must implement the [`PrettyDoc`] trait:
 //!
 //! ```ignore
-//! trait PrettyDoc: Sized {
+//! pub trait PrettyDoc: Sized {
 //!     type Id: Eq + Copy;
 //!
 //!     fn id(&self) -> Self::Id;
 //!     fn notation(&self) -> &Notation;
-//!     fn contents(&self) -> PrettyDocContents<Self>;
-//! }
-//!
-//! enum PrettyDocContents<'d, D: PrettyDoc> {
-//!     Text(&'d str),
-//!     Children(&'d [D]),
+//!     fn num_children(&self) -> Option<usize>;
+//!     fn unwrap_text(&self) -> &str;
+//!     fn unwrap_child(&self, i: usize) -> Self;
 //! }
 //! ```
 //!
@@ -125,9 +122,7 @@ pub mod notation_constructors;
 
 pub use geometry::{Col, Height, Line, Pos, Size, Width};
 pub use notation::{Notation, RepeatInner};
-pub use pretty_printing::{
-    pretty_print, pretty_print_to_string, LineContents, PrettyDoc, PrettyDocContents,
-};
+pub use pretty_printing::{pretty_print, pretty_print_to_string, LineContents, PrettyDoc};
 pub use style::{Color, ShadedStyle, Style};
 
 pub mod pane {

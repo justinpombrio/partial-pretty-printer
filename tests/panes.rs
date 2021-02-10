@@ -7,17 +7,26 @@ use partial_pretty_printer::{
     PrettyDoc, Style,
 };
 use std::fmt::Debug;
+use std::marker::PhantomData;
 
 #[derive(Debug, Clone)]
-struct SimpleLabel<D: PrettyDoc + Clone + Debug>(Option<(D, Vec<usize>)>);
-impl<D: PrettyDoc + Clone + Debug> Label for SimpleLabel<D> {}
+struct SimpleLabel<'d, D: PrettyDoc<'d> + Clone + Debug>(
+    Option<(D, Vec<usize>)>,
+    PhantomData<&'d D>,
+);
+impl<'d, D: PrettyDoc<'d> + Clone + Debug> Label for SimpleLabel<'d, D> {}
 
-fn get_content<D: PrettyDoc + Clone + Debug>(label: SimpleLabel<D>) -> Option<(D, Vec<usize>)> {
+fn get_content<'d, D: PrettyDoc<'d> + Clone + Debug>(
+    label: SimpleLabel<'d, D>,
+) -> Option<(D, Vec<usize>)> {
     label.0
 }
 
 #[track_caller]
-fn pane_test<D: PrettyDoc + Clone + Debug>(notation: PaneNotation<SimpleLabel<D>>, expected: &str) {
+fn pane_test<'d, D: PrettyDoc<'d> + Clone + Debug>(
+    notation: PaneNotation<SimpleLabel<'d, D>>,
+    expected: &str,
+) {
     let mut screen = PlainText::new(7, 7);
     pane_print(&mut screen, &notation, &get_content).unwrap();
     let actual = screen.to_string();
@@ -37,12 +46,12 @@ fn fill<L: Label>(ch: char) -> PaneNotation<L> {
 
 #[test]
 fn test_empty_pane() {
-    pane_test::<SimpleDoc>(PaneNotation::Empty, "");
+    pane_test::<&SimpleDoc>(PaneNotation::Empty, "");
 }
 
 #[test]
 fn test_fill_pane() {
-    pane_test::<SimpleDoc>(
+    pane_test::<&SimpleDoc>(
         fill('a'),
         "aaaaaaa\n\
          aaaaaaa\n\
@@ -58,7 +67,7 @@ fn test_fill_pane() {
 fn test_horz_split_pane() {
     use PaneSize::{Fixed, Proportional};
 
-    pane_test::<SimpleDoc>(
+    pane_test::<&SimpleDoc>(
         PaneNotation::Horz(vec![
             (Proportional(2), fill('a')),
             (Proportional(3), fill('b')),
@@ -81,7 +90,7 @@ fn test_horz_split_pane() {
 fn test_vert_split_pane() {
     use PaneSize::{Fixed, Proportional};
 
-    pane_test::<SimpleDoc>(
+    pane_test::<&SimpleDoc>(
         PaneNotation::Vert(vec![
             (Proportional(2), fill('a')),
             (Proportional(3), fill('b')),
@@ -104,7 +113,7 @@ fn test_vert_split_pane() {
 fn test_mixed_split_pane() {
     use PaneSize::{Fixed, Proportional};
 
-    pane_test::<SimpleDoc>(
+    pane_test::<&SimpleDoc>(
         PaneNotation::Horz(vec![
             (Proportional(2), fill('|')),
             (
@@ -150,7 +159,7 @@ fn test_doc_pane() {
         width_strategy: WidthStrategy::Full,
     };
     let doc = json_list(vec![json_string("Hello"), json_string("world")]);
-    let contents = SimpleLabel(Some((doc, vec![])));
+    let contents = SimpleLabel(Some((&doc, vec![])), PhantomData);
     pane_test(
         PaneNotation::Doc {
             label: contents,
@@ -170,7 +179,7 @@ fn test_pane_cursor_heights() {
             width_strategy: WidthStrategy::Full,
         };
         let doc = json_string("Hi");
-        let contents = SimpleLabel(Some((doc, vec![])));
+        let contents = SimpleLabel(Some((&doc, vec![])), PhantomData);
         pane_test(
             PaneNotation::Doc {
                 label: contents,
@@ -199,7 +208,7 @@ fn test_pane_widths() {
             width_strategy,
         };
         let doc = json_list(vec![json_string("Hello"), json_string("world")]);
-        let contents = SimpleLabel(Some((doc, vec![])));
+        let contents = SimpleLabel(Some((&doc, vec![])), PhantomData);
         pane_test(
             PaneNotation::Doc {
                 label: contents,

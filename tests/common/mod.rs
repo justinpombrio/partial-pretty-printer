@@ -1,6 +1,6 @@
 use partial_pretty_printer::{
-    notation_constructors::lit, pretty_print, pretty_print_to_string, Notation, PrettyDoc,
-    PrettyDocContents, Style, Width,
+    notation_constructors::lit, pretty_print, pretty_print_to_string, Notation, PrettyDoc, Style,
+    Width,
 };
 
 #[allow(unused)]
@@ -11,19 +11,27 @@ pub fn punct(s: &'static str) -> Notation {
 #[derive(Debug, Clone)]
 pub struct SimpleDoc(pub Notation);
 
-impl PrettyDoc for SimpleDoc {
+impl<'a> PrettyDoc<'a> for &'a SimpleDoc {
     type Id = usize;
 
-    fn id(&self) -> usize {
+    fn id(self) -> usize {
         0
     }
 
-    fn notation(&self) -> &Notation {
+    fn notation(self) -> &'a Notation {
         &self.0
     }
 
-    fn contents(&self) -> PrettyDocContents<SimpleDoc> {
-        PrettyDocContents::Children(&[])
+    fn num_children(self) -> Option<usize> {
+        Some(0)
+    }
+
+    fn unwrap_text(self) -> &'a str {
+        panic!("Nothing in a simple doc");
+    }
+
+    fn unwrap_child(self, _i: usize) -> Self {
+        panic!("Nothing in a simple doc");
     }
 }
 
@@ -39,8 +47,8 @@ fn compare_lines(message: &str, actual: &[String], expected: &[&str]) {
     }
 }
 
-fn print_above_and_below<D: PrettyDoc>(
-    doc: &D,
+fn print_above_and_below<'d, D: PrettyDoc<'d>>(
+    doc: D,
     width: Width,
     path: &[usize],
 ) -> (Vec<String>, Vec<String>) {
@@ -56,8 +64,8 @@ fn print_above_and_below<D: PrettyDoc>(
 }
 
 #[allow(unused)]
-pub fn all_paths<D: PrettyDoc>(doc: &D) -> Vec<Vec<usize>> {
-    fn recur<D: PrettyDoc>(doc: &D, path: &mut Vec<usize>, paths: &mut Vec<Vec<usize>>) {
+pub fn all_paths<'d, D: PrettyDoc<'d>>(doc: D) -> Vec<Vec<usize>> {
+    fn recur<'d, D: PrettyDoc<'d>>(doc: D, path: &mut Vec<usize>, paths: &mut Vec<Vec<usize>>) {
         paths.push(path.clone());
         for i in 0..doc.num_children().unwrap_or(0) {
             path.push(i);
@@ -71,8 +79,8 @@ pub fn all_paths<D: PrettyDoc>(doc: &D) -> Vec<Vec<usize>> {
 }
 
 #[allow(unused)]
-pub fn print_region<D: PrettyDoc>(
-    doc: &D,
+pub fn print_region<'d, D: PrettyDoc<'d>>(
+    doc: D,
     width: Width,
     path: &[usize],
     rows: usize,
@@ -93,7 +101,7 @@ pub fn print_region<D: PrettyDoc>(
 
 #[allow(unused)]
 #[track_caller]
-pub fn assert_pp<D: PrettyDoc>(doc: &D, width: Width, expected_lines: &[&str]) {
+pub fn assert_pp<'d, D: PrettyDoc<'d>>(doc: D, width: Width, expected_lines: &[&str]) {
     let lines = pretty_print_to_string(doc, width)
         .split('\n')
         .map(|s| s.to_owned())
@@ -113,8 +121,8 @@ pub fn assert_pp<D: PrettyDoc>(doc: &D, width: Width, expected_lines: &[&str]) {
 
 #[allow(unused)]
 #[track_caller]
-pub fn assert_pp_seek<D: PrettyDoc>(
-    doc: &D,
+pub fn assert_pp_seek<'d, D: PrettyDoc<'d>>(
+    doc: D,
     width: Width,
     path: &[usize],
     expected_lines_above: &[&str],
@@ -135,8 +143,8 @@ pub fn assert_pp_seek<D: PrettyDoc>(
 
 #[allow(unused)]
 #[track_caller]
-pub fn assert_pp_region<D: PrettyDoc>(
-    doc: &D,
+pub fn assert_pp_region<'d, D: PrettyDoc<'d>>(
+    doc: D,
     width: Width,
     path: &[usize],
     rows: usize,

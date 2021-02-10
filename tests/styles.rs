@@ -12,12 +12,19 @@ use partial_pretty_printer::{
 use std::fmt;
 use std::fmt::Debug;
 use std::iter;
+use std::marker::PhantomData;
 
 #[derive(Debug, Clone)]
-struct SimpleLabel<D: PrettyDoc + Clone + Debug>(Option<(D, Vec<usize>)>);
-impl<D: PrettyDoc + Clone + Debug> Label for SimpleLabel<D> {}
+struct SimpleLabel<'d, D: PrettyDoc<'d> + Clone + Debug>(
+    Option<(D, Vec<usize>)>,
+    PhantomData<&'d D>,
+);
 
-fn get_content<D: PrettyDoc + Clone + Debug>(label: SimpleLabel<D>) -> Option<(D, Vec<usize>)> {
+impl<'d, D: PrettyDoc<'d> + Clone + Debug> Label for SimpleLabel<'d, D> {}
+
+fn get_content<'d, D: PrettyDoc<'d> + Clone + Debug>(
+    label: SimpleLabel<'d, D>,
+) -> Option<(D, Vec<usize>)> {
     label.0
 }
 
@@ -152,14 +159,19 @@ impl PrettyWindow for RichText {
 }
 
 #[track_caller]
-fn pane_test(doc: impl PrettyDoc + Clone + Debug, path: Vec<usize>, width: Width, expected: &str) {
+fn pane_test<'d>(
+    doc: impl PrettyDoc<'d> + Clone + Debug + 'd,
+    path: Vec<usize>,
+    width: Width,
+    expected: &str,
+) {
     let render_options = RenderOptions {
         highlight_cursor: true,
         cursor_height: 1.0,
         width_strategy: WidthStrategy::Full,
     };
     let mut screen = RichText::new(Size { width, height: 100 });
-    let label = SimpleLabel(Some((doc, path)));
+    let label = SimpleLabel(Some((doc, path)), PhantomData);
     let pane_notation = PaneNotation::Doc {
         label,
         render_options,
@@ -216,7 +228,7 @@ fn test_pane_styles() {
     ];
     let note = words.into_iter().fold_first(|n1, n2| n1 + n2).unwrap();
     pane_test(
-        SimpleDoc(note),
+        &SimpleDoc(note),
         vec![],
         80,
         "|Hello, world!\n\
@@ -245,7 +257,7 @@ fn test_pane_highlighting() {
         ]),
     ]);
     pane_test(
-        doc,
+        &doc,
         vec![1, 0],
         20,
         "|        [5, 6], [\n\
