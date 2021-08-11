@@ -56,19 +56,19 @@ pp w (Choice x y) n k = pick w n (pp w x n k) (pp w y n k)
 pp w (Concat x y) n k
   = pp w x n (\x -> pp w y (n + numNewlines x) (\y -> k (append x y)))
 
+pretty :: Int -> Doc -> String
+pretty w x = display (pp w x 0 id)
+  where
+    display :: Layout -> String
+    display LErr = "!"
+    display (Layout lines) = intercalate "\n" lines
+
 {- Testing -}
 
 infixr 6 <+>
 infixr 5 <|>
 (<+>) = Concat
 (<|>) = Choice
-
-display :: Layout -> String
-display LErr = "!"
-display (Layout lines) = intercalate "\n" lines
-
-pretty :: Int -> Doc -> String
-pretty w x = display (pp w x 0 id)
 
 test :: Int -> String -> Doc -> IO ()
 test w s x = putStrLn ("\n" ++ s ++ ":\n" ++ pretty w x)
