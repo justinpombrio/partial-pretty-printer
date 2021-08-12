@@ -4,8 +4,8 @@ mod notation;
 //mod pretty_doc;
 //mod pretty_print;
 mod staircase;
-//mod validate;
 mod style;
+mod validate;
 
 /*
 pub use measure::NotationCache;

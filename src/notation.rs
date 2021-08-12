@@ -19,7 +19,7 @@ pub enum Notation {
     /// Display the second notation after the first, and so forth. The last character of one of the
     /// notations is immediately followed by the first character of the next. The notations'
     /// indentation levels are not affected.
-    Follow(Vec<Notation>),
+    Concat(Vec<Notation>),
     /// Pick exactly one of the notations to display: either the first one that fits in the allowed
     /// width or, failing that, the last one.
     Choice(Vec<Notation>),
@@ -27,11 +27,11 @@ pub enum Notation {
     Text(Style),
     /// Determines what to display based on the arity of this node.
     /// Used for syntactic constructs that have extendable arity.
-    Repeat(Box<Repeat>),
+    Repeat(Box<RepeatInner>),
+    /// Used in [`Repeat`](Repeat) to refer to the next child in `join`.
+    Left,
     /// Used in [`Repeat`](Repeat) to refer to the accumulated Notation
     /// in `join`.
-    Left,
-    /// Used in [`Repeat`](Repeat) to refer to the next child in `join`.
     Right,
     /// Used in [`Repeat`](Repeat) to refer to the Notation inside of
     /// `surround`.
@@ -41,7 +41,7 @@ pub enum Notation {
 /// Describes how to display the extra children of a syntactic
 /// construct with extendable arity.
 #[derive(Clone, Debug)]
-pub struct Repeat {
+pub struct RepeatInner {
     /// If the sequence is empty, use this notation.
     pub empty: Notation,
     /// If the sequence has length one, use this notation.
@@ -59,7 +59,7 @@ impl Add<Notation> for Notation {
     type Output = Notation;
     /// Shorthand for `Concat`.
     fn add(self, other: Notation) -> Notation {
-        Notation::Follow(vec![self, other])
+        Notation::Concat(vec![self, other])
     }
 }
 

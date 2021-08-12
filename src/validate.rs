@@ -1,4 +1,4 @@
-use super::Notation;
+use crate::notation::{Notation, RepeatInner};
 
 #[derive(Clone, Debug)]
 pub struct CompiledNotation(pub(crate) Notation);
@@ -54,6 +54,16 @@ impl Possibilities {
             multi_line: Some(ChoosyLines {
                 first: first_choosy,
                 last: last_choosy,
+            }),
+        }
+    }
+
+    fn new_choosiest() -> Self {
+        Self {
+            single_line: Some(true),
+            multi_line: Some(ChoosyLines {
+                first: true,
+                last: true,
             }),
         }
     }
@@ -116,43 +126,60 @@ impl Notation {
         use Notation::*;
 
         match self {
-            Empty | Literal(_) => Ok(Possibilities::new_single(false)),
+            Empty | Literal(_, _) => Ok(Possibilities::new_single(false)),
             Newline => Ok(Possibilities::new_multi(false, false)),
             Flat(note) => {
                 let mut poss = note.compile_rec()?;
                 poss.multi_line = None;
                 Ok(poss)
             }
-            Indent(_indent, note) => note.compile_rec(),
-            Concat(left, right) => {
-                let left_poss = left.compile_rec()?;
-                let right_poss = right.compile_rec()?;
+            Indent(_indent, notation) => notation.compile_rec(),
+            Concat(notations) => {
+                let mut iter = notations.iter();
+                let mut poss = iter.next().expect("Empty concat").compile_rec()?;
+                while let Some(next) = iter.next() {
+                    let left_poss = poss;
+                    let right_poss = next.compile_rec()?;
 
-                if left_poss.choosy_last() == Some(true) && right_poss.choosy_first() == Some(true)
-                {
-                    return Err(ValidationError::TooChoosy);
-                }
+                    if left_poss.choosy_last() == Some(true)
+                        && right_poss.choosy_first() == Some(true)
+                    {
+                        return Err(ValidationError::TooChoosy);
+                    }
 
-                let mut poss = Possibilities::new_impossible();
-                if let (Some(ls), Some(rs)) = (left_poss.single_line, right_poss.single_line) {
-                    poss = poss.choice(Possibilities::new_single(ls || rs));
+                    poss = Possibilities::new_impossible();
+                    if let (Some(ls), Some(rs)) = (left_poss.single_line, right_poss.single_line) {
+                        poss = poss.choice(Possibilities::new_single(ls || rs));
+                    }
+                    if let (Some(ls), Some(rm)) = (left_poss.single_line, right_poss.multi_line) {
+                        poss = poss.choice(Possibilities::new_multi(ls || rm.first, rm.last));
+                    }
+                    if let (Some(lm), Some(rs)) = (left_poss.multi_line, right_poss.single_line) {
+                        poss = poss.choice(Possibilities::new_multi(lm.first, lm.last || rs));
+                    }
+                    if let (Some(lm), Some(rm)) = (left_poss.multi_line, right_poss.multi_line) {
+                        poss = poss.choice(Possibilities::new_multi(lm.first, rm.last));
+                    }
                 }
-                if let (Some(ls), Some(rm)) = (left_poss.single_line, right_poss.multi_line) {
-                    poss = poss.choice(Possibilities::new_multi(ls || rm.first, rm.last));
-                }
-                if let (Some(lm), Some(rs)) = (left_poss.multi_line, right_poss.single_line) {
-                    poss = poss.choice(Possibilities::new_multi(lm.first, lm.last || rs));
-                }
-                if let (Some(lm), Some(rm)) = (left_poss.multi_line, right_poss.multi_line) {
-                    poss = poss.choice(Possibilities::new_multi(lm.first, rm.last));
-                }
-
                 Ok(poss)
             }
-            Choice(left, right) => {
-                let left_poss = left.compile_rec()?;
-                let right_poss = right.compile_rec()?;
-                Ok(left_poss.choice(right_poss))
+            Choice(options) => {
+                let mut iter = options.iter();
+                let mut poss = iter.next().expect("Empty choice").compile_rec()?;
+                while let Some(next) = iter.next() {
+                    poss = poss.choice(next.compile_rec()?);
+                }
+                Ok(poss)
+            }
+            Text(_) => Ok(Possibilities::new_choosiest()),
+            Repeat(repeat) => {
+                let RepeatInner {
+                    empty,
+                    lone,
+                    join,
+                    surround,
+                } = &**repeat;
+                unimplemented!()
             }
         }
     }
