@@ -1,0 +1,213 @@
+\documentclass{article}
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{listings}
+\usepackage{mathabx}
+\usepackage{textcomp}
+
+\usepackage[footskip=0.5in, top=0.5in, bottom=1in, left=1.5in, right=1.5in]{geometry}
+
+\newenvironment{Table}
+  {\begin{center}\begin{tabular}{l @{\;\;} l @{\;\;} l @{\quad\quad} l}}
+  {\end{tabular}\end{center}}
+\newenvironment{BigTable}
+  {\begin{center}\begin{tabular}{
+    l @{\;\;} l @{\;\;} l
+    @{\quad\quad\quad\quad}
+    l @{\;\;} l @{\;\;} l
+  }}
+  {\end{tabular}\end{center}}
+
+\newcommand{\pp}[2]{\textit{pretty}(#1, #2)}
+\newcommand{\layout}[2]{\textit{layout}(#1, #2)}
+\newcommand{\resolve}[2]{\textit{resolve}(#1, #2)}
+
+\newcommand{\txt}{T}
+\newcommand{\nil}{{\epsilon}}
+\newcommand{\err}{{!}}
+\newcommand{\nl}{{\dlsh}}
+\newcommand{\ind}[2]{#1 \Rightarrow #2}
+\renewcommand{\flat}[1]{\lfloor #1 \rfloor}
+\newcommand{\cat}[2]{#1 + #2}
+\newcommand{\choice}[2]{#1 \,|\, #2}
+\newcommand{\spaces}[1]{\texttt{replicate}\;#1\;\texttt{\textquotesingle \textquotesingle}}
+
+\newcommand{\doubleplus}{\mathbin{+\mkern-8mu+}}
+
+\begin{document}
+
+\author{Justin Pombrio}
+\title{Partial Pretty Printing}
+\maketitle
+
+\section{Introduction}
+
+[FILL] introduction; relationship to Wadler's Prettier Printer and others
+
+[FILL] only consider length of first line, trading off expressiveness for efficiency. Linear time.
+
+[FILL] peephole efficiency
+
+\subsection{Definition of Documents}
+
+We'll have 
+
+A \emph{document} is a set of instructions for rendering
+
+My documents are similar to Wadler's, but more general in that choices are 
+
+[FILL] description of documents
+
+\begin{Table}
+  $\textit{expr } x, y, z$
+  &$::=$& $\nil$ & empty document \\
+    &$|$& $\txt$ & text (without newlines) \\
+    &$|$& $\nl$ & newline \\
+    &$|$& $\ind{i}{x}$ & indent $x$ by $i$ spaces \\
+    &$|$& $\flat{x}$ & flattening of $x$ \\
+    &$|$& $\cat{x}{y}$ & concatenation of $x$ and $y$ \\
+    &$|$& $\choice{x}{y}$ & choice between $x$ and $y$ \\
+    &$|$& $\err$ & error
+\end{Table}
+
+\subsection{Laws for Documents}
+
+\paragraph{Concatenation}
+The concatenation of two documents just prints them one after another (with no space or newline in
+between). Thus concatenation with an empty document has no effect, and concatenation is associative.
+
+\begin{gather*}
+  \cat{\nil}{x} = \cat{x}{\nil} = x \tag{concat-unit} \\
+  \cat{(\cat{x}{y})}{z} = \cat{x}{(\cat{y}{z})} \tag{concat-assoc}
+\end{gather*}
+
+\paragraph{Text}
+Text $\txt$ is rendered exactly as is. Thus the empty string is the same as the empty document, and
+the concatenation of two texts just concatenates their strings.
+
+\begin{align*}
+  \texttt{""} &= \nil \tag{text-empty} \\
+  \cat{\txt_1}{\txt_2} &= (\txt_1 \doubleplus \txt_2) \tag{text-concat}
+\end{align*}
+
+\paragraph{Indentation and Flattening}
+Indentation and flattening can be lowered to the leaves of the document.  They both leave text (and
+thus also empty documents) unchanged, but behave differently on newlines:
+\begin{itemize}
+\item A newline indented by $i$ is a newline followed by $i$ spaces.
+\item The flattening of a newline is an error, since it's impossible to fit a newline on one line.
+\end{itemize}
+
+\begin{align*}
+  \ind{i}{\nil} &= \nil
+    \tag{indent-absorb-empty} \\
+  \ind{i}{\txt} &= \txt
+    \tag{indent-absorb-text} \\
+  \ind{i}{\nl}  &= \cat{\nl}{(\spaces{i})}
+    \tag{indent-newline} \\
+  \ind{i}{(\cat{x}{y})} &= \cat{(\ind{i}{x})}{(\ind{i}{y})}
+    \tag{indent-distr-concat} \\
+  \ind{i}{(\choice{x}{y})} &= \choice{(\ind{i}{x})}{(\ind{i}{y})}
+    \tag{indent-distr-choice} \\
+  \\
+  \flat{\nil} &= \nil
+    \tag{flat-absort-empty} \\
+  \flat{\txt} &= \txt
+    \tag{flat-absort-text} \\
+  \flat{\nl} &= \err
+    \tag{flat-newline} \\
+  \flat{\cat{x}{y}} &= \cat{\flat{x}}{\flat{y}}
+    \tag{flat-distr-concat} \\
+  \flat{\choice{x}{y}} &= \choice{\flat{x}}{\flat{y}}
+    \tag{flat-distr-choice}
+\end{align*}
+
+Also, indentation respects addition: indenting by zero spaces is the same as not indenting at all,
+and indenting by $i$ spaces and then $j$ spaces is the same as indenting by $i+j$ spaces.
+
+\begin{align*}
+  \ind{0}{x} &= x
+    \tag{indent-identity} \\
+  \ind{j}{(\ind{i}{x})} &= \ind{(i+j)}{x}
+    \tag{indent-compose}
+\end{align*}
+
+\paragraph{Errors}
+There is only one source of error: flattening a newline (shown above). Once created, errors are
+contagious and propagate up to the root of the document, except when inside a choice in which cae
+they eliminate that option of the choice.
+
+\begin{align*}
+  \cat{\err}{x} = \cat{x}{\err} &= \err
+    \tag{error-concat} \\
+  \ind{i}{\err} &= \err
+    \tag{error-indent} \\
+  \flat{\err} &= \err
+    \tag{error-flat} \\
+  \choice{\err}{x} = \choice{x}{\err} &= x
+    \tag{error-choice}
+\end{align*}
+
+\paragraph{Choice}
+Choice is associative, and if you concatenate a choice with some text, that's the same as
+concatenating the text inside the choice. [FILL]
+
+\begin{align*}
+  \choice{x}{(\choice{y}{z})} &= \choice{(\choice{x}{y})}{z}
+    \tag{choice-assoc} \\
+  \cat{\txt}{(\choice{x}{y})} &= \choice{(\cat{\txt}{x})}{(\cat{\txt}{y})}
+    \tag{choice-distr-text-left} \\
+  \cat{(\choice{x}{y})}{z} &= \choice{(\cat{x}{z})}{(\cat{y}{z})}
+    \tag{choice-distr-right}
+\end{align*}
+
+\subsection{Laws for Documents that Don't Hold}
+
+Surprisingly, concatenation does \emph{not} in always distribute over choice. That is,
+$\cat{x}{(\choice{y}{z})}$ is not always equal to $\choice{(\cat{x}{y})}{(\cat{x}{z})}$.  This is
+because $x$ could contain a newline. In that case, we would have:
+
+\[ \cat{\nl}{(\choice{y}{z})} =^? \choice{(\cat{\nl}{y})}{(\cat{\nl}{z})} \]
+
+The document on the left makes a legitimate choice between $y$ and $z$, comparing their first lines
+to see which one fits. However, the document on the right makes a degenerate choice: it compares the
+first lines of $\cat{\nl}{y}$ and $\cat{\nl}{z}$, which are both empty! Thus it always picks
+$\cat{\nl}{y}$, regardless of $y$ and $z$.  As a result, the concatenation of a newline and a choice
+cannot be simplified.
+
+For a similar reason, $\cat{(\choice{x}{y})}{(\choice{z}{w})}$ is not always equal to
+$\choice{\choice{(\cat{x}{z})}{(\cat{y}{z})}}{\choice{(\cat{x}{w})}{(\cat{y}{w})}}$.
+
+\subsection{Laws for Pretty Printing}
+
+\paragraph{Resolving Choices}
+
+\begin{Table}
+$\resolve{w}{\nil}$ &$=$& $\nil$ \\
+\end{Table}
+
+\paragraph{Layout}
+
+\begin{Table}
+$\layout{i}{\nil}$ &$=$& \texttt{""} \\
+$\layout{i}{\txt}$ &$=$& $\txt$ \\
+$\layout{i}{\nl}$ &$=$& \texttt{"{\textbackslash}n"} $\doubleplus$ $i*$\texttt{" "} \\
+$\layout{i}{\ind{j}{x}}$ &$=$& $\layout{i+j}{x}$ \\
+$\layout{i}{\flat{x}}$ &$=$& $\layout{i}{x}$ \\
+$\layout{i}{\cat{x}{y}}$ &$=$& $\layout{i}{x} \doubleplus \layout{i}{y}$ \\
+\end{Table}
+
+\paragraph{Pretty Printing}
+
+\[ \pp{w}{x} = \layout{0}{\resolve{w}{x}} \]
+
+\section{Normal Form}
+
+[FILL]
+
+\section{Implementation}
+
+We can use these laws to derive an efficient implementation.
+
+\end{document}
