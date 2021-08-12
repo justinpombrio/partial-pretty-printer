@@ -79,3 +79,6 @@ main = do
   test 2 "Newline Choice" $ Newline <+> (Text "ccc" <|> Text "bb")
   test 2 "Choice Newline" $ (Newline <+> Text "ccc") <|> (Newline <+> Text "bb")
   test 2 "Choice with Suffix" $ (Text "cc" <|> Text "d") <+> Text "x"
+  test 80 "Indent" $ (Indent 2 multiline <+> Indent 2 multiline)
+  test 80 "Indent" $ (Indent 2 (multiline <+> multiline))
+    where multiline = Text "aaaaaa" <+> Newline <+> Text "bbbbbb"
