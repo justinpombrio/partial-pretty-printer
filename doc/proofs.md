@@ -9,10 +9,11 @@
       | Empty
       | Text String
       | Newline
-      | Indent Int Doc
+      | Int :>> Doc
       | Flat Doc
-      | Concat Doc Doc
-      | Choice Doc Doc
+      | Doc :+ Doc
+      | Doc :| Doc
+    
     
     data Layout = Layout [String]
                 | LErr
@@ -54,11 +55,11 @@
     pp w Empty _ k = k (Layout [""])
     pp w (Text t) _ k = k (Layout [t])
     pp w Newline _ k = k (Layout ["", ""])
-    pp w (Indent i x) n k = pp w x n (k . indent i)
+    pp w (i :>> x) n k = pp w x n (k . indent i)
     pp w (Flat x) n k = pp w x n (k . flatten)
-    pp w (Choice x y) n k = pick w n (pp w x n k) (pp w y n k)
-    pp w (Concat x y) n k
-      = pp w x n (\x -> pp w y (n + numNewlines x) (\y -> k (append x y)))
+    pp w (x :| y) n k = pick w n (pp w x n k) (pp w y n k)
+    pp w (x :+ y) n k = pp w x n (\x ->
+      pp w y (n + numNewlines x) (\y -> k (append x y)))
     
     pretty :: Int -> Doc -> String
     pretty w x = display (pp w x 0 id)
@@ -76,9 +77,9 @@
     ⬐ = Newline
     "" = (Text "")
     "t" = Text t
-    i => x = Indent i x
-    x + y = Concat x y
-    x | y = Choice x y
+    i >> x = Indent i x
+    x + y = x :+ y
+    x | y = x :| y
     ' '*i = Text (replicate i ' ')
             or just `replicate i ' '` depending on context
 
@@ -115,7 +116,7 @@ I verified these mentally or on paper. A little tedius, but straightforward.
     flatten LErr = LErr
 
 Also, for every continuation `k` that is ever passed to `pp`, `k LErr = LErr`. You can see
-this because `k`s are constructed only by the indent, flat, and concat cases, which call only
+this because `k`s are constructed only by the indent, flat, and append cases, which call only
 `indent`, `flatten`, `append`, and `pp`, all of which produce `LErr` when passed a `LErr`.
 
 #### Concatenation Laws
@@ -123,15 +124,15 @@ this because `k`s are constructed only by the indent, flat, and concat cases, wh
 Concat-unit:
 
       pp (ε + y) n k
-    = pp ε n (\x -> pp y (inc n x) (\y -> k (append x y)))        -- concat
-    = (\x -> pp y (inc n x) (\y -> k (append x y))) (Layout [""]) -- empty
+    = pp ε n (\x -> pp y (inc n x) (\y -> k (append x y)))        -- Concat
+    = (\x -> pp y (inc n x) (\y -> k (append x y))) (Layout [""]) -- Empty
     = pp y n (\y -> k (append (Layout [""]) y))                   -- (simplify)
     = pp y n (\y -> k y)                                          -- law of append
     = pp y n k                                                    -- (simplify)
 
       pp (x + ε) n k
-    = pp x n (\x -> pp ε (inc n x) (\y -> k (append x y))) -- concat
-    = pp x n (\x -> (\y -> k (append x y)) (Layout [""]))  -- empty
+    = pp x n (\x -> pp ε (inc n x) (\y -> k (append x y))) -- Concat
+    = pp x n (\x -> (\y -> k (append x y)) (Layout [""]))  -- Empty
     = pp x n (\x -> k (append x (Layout [""])))            -- (simplify)
     = pp x n (\x -> k x)                                   -- law of append
     = pp x n k                                             -- (simplify)
@@ -139,19 +140,19 @@ Concat-unit:
 Concat-assoc:
 
       pp ((x + y) + z) n k
-    = pp (x + y) n (\xy -> pp z (inc n xy) (\z -> k (append xy z)))     -- concat
+    = pp (x + y) n (\xy -> pp z (inc n xy) (\z -> k (append xy z)))     -- Concat
     = pp x n (\x -> pp y (inc n x) (\y ->
-        (\xy -> pp z (inc n xy) (\z -> k (append xy z))) (append x y))) -- concat
+        (\xy -> pp z (inc n xy) (\z -> k (append xy z))) (append x y))) -- Concat
     = pp x n (\x -> pp y (inc n x) (\y ->
         pp z (inc n (append x y)) (\z -> k (append (append x y) z))))   -- (simplify)
     = pp x n (\x -> pp y (inc n x) (\y ->
         pp z (inc (inc n x) y) (\z -> k (append x (append y z)))))      -- law of append, inc
 
       pp (x + (y + z)) n k
-    = pp x n (\x -> pp (y + z) (inc n x) (\yz -> k (append x yz)))     -- concat
+    = pp x n (\x -> pp (y + z) (inc n x) (\yz -> k (append x yz)))     -- Concat
     = pp x n (\x -> pp y (inc n x) (\y ->
         pp z (inc (inc n x) y) (\z ->
-          (\yz -> k (append x yz)) (append y z))))                     -- concat
+          (\yz -> k (append x yz)) (append y z))))                     -- Concat
     = pp x n (\x -> pp y (inc n x) (\y ->
         pp z (inc (inc n x) y) (\z -> k (append x (append y z)))))     -- (simplify)
 
@@ -160,114 +161,114 @@ Concat-assoc:
 Text-empty:
 
       pp "" n k
-    = k (Layout "")  -- text
-    = pp ε n k       -- empty (in reverse)
+    = k (Layout "")  -- Text
+    = pp ε n k       -- Empty (in reverse)
 
-Text-concat:
+Text-append:
 
       pp ("t1" + "t2") n k
-    = pp "t1" n (\x -> pp "t2" (inc n x) (\y -> k (append x y)))     -- concat
-    = (\x -> pp "t2" (inc n x) (\y -> k (append x y))) (Layout [t1]) -- text
-    = (\x -> (\y -> k (append x y)) (Layout [t2]) (Layout [t1])      -- text
+    = pp "t1" n (\x -> pp "t2" (inc n x) (\y -> k (append x y)))     -- Concat
+    = (\x -> pp "t2" (inc n x) (\y -> k (append x y))) (Layout [t1]) -- Text
+    = (\x -> (\y -> k (append x y)) (Layout [t2]) (Layout [t1])      -- Text
     = k (append (Layout [t1]) (Layout [t2]))                         -- (simplify)
     = k (Layout [t1 ++ t2])                                          -- law of append
-    = pp "t1 ++ t2" n k                                              -- text
+    = pp "t1 ++ t2" n k                                              -- Text
 
 #### Indentation Laws
 
 Indent-absorb-empty:
 
-      pp (i => ε) n k
-    = pp ε n (k . indent i)        -- indent
-    = (k . indent i) (Layout [""]) -- empty
+      pp (i >> ε) n k
+    = pp ε n (k . indent i)        -- Indent
+    = (k . indent i) (Layout [""]) -- Empty
     = k (Layout [""])              -- law of indent
-    = pp ε n k                     -- empty, in reverse
+    = pp ε n k                     -- Empty, in reverse
 
 Indent-absorb-text:
 
-      pp (i => "t") n k
-    = pp "t" n (k . indent i)     -- indent
-    = (k . indent i) (Layout [t]) -- text
+      pp (i >> "t") n k
+    = pp "t" n (k . indent i)     -- Indent
+    = (k . indent i) (Layout [t]) -- Text
     = k (Layout [t])              -- law of indent
-    = pp "t" n k                  -- text, in reverse
+    = pp "t" n k                  -- Text, in reverse
 
 Indent-newline:
 
-      pp (i => ⬐) n k
-    = pp ⬐ n (k . indent i)            -- indent
-    = (k . indent i) (Layout ["", ""]) -- newline
+      pp (i >> ⬐) n k
+    = pp ⬐ n (k . indent i)            -- Indent
+    = (k . indent i) (Layout ["", ""]) -- Newline
     = k (Layout ["", replicate i ' '])
 
       pp (⬐ + ' '*i) n k
-    = pp ⬐ n (\x -> pp ' '*i) (inc n x) (\y -> k (append x y))            -- concat
-    = (\x -> pp ' '*i (inc n x) (\y -> k (append x y))) (Layout ["", ""]) -- newline
+    = pp ⬐ n (\x -> pp ' '*i) (inc n x) (\y -> k (append x y))            -- Concat
+    = (\x -> pp ' '*i (inc n x) (\y -> k (append x y))) (Layout ["", ""]) -- Newline
     = pp ' '*i (n + 1) (\y -> k (append (Layout ["", ""]) y))             -- (simplify)
-    = (\y -> k (append (Layout ["", ""]) y)) (Layout [' '*i])             -- text
+    = (\y -> k (append (Layout ["", ""]) y)) (Layout [' '*i])             -- Text
     = k (append (Layout ["", ""]) (Layout [' '*i]))                       -- (simplify)
     = k (Layout ["", ' '*i])                                              -- (simplify)
 
-Indent-distr-concat:
+Indent-distr-append:
 
-      pp (i => (x + y)) n k
-    = pp (x + y) n (k . indent i)                                                    -- indent
-    = pp x n (\x -> pp y (inc n x) (\y -> (k . indent i) (append x y)))              -- concat
+      pp (i >> (x + y)) n k
+    = pp (x + y) n (k . indent i)                                                    -- Indent
+    = pp x n (\x -> pp y (inc n x) (\y -> (k . indent i) (append x y)))              -- Concat
     = pp x n (\x -> pp y (inc n x) (\y -> k (indent i (append x y))))                -- (simplify)
 
-      pp ((i => x) + (i => y)) n k
-    = pp (i => x) n (\x -> pp (i => y) (inc n x) (\y -> k (append x y)))             -- concat
-    = pp x n ((\x -> pp (i => y) (inc n x) (\y -> k (append x y))) . indent i)       -- indent
-    = pp x n ((\x -> pp y (inc n x) ((\y -> k (append x y)) . indent i)) . indent i) -- indent
+      pp ((i >> x) + (i >> y)) n k
+    = pp (i >> x) n (\x -> pp (i >> y) (inc n x) (\y -> k (append x y)))             -- Concat
+    = pp x n ((\x -> pp (i >> y) (inc n x) (\y -> k (append x y))) . indent i)       -- Indent
+    = pp x n ((\x -> pp y (inc n x) ((\y -> k (append x y)) . indent i)) . indent i) -- Indent
     = pp x n (\x -> pp y (inc n x) (\y -> k (append (indent i x) (indent i y))))     -- (simplify)
     = pp x n (\x -> pp y (inc n x) (\y -> k (indent i (append x y))))                -- law of indent
 
 Indent-distr-choice:
 
-      pp (i => (x | y)) n k
-    = pp (x | y) n (k . indent i)                            -- indent
-    = pick n (pp x n (k . indent i)) (pp y n (k . indent i)) -- choice
+      pp (i >> (x | y)) n k
+    = pp (x | y) n (k . indent i)                            -- Indent
+    = pick n (pp x n (k . indent i)) (pp y n (k . indent i)) -- Choice
 
-      pp ((i => x) | (i => y)) n k
-    = pick n (pp (i => x) n k) (pp (i => y) n k)             -- choice
-    = pick n (pp x n (k . indent i)) (pp y n (k . indent i)) -- indent
+      pp ((i >> x) | (i >> y)) n k
+    = pick n (pp (i >> x) n k) (pp (i >> y) n k)             -- Choice
+    = pick n (pp x n (k . indent i)) (pp y n (k . indent i)) -- Indent
 
 #### Flattening Laws
 
 Flat-absorb-empty:
 
       pp (Flat ε) n k
-    = pp ε n (k . flatten)        -- flat
-    = (k . flatten) (Layout [""]) -- empty
+    = pp ε n (k . flatten)        -- Flat
+    = (k . flatten) (Layout [""]) -- Empty
     = k (Layout [""])             -- law of flatten
-    = pp ε n k                    -- empty, in reverse
+    = pp ε n k                    -- Empty, in reverse
 
 Flat-absorb-text:
 
       pp (Flat "t") n k
-    = pp "t" n (k . flatten)     -- flat
-    = (k . flatten) (Layout [t]) -- text
+    = pp "t" n (k . flatten)     -- Flat
+    = (k . flatten) (Layout [t]) -- Text
     = k (Layout [t])             -- law of flatten
-    = pp "t" n k                 -- text, in revese
+    = pp "t" n k                 -- Text, in revese
 
 Flat-newline:
 
       pp (Flat ⬐) n k
-    = pp ⬐ n (k . flatten)            -- flat
-    = (k . flatten) (Layout ["", ""]) -- newline
+    = pp ⬐ n (k . flatten)            -- Flat
+    = (k . flatten) (Layout ["", ""]) -- Newline
     = k LErr                          -- law of flatten
-    = pp ! n k                        -- error, in reverse
+    = pp ! n k                        -- Error, in reverse
 
-Flat-distr-concat:
+Flat-distr-append:
 
       pp (Flat (x + y)) n k
-    = pp (x + y) n (k . flatten)                                                   -- flat
-    = pp x n (\x -> pp y (inc n x) (\y -> (k . flatten) (append x y)))             -- concat
+    = pp (x + y) n (k . flatten)                                                   -- Flat
+    = pp x n (\x -> pp y (inc n x) (\y -> (k . flatten) (append x y)))             -- Concat
     = pp x n (\x -> pp y (inc n x) (\y -> k (append (flatten x) (flatten y))))     -- law of flatten
 
       pp ((Flat x) + (Flat y)) n k
-    = pp (Flat x) n (\x -> pp (Flat y) (inc n x) (\y -> k (append x y)))           -- concat
-    = pp x n ((\x -> pp (Flat y) (inc n x) (\y -> k (append x y))) . flatten)      -- flat
+    = pp (Flat x) n (\x -> pp (Flat y) (inc n x) (\y -> k (append x y)))           -- Concat
+    = pp x n ((\x -> pp (Flat y) (inc n x) (\y -> k (append x y))) . flatten)      -- Flat
     = pp x n (\x -> pp (Flat y) n (\y -> k (append (flatten x) y)))                -- (simplify)
-    = pp x n (\x -> pp y n ((\y -> k (append (flatten x) y)) . flatten))           -- flat
+    = pp x n (\x -> pp y n ((\y -> k (append (flatten x) y)) . flatten))           -- Flat
     = pp x n (\x -> pp y n (\y -> k (append (flatten x) (flatten y))))             -- (simplify)
 
 (The line numbers are different here. But either `x` is multi-line, in which case both expressions
@@ -276,65 +277,65 @@ error, or `x` is single-line, in which case the line numbers match.)
 Flat-distr-choice:
 
       pp (Flat (x | y)) n k
-    = pp (x | y) n (k . flatten)                         -- flat
-    = pick (pp x n (k . flatten)) (pp y n (k . flatten)) -- choice
+    = pp (x | y) n (k . flatten)                         -- Flat
+    = pick (pp x n (k . flatten)) (pp y n (k . flatten)) -- Choice
     
       pp ((Flat x) | (Flat y)) n k
-    = pick (pp (Flat x) n k) (pp (Flat y) n k)           -- choice
-    = pick (pp x n (k . flatten)) (pp y n (k . flatten)) -- flat
+    = pick (pp (Flat x) n k) (pp (Flat y) n k)           -- Choice
+    = pick (pp x n (k . flatten)) (pp y n (k . flatten)) -- Flat
 
 #### Error Laws
 
-Error-concat:
+Error-append:
 
       pp (! + y) n k
-    = pp ! n (\x -> pp y (inc n x) (\y -> k (append x y))) -- concat
-    = (\x -> pp y (inc n x) (\y -> k (append x y))) LErr   -- error
+    = pp ! n (\x -> pp y (inc n x) (\y -> k (append x y))) -- Concat
+    = (\x -> pp y (inc n x) (\y -> k (append x y))) LErr   -- Error
     = pp y n (\y -> k (append LErr y))                     -- (simplify)
     = pp y n (\y -> k LErr)                                -- law of append
     = k LErr                                               -- by below lemma
-    = pp ! n k                                             -- error, in reverse
+    = pp ! n k                                             -- Error, in reverse
 
       pp (x + !) n k
-    = pp x n (\x -> pp ! (inc n x) (\y -> k (append x y))) -- concat
-    = pp x n (\x -> (\y -> k (append x y)) LErr)           -- error
+    = pp x n (\x -> pp ! (inc n x) (\y -> k (append x y))) -- Concat
+    = pp x n (\x -> (\y -> k (append x y)) LErr)           -- Error
     = pp x n (\x -> k (append x LErr))                     -- (simplify)
     = pp x n (\x -> k LErr)                                -- (simplify)
     = k LErr                                               -- by below lemma
     = pp ! n k
 
     or just:
-      pp (! + y) n k = (expand concat) = LErr = pp ! n k
-      pp (x + !) n k = (expand concat) = pp x n (\x -> LErr)  =(below lemma) pp ! n k
+      pp (! + y) n k = (expand append) = LErr = pp ! n k
+      pp (x + !) n k = (expand append) = pp x n (\x -> LErr)  =(below lemma) pp ! n k
     if we use the simpler definition of !
 
 Error-indent:
 
-      pp (i => !) n k
-    = pp ! n (k . indent i) -- indent
-    = (k . indent i) LErr   -- error
+      pp (i >> !) n k
+    = pp ! n (k . indent i) -- Indent
+    = (k . indent i) LErr   -- Error
     = k LErr                -- law of indent
-    = pp ! n k              -- error, in reverse
+    = pp ! n k              -- Error, in reverse
 
 Error-flat:
 
       pp (flat !) n k
-    = pp ! n (k . flatten) -- flat
-    = (k . flatten) LErr   -- error
+    = pp ! n (k . flatten) -- Flat
+    = (k . flatten) LErr   -- Error
     = k LErr               -- law of flatten
-    = pp ! n k             -- error, in reverse
+    = pp ! n k             -- Error, in reverse
 
 Error-choice:
 
     pp (! | y) n k
-  = pick n (pp ! n k) (pp y n k) -- choice
-  = pick n (k LErr) (pp y n k)   -- error
+  = pick n (pp ! n k) (pp y n k) -- Choice
+  = pick n (k LErr) (pp y n k)   -- Error
   = pick n LErr (pp y n k)       -- property of k
   = pp y n k                     -- law of pick
 
     pp (x | !) n k
-  = pick n (pp x n k) (pp ! n k) -- choice
-  = pick n (pp x n k) (k LErr)   -- error
+  = pick n (pp x n k) (pp ! n k) -- Choice
+  = pick n (pp x n k) (k LErr)   -- Error
   = pick n (pp x n k) LErr       -- property of k
   = pp x n k                     -- law of pick
 
@@ -348,14 +349,14 @@ Mini lemma:
       pp ε n (\_ -> k LErr) = (\_ -> k LErr) (Layout [""]) = k LErr
       pp "t" n (\_ -> k LErr) = (\_ -> k LErr) (Layout [""]) = k LErr
       pp ⬐ n (\_ -> k LErr)
-        = (\_ -> k LErr) (Layout ["", ""])                      -- newline
+        = (\_ -> k LErr) (Layout ["", ""])                      -- Newline
         = k LErr                                                -- (simplify)
-      pp (i => x) n (\_ -> k LErr)
-        = pp x n ((\_ -> k LErr) . indent i)                    -- indent
+      pp (i >> x) n (\_ -> k LErr)
+        = pp x n ((\_ -> k LErr) . indent i)                    -- Indent
         = pp x n (\_ -> k LErr)                                 -- (simplify)
         = k LErr                                                -- inductive hypothesis
       pp (Flatten x) n (\_  -> k LErr)
-        = pp x n ((\_ -> k LErr) . flatten)                     -- flat
+        = pp x n ((\_ -> k LErr) . flatten)                     -- Flat
         = pp x n (\_ -> k LErr)                                 -- (simplify)
         = k LErr                                                -- inductive hypothesis
       pp (x + y) n (\_ -> k LErr)
@@ -364,7 +365,7 @@ Mini lemma:
         = pp x n (\x -> k LErr)                                 -- inductive hypothesis
         = k LErr                                                -- inductive hypothesis
       pp (x | y) n (\_ -> k LErr)
-        = pick (pp x n (\_ -> k LErr)) (pp y n (\_ -> k LErr))  -- choice
+        = pick (pp x n (\_ -> k LErr)) (pp y n (\_ -> k LErr))  -- Choice
         = pick (k LErr) (k LErr)                                -- inductive hypothesis
         = k LErr                                                -- law of pick
 
@@ -373,41 +374,41 @@ Mini lemma:
 Choice-assoc:
 
       pp ((x | y) | z) n k
-    = pick (pp (x | y) n k) (pp z n k)             -- choice
-    = pick (pick (pp x n k) (pp y n k)) (pp z n k) -- choice
+    = pick (pp (x | y) n k) (pp z n k)             -- Choice
+    = pick (pick (pp x n k) (pp y n k)) (pp z n k) -- Choice
     = pick (pp x n k) (pick (pp y n k) (pp z n k)) -- law of pick
   
       pp (x | (y | z)) n k
-    = pick (pp x n k) (pp (y | z) n k)             -- choice
-    = pick (pp x n k) (pick (pp y n k) (pp z n k)) -- choice
+    = pick (pp x n k) (pp (y | z) n k)             -- Choice
+    = pick (pp x n k) (pick (pp y n k) (pp z n k)) -- Choice
 
 Choice-distr-text-left:
 
       pp ("t" + (y |z)) n k
-    = pp "t" n (\x -> pp (y | z) (inc n x) (\yz -> k (append x yz)))     -- concat
-    = (\x -> pp (y | z) (inc n x) (\yz -> k (append x yz))) (Layout [t]) -- text
+    = pp "t" n (\x -> pp (y | z) (inc n x) (\yz -> k (append x yz)))     -- Concat
+    = (\x -> pp (y | z) (inc n x) (\yz -> k (append x yz))) (Layout [t]) -- Text
     = pp (y | z) n (\yz -> k (append (Layout [t]) yz))                   -- (simplify)
     = pick (pp y n (\yz -> k (append (Layout [t]) yz)))
-           (pp z n (\yz -> k (append (Layout [t]) yz)))                  -- choice
+           (pp z n (\yz -> k (append (Layout [t]) yz)))                  -- Choice
     = pick (pp ("t" + y) n k) (pp ("t" + z) n k)                         -- by below lemma
-    = pp (("t" + y) | ("t" + z)) n                                       -- choice, in reverse
+    = pp (("t" + y) | ("t" + z)) n                                       -- Choice, in reverse
   
 Mini lemma:
 
       pp ("t" + y) n k
-    = pp "t" n (\x -> pp y (inc n x) (\y -> k (append x y)))     -- concat
-    = (\x -> pp y (inc n x) (\y -> k (append x y))) (Layout [t]) -- text
+    = pp "t" n (\x -> pp y (inc n x) (\y -> k (append x y)))     -- Concat
+    = (\x -> pp y (inc n x) (\y -> k (append x y))) (Layout [t]) -- Text
     = pp y n (\y -> k (append (Layout [t]) y))                   -- (simplify)
 
 Choice-distr-right:
 
       pp ((x | y) + z) n k
-    = pp (x | y) n (\xy -> pp z (inc n xy) (\z -> k (append xy z)))  -- concat
+    = pp (x | y) n (\xy -> pp z (inc n xy) (\z -> k (append xy z)))  -- Concat
     = pick (pp x n (\xy -> pp z (inc n xy) (\z -> k (append xy z)))
-           (pp y n (\xy -> pp z (inc n xy) (\z -> k (append xy z)))) -- choice
+           (pp y n (\xy -> pp z (inc n xy) (\z -> k (append xy z)))) -- Choice
 
       pp ((x + z) | (y + z)) n k
-    = pick (pp n (x + z) k) (pp n (y + z) k)                      -- choice
+    = pick (pp n (x + z) k) (pp n (y + z) k)                      -- Choice
     = pick (pp x n (\x -> pp z (inc n x) (\z -> k (append x z))))
-           (pp y n (\y -> pp z (inc n y) (\z -> k (append y z)))) -- concat
+           (pp y n (\y -> pp z (inc n y) (\z -> k (append y z)))) -- Concat
 
