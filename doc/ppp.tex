@@ -23,17 +23,36 @@
 \newcommand{\layout}[2]{\textit{layout}(#1, #2)}
 \newcommand{\resolve}[2]{\textit{resolve}(#1, #2)}
 
-\newcommand{\txt}{T}
-\newcommand{\nil}{{\epsilon}}
-\newcommand{\err}{{!}}
-\newcommand{\nl}{{\dlsh}}
-\newcommand{\ind}[2]{#1 \Rightarrow #2}
-\renewcommand{\flat}[1]{\lfloor #1 \rfloor}
-\newcommand{\cat}[2]{#1 + #2}
-\newcommand{\choice}[2]{#1 \,|\, #2}
+\newcommand{\ind}[2]{\texttt{#1 :>> #2}}
+\newcommand{\cat}[2]{\texttt{#1 :+ #2}}
+\newcommand{\choice}[2]{\texttt{#1 :| #2}}
+
+\newcommand{\txt}[1]{\texttt{Text #1}}
+\newcommand{\nil}{\texttt{Nil}}
+\newcommand{\err}{\texttt{Err}}
+\newcommand{\nl}{\texttt{Newline}}
+% \newcommand{\ind}[2]{\texttt{Indent #1 #2}}
+\renewcommand{\flat}[1]{\texttt{Flat #1}}
+% \newcommand{\cat}[2]{\texttt{Concat #1 #2}}
+% \newcommand{\choice}[2]{\texttt{Choice #1 #2}}
+
+% \newcommand{\txt}{T}
+% \newcommand{\nil}{{\epsilon}}
+% \newcommand{\err}{{!}}
+% \newcommand{\nl}{{\dlsh}}
+% \newcommand{\ind}[2]{#1 \Rightarrow #2}
+% \renewcommand{\flat}[1]{\lfloor #1 \rfloor}
+% \newcommand{\cat}[2]{#1 + #2}
+% \newcommand{\choice}[2]{#1 \,|\, #2}
 \newcommand{\spaces}[1]{\texttt{replicate}\;#1\;\texttt{\textquotesingle \textquotesingle}}
 
-\newcommand{\doubleplus}{\mathbin{+\mkern-8mu+}}
+\newcommand{\doubleplus}{\,\texttt{++}\,}
+%\newcommand{\doubleplus}{\mathbin{+\mkern-8mu+}}
+
+\lstset{
+  language=Haskell,
+  basicstyle=\ttfamily
+}
 
 \begin{document}
 
@@ -41,39 +60,165 @@
 \title{Partial Pretty Printing}
 \maketitle
 
-\section{Introduction}
-
 [FILL] introduction; relationship to Wadler's Prettier Printer and others
 
 [FILL] only consider length of first line, trading off expressiveness for efficiency. Linear time.
 
 [FILL] peephole efficiency
 
-\subsection{Definition of Documents}
+\section{Reference Implementation}
 
-We'll have 
+[FILL]
 
-A \emph{document} is a set of instructions for rendering
+\subsection{Documents}
 
-My documents are similar to Wadler's, but more general in that choices are 
-
-[FILL] description of documents
+Documents will be made by eight constructors:
 
 \begin{Table}
   $\textit{expr } x, y, z$
   &$::=$& $\nil$ & empty document \\
-    &$|$& $\txt$ & text (without newlines) \\
+    &$|$& $\txt{t}$ & text (without newlines) \\
     &$|$& $\nl$ & newline \\
+    &$|$& $\flat{x}$ & disallow newlines in $x$ \\
     &$|$& $\ind{i}{x}$ & indent $x$ by $i$ spaces \\
-    &$|$& $\flat{x}$ & flattening of $x$ \\
-    &$|$& $\cat{x}{y}$ & concatenation of $x$ and $y$ \\
+    &$|$& $\cat{x}{y}$ & concatenation of $x$ and $y$ \\ 
     &$|$& $\choice{x}{y}$ & choice between $x$ and $y$ \\
     &$|$& $\err$ & error
 \end{Table}
 
-\subsection{Laws for Documents}
+\paragraph{Text.} $\nil$ prints nothing at all, $\txt{t}$ prints a string verbatim, and $\nl$ prints
+a newline. $\cat{x}{y}$ is the \emph{concatenation} of $x$ and $y$: it first prints $x$, then $y$,
+with no separation.
+\paragraph{Indentation.} Parts of a document can be indented. $\ind{i}{x}$ indents $x$ by $i$
+spaces---or more specifically,it inserts $i$ spaces after every newline in $x$. $\flat{x}$, on the
+other hand, \emph{disallows} newlines: it produces an error $\err$ if it encounters a newline in
+$x$. This is only useful in conjunction with choices, described next.
+\paragraph{Choices.} $\choice{x}{y}$ will print either $x$ or $y$. Choices are resolved
+\emph{greedily}, and only based on the current line. In detail: $x$ is chosen iff it does not cause
+the current line to exceed the pretty printing width or choosing $y$ would result in an error.
+(Informally: the first line of $x$ is not "too long".) For example, the choice $\choice{\text{"
+"}}{\nl}$ will 
 
-\paragraph{Concatenation}
+This rule for resolving choices does limit how pretty documents can be. Certain ways of formatting
+can be either great or terrible, and you cannot tell which just by looking at their first line.
+These must be avoided, lest someone runs into the terrible case. [FILL: examples, e.g. alignment]. 
+However, this way of resolving choices also has a very strong advantage: it allows for partial
+pretty printing. [REF: more details].
+
+\subsection{Pretty Printing}
+
+Let's turn this informal definition into code. For the moment, we'll keep the implementation naive
+at the expense of efficiency (even to the extent of exponential runtime). We will later use it to
+derive a more efficient implementation that provably behaves the same.
+
+First we need a data structure for the output of pretty printing, and some basic operations on it.
+The output---call it a \emph{layout}---is either a list of lines, or an error in case of
+encountering $\err$:
+
+\begin{lstlisting}
+data Layout = LErr | Layout [String]
+\end{lstlisting}
+
+Layouts can be indented, flattened, or appended:
+
+\begin{lstlisting}
+flatten :: Layout -> Layout
+flatten LErr = LErr
+flatten (Layout lines) =
+  if length lines == 1
+  then Layout lines
+  else LErr
+
+indent :: Int -> Layout -> Layout
+indent _ LErr = LErr
+indent i (Layout (line : lines)) =
+  Layout (line : map addSpaces lines)
+  where addSpaces line = replicate i ' ' ++ line
+
+append :: Layout -> Layout -> Layout
+append (Layout lines1) (Layout lines2) =
+  Layout (init lines1 ++ [middleLine] ++ tail lines2)
+  where middleLine = (last lines1 ++ head lines2)
+append _ _ = LErr
+\end{lstlisting}
+
+Pretty printing a document that contains no choices is completely straightforward:
+
+\begin{lstlisting}
+-- Preliminary
+pp :: Int -> Doc -> Layout
+pp w Err = LErr
+pp w Empty = Layout [""]
+pp w (Text t) = Layout [t]
+pp w Newline = Layout ["", ""]
+pp w (Flat x) = flatten (pp w x)
+pp w (i :>> x) = indent (pp w x)
+pp w (x :+ y) = append (pp w x) (pp w y)
+\end{lstlisting}
+
+In fact, since we aren't making any choices, notice that we aren't even using the pretty printing
+width \texttt{w} yet (that is, the line width we would prefer not to exceed).
+
+To pretty print a document with choices, we must tell the program how to pick the "best" layout. As
+described above, it will be whichever layout does not exceed the maximum width \texttt{w} on the
+current line \texttt{n}:
+\begin{lstlisting}
+pick :: Int -> Int -> Layout -> Layout -> Layout
+pick w _ LErr LErr = LErr
+pick w _ (Layout lines) LErr = Layout lines
+pick w _ LErr (Layout lines) = Layout lines
+pick w n (Layout lines1) (Layout lines2) =
+  if length (lines1 !! n) <= w
+  then Layout lines1
+  else Layout lines2
+\end{lstlisting}
+
+The \texttt{pp} function needs two modifications to be able to handle choices. First, we must keep
+track of the current line number so that a choice can be resolved based on the current line.
+
+Second, we pass down a continuation: a function of type \texttt{Layout -> Layout} which pretty
+prints the rest of the document surrounding the current part of it. This continuation is necessary
+to answer the question "what would happen if we picked the first option in this choice?" For
+example, say we are currently printing the \texttt{,} within the larger document:
+
+\begin{lstlisting}
+Text "Hello" :+ Text "," :+ Text "World"
+\end{lstlisting}
+
+Then the continuation \texttt{k} would essentially be the function \texttt{$\backslash$s -> "Hello"
+++ s ++ "World"}, except that it would act on \texttt{Layout}s instead of strings.
+
+With these modifications, we can finish the naive pretty printing function. It takes the maximum
+line width \texttt{w}, document to be printed, current line number \texttt{n}, and continuation
+\texttt{k}, and produces a \texttt{Layout}:
+
+\begin{lstlisting}
+pp :: Int -> Doc -> Int -> (Layout -> Layout) -> Layout
+pp w Err _ k = k LErr
+pp w Empty _ k = k (Layout [""])
+pp w (Text t) _ k = k (Layout [t])
+pp w Newline _ k = k (Layout ["", ""])
+pp w (i :>> x) n k = pp w x n (k . indent i)
+pp w (Flat x) n k = pp w x n (k . flatten)
+pp w (x :| y) n k = pick w n (pp w x n k) (pp w y n k)
+pp w (x :+ y) n k = pp w x n (\x ->
+  pp w y (n + numNewlines x) (\y -> k (append x y)))
+\end{lstlisting}
+
+This is a complete and correct implementation. Though it is exponential time, as it tries resolving
+each choice both ways. This makes it sound useless, but it is not! We can use it to prove algebraic
+laws about equivalence between `Doc`s, and then use these laws to derive a more efficient
+implementation that (provably) behaves the same.
+
+\section{Laws of Pretty Printing}
+
+This section lists equivalences between \texttt{Doc}s. An equivalence \texttt{x = y} between docs
+means:
+\[ \forall w, n, k.\; \texttt{pp w x n k = pp w y n k} \]
+All of the equivalences in this section can be proven from the implementation of \texttt{pp} using
+basic equational reasoning. The proofs are given in [TODO: the appendix, but for now proofs.md].
+
+\paragraph{Concatenation.}
 The concatenation of two documents just prints them one after another (with no space or newline in
 between). Thus concatenation with an empty document has no effect, and concatenation is associative.
 
@@ -82,16 +227,16 @@ between). Thus concatenation with an empty document has no effect, and concatena
   \cat{(\cat{x}{y})}{z} = \cat{x}{(\cat{y}{z})} \tag{concat-assoc}
 \end{gather*}
 
-\paragraph{Text}
-Text $\txt$ is rendered exactly as is. Thus the empty string is the same as the empty document, and
+\paragraph{Text.}
+$\txt{t}$ is rendered exactly as is. Thus the empty string is the same as the empty document, and
 the concatenation of two texts just concatenates their strings.
 
 \begin{align*}
   \texttt{""} &= \nil \tag{text-empty} \\
-  \cat{\txt_1}{\txt_2} &= (\txt_1 \doubleplus \txt_2) \tag{text-concat}
+  \cat{\txt{t1}}{\txt{t2}} &= (\txt{t1} \doubleplus \txt{t2}) \tag{text-concat}
 \end{align*}
 
-\paragraph{Indentation and Flattening}
+\paragraph{Indentation and Flattening.}
 Indentation and flattening can be lowered to the leaves of the document.  They both leave text (and
 thus also empty documents) unchanged, but behave differently on newlines:
 \begin{itemize}
@@ -102,7 +247,7 @@ thus also empty documents) unchanged, but behave differently on newlines:
 \begin{align*}
   \ind{i}{\nil} &= \nil
     \tag{indent-absorb-empty} \\
-  \ind{i}{\txt} &= \txt
+  \ind{i}{\txt{t}} &= \txt{t}
     \tag{indent-absorb-text} \\
   \ind{i}{\nl}  &= \cat{\nl}{(\spaces{i})}
     \tag{indent-newline} \\
@@ -112,12 +257,12 @@ thus also empty documents) unchanged, but behave differently on newlines:
     \tag{indent-distr-choice} \\
   \\
   \flat{\nil} &= \nil
-    \tag{flat-absort-empty} \\
-  \flat{\txt} &= \txt
-    \tag{flat-absort-text} \\
+    \tag{flat-absorb-empty} \\
+  \flat{(\txt{t})} &= \txt{t}
+    \tag{flat-absorb-text} \\
   \flat{\nl} &= \err
     \tag{flat-newline} \\
-  \flat{\cat{x}{y}} &= \cat{\flat{x}}{\flat{y}}
+  \flat{(\cat{x}{y})} &= \cat{\flat{x}}{\flat{y}}
     \tag{flat-distr-concat} \\
   \flat{\choice{x}{y}} &= \choice{\flat{x}}{\flat{y}}
     \tag{flat-distr-choice}
@@ -133,7 +278,7 @@ and indenting by $i$ spaces and then $j$ spaces is the same as indenting by $i+j
     \tag{indent-compose}
 \end{align*}
 
-\paragraph{Errors}
+\paragraph{Errors.}
 There is only one source of error: flattening a newline (shown above). Once created, errors are
 contagious and propagate up to the root of the document, except when inside a choice in which cae
 they eliminate that option of the choice.
@@ -149,21 +294,20 @@ they eliminate that option of the choice.
     \tag{error-choice}
 \end{align*}
 
-\paragraph{Choice}
+\paragraph{Choice.}
 Choice is associative, and if you concatenate a choice with some text, that's the same as
 concatenating the text inside the choice. [FILL]
 
 \begin{align*}
   \choice{x}{(\choice{y}{z})} &= \choice{(\choice{x}{y})}{z}
     \tag{choice-assoc} \\
-  \cat{\txt}{(\choice{x}{y})} &= \choice{(\cat{\txt}{x})}{(\cat{\txt}{y})}
+  \cat{\txt{t}}{(\choice{x}{y})} &= \choice{(\cat{\txt{t}}{x})}{(\cat{\txt{t}}{y})}
     \tag{choice-distr-text-left} \\
   \cat{(\choice{x}{y})}{z} &= \choice{(\cat{x}{z})}{(\cat{y}{z})}
     \tag{choice-distr-right}
 \end{align*}
 
-\subsection{Laws for Documents that Don't Hold}
-
+\paragraph{A law that doesn't hold.}
 Surprisingly, concatenation does \emph{not} in always distribute over choice. That is,
 $\cat{x}{(\choice{y}{z})}$ is not always equal to $\choice{(\cat{x}{y})}{(\cat{x}{z})}$.  This is
 because $x$ could contain a newline. In that case, we would have:
@@ -175,32 +319,6 @@ to see which one fits. However, the document on the right makes a degenerate cho
 first lines of $\cat{\nl}{y}$ and $\cat{\nl}{z}$, which are both empty! Thus it always picks
 $\cat{\nl}{y}$, regardless of $y$ and $z$.  As a result, the concatenation of a newline and a choice
 cannot be simplified.
-
-For a similar reason, $\cat{(\choice{x}{y})}{(\choice{z}{w})}$ is not always equal to
-$\choice{\choice{(\cat{x}{z})}{(\cat{y}{z})}}{\choice{(\cat{x}{w})}{(\cat{y}{w})}}$.
-
-\subsection{Laws for Pretty Printing}
-
-\paragraph{Resolving Choices}
-
-\begin{Table}
-$\resolve{w}{\nil}$ &$=$& $\nil$ \\
-\end{Table}
-
-\paragraph{Layout}
-
-\begin{Table}
-$\layout{i}{\nil}$ &$=$& \texttt{""} \\
-$\layout{i}{\txt}$ &$=$& $\txt$ \\
-$\layout{i}{\nl}$ &$=$& \texttt{"{\textbackslash}n"} $\doubleplus$ $i*$\texttt{" "} \\
-$\layout{i}{\ind{j}{x}}$ &$=$& $\layout{i+j}{x}$ \\
-$\layout{i}{\flat{x}}$ &$=$& $\layout{i}{x}$ \\
-$\layout{i}{\cat{x}{y}}$ &$=$& $\layout{i}{x} \doubleplus \layout{i}{y}$ \\
-\end{Table}
-
-\paragraph{Pretty Printing}
-
-\[ \pp{w}{x} = \layout{0}{\resolve{w}{x}} \]
 
 \section{Normal Form}
 
