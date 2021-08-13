@@ -5,10 +5,11 @@ data Doc
   | Empty
   | Text String
   | Newline
-  | Indent Int Doc
+  | Int :>> Doc
   | Flat Doc
-  | Concat Doc Doc
-  | Choice Doc Doc
+  | Doc :+ Doc
+  | Doc :| Doc
+
 
 data Layout = Layout [String]
             | LErr
@@ -50,11 +51,11 @@ pp w Err _ k = k LErr -- should equal LErr
 pp w Empty _ k = k (Layout [""])
 pp w (Text t) _ k = k (Layout [t])
 pp w Newline _ k = k (Layout ["", ""])
-pp w (Indent i x) n k = pp w x n (k . indent i)
+pp w (i :>> x) n k = pp w x n (k . indent i)
 pp w (Flat x) n k = pp w x n (k . flatten)
-pp w (Choice x y) n k = pick w n (pp w x n k) (pp w y n k)
-pp w (Concat x y) n k
-  = pp w x n (\x -> pp w y (n + numNewlines x) (\y -> k (append x y)))
+pp w (x :| y) n k = pick w n (pp w x n k) (pp w y n k)
+pp w (x :+ y) n k = pp w x n (\x ->
+  pp w y (n + numNewlines x) (\y -> k (append x y)))
 
 pretty :: Int -> Doc -> String
 pretty w x = display (pp w x 0 id)
@@ -65,20 +66,15 @@ pretty w x = display (pp w x 0 id)
 
 {- Testing -}
 
-infixr 6 <+>
-infixr 5 <|>
-(<+>) = Concat
-(<|>) = Choice
-
 test :: Int -> String -> Doc -> IO ()
 test w s x = putStrLn ("\n" ++ s ++ ":\n" ++ pretty w x)
 
 main = do
-  test 2 "Middle" $ Text "ccc" <|> Text "bb" <|> Text "a"
-  test 2 "Newline" $ Text "Hello" <+> Newline <+> Text "World"
-  test 2 "Newline Choice" $ Newline <+> (Text "ccc" <|> Text "bb")
-  test 2 "Choice Newline" $ (Newline <+> Text "ccc") <|> (Newline <+> Text "bb")
-  test 2 "Choice with Suffix" $ (Text "cc" <|> Text "d") <+> Text "x"
-  test 80 "Indent" $ (Indent 2 multiline <+> Indent 2 multiline)
-  test 80 "Indent" $ (Indent 2 (multiline <+> multiline))
-    where multiline = Text "aaaaaa" <+> Newline <+> Text "bbbbbb"
+  test 2 "Middle" $ Text "ccc" :| Text "bb" :| Text "a"
+  test 2 "Newline" $ Text "Hello" :+ Newline :+ Text "World"
+  test 2 "Newline Choice" $ Newline :+ (Text "ccc" :| Text "bb")
+  test 2 "Choice Newline" $ (Newline :+ Text "ccc") :| (Newline :+ Text "bb")
+  test 2 "Choice with Suffix" $ (Text "cc" :| Text "d") :+ Text "x"
+  test 80 "Indent" $ (2 :>> multiline) :+ (2 :>> multiline)
+  test 80 "Indent" $ 2 :>> (multiline :+ multiline)
+    where multiline = Text "aaaaaa" :+ Newline :+ Text "bbbbbb"
