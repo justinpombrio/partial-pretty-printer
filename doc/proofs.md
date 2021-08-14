@@ -231,6 +231,8 @@ Indent-distr-choice:
     = pick n (pp (i >> x) n k) (pp (i >> y) n k)             -- Choice
     = pick n (pp x n (k . indent i)) (pp y n (k . indent i)) -- Indent
 
+[FILL: indent-identity, indent-compose, flatten-compose]
+
 #### Flattening Laws
 
 Flat-absorb-empty:
