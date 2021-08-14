@@ -85,7 +85,6 @@ pp (x :| y) = Branch 0 (pp x) (pp y)
 
 pretty :: Int -> Doc -> String
 pretty w x = display (resolve w (pp x))
-  where
 
 {- Testing -}
 
