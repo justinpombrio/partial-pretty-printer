@@ -6,7 +6,7 @@
 \usepackage{mathabx}
 \usepackage{textcomp}
 
-\usepackage[footskip=0.5in, top=0.5in, bottom=1in, left=1.5in, right=1.5in]{geometry}
+\usepackage[footskip=0.5in, top=0.75in, bottom=1in, left=1.5in, right=1.5in]{geometry}
 
 \newenvironment{Table}
   {\begin{center}\begin{tabular}{l @{\;\;} l @{\;\;} l @{\quad\quad} l}}
@@ -19,7 +19,6 @@
   }}
   {\end{tabular}\end{center}}
 
-\newcommand{\pp}[2]{\textit{pretty}(#1, #2)}
 \newcommand{\layout}[2]{\textit{layout}(#1, #2)}
 \newcommand{\resolve}[2]{\textit{resolve}(#1, #2)}
 
@@ -46,12 +45,14 @@
 % \newcommand{\choice}[2]{#1 \,|\, #2}
 \newcommand{\spaces}[1]{\texttt{replicate}\;#1\;\texttt{\textquotesingle \textquotesingle}}
 
-\newcommand{\doubleplus}{\,\texttt{++}\,}
 %\newcommand{\doubleplus}{\mathbin{+\mkern-8mu+}}
+
+\newcommand{\code}[1]{\texttt{#1}}
 
 \lstset{
   language=Haskell,
-  basicstyle=\ttfamily
+  basicstyle=\ttfamily,
+  mathescape
 }
 
 \begin{document}
@@ -74,41 +75,54 @@
 
 Documents will be made by eight constructors:
 
-\begin{Table}
-  $\textit{expr } x, y, z$
-  &$::=$& $\nil$ & empty document \\
-    &$|$& $\txt{t}$ & text (without newlines) \\
-    &$|$& $\nl$ & newline \\
-    &$|$& $\flat{x}$ & disallow newlines in $x$ \\
-    &$|$& $\ind{i}{x}$ & indent $x$ by $i$ spaces \\
-    &$|$& $\cat{x}{y}$ & concatenation of $x$ and $y$ \\ 
-    &$|$& $\choice{x}{y}$ & choice between $x$ and $y$ \\
-    &$|$& $\err$ & error
-\end{Table}
+\begin{lstlisting}
+data Doc = Nil         -- empty document
+         | Text String -- text (without newlines)
+         | Newline     -- newline
+         | Flat x      -- disallow newlines in x
+         | i :>> x     -- indent x by i spaces
+         | x :+ y      -- concatenation of x and y
+         | x :| y      -- choice between x and y
+         | Err         -- error
+\end{lstlisting}
 
-\paragraph{Text.} $\nil$ prints nothing at all, $\txt{t}$ prints a string verbatim, and $\nl$ prints
-a newline. $\cat{x}{y}$ is the \emph{concatenation} of $x$ and $y$: it first prints $x$, then $y$,
-with no separation.
-\paragraph{Indentation.} Parts of a document can be indented. $\ind{i}{x}$ indents $x$ by $i$
-spaces---or more specifically,it inserts $i$ spaces after every newline in $x$. $\flat{x}$, on the
-other hand, \emph{disallows} newlines: it produces an error $\err$ if it encounters a newline in
-$x$. This is only useful in conjunction with choices, described next.
-\paragraph{Choices.} $\choice{x}{y}$ will print either $x$ or $y$. Choices are resolved
-\emph{greedily}, and only based on the current line. In detail: $x$ is chosen iff it does not cause
-the current line to exceed the pretty printing width or choosing $y$ would result in an error.
-(Informally: the first line of $x$ is not "too long".) For example, the choice $\choice{\text{"
-"}}{\nl}$ will 
+$\nil$ prints nothing at all, $\txt{t}$ prints a string verbatim, and $\nl$ prints a newline.
+$\cat{x}{y}$ is the \emph{concatenation} of $x$ and $y$: it first prints $x$, then $y$, with no
+separation.
 
-This rule for resolving choices does limit how pretty documents can be. Certain ways of formatting
-can be either great or terrible, and you cannot tell which just by looking at their first line.
-These must be avoided, lest someone runs into the terrible case. [FILL: examples, e.g. alignment]. 
-However, this way of resolving choices also has a very strong advantage: it allows for partial
-pretty printing. [REF: more details].
+Parts of a document can be indented. $\ind{i}{x}$ indents $x$ by $i$ spaces (specifically, it
+inserts $i$ spaces after every newline in $x$.) $\flat{x}$, on the other hand, \emph{disallows}
+newlines: it produces an error $\err$ if it encounters a newline in $x$. This is only useful in
+conjunction with choices, described next.
 
-\subsection{Pretty Printing}
+A choice $\choice{x}{y}$ will print either $x$ or $y$. Choices are resolved \emph{greedily}, and
+only based on the current line. Specifically, $x$ is chosen iff it does not cause the current line
+to exceed the pretty printing width or choosing $y$ would result in an error.
+
+[TODO: move para?] This rule for resolving choices does limit how pretty documents can be. Certain
+ways of formatting can be either great or terrible, and you cannot tell which just by looking at
+their first line.  These must be avoided, lest someone runs into the terrible case. [FILL: examples,
+e.g. alignment].  However, this way of resolving choices also has a very strong advantage: it allows
+for partial pretty printing. [REF: more details].
+
+For example, this document:
+\begin{lstlisting}
+2 :>> (Text "Hello" :+ (Text " " :| Newline) :+ "world")
+\end{lstlisting}
+will either print on one line if the printing width is at least 11:
+\begin{lstlisting}
+Hello world
+\end{lstlisting}
+on on two lines otherwise:
+\begin{lstlisting}
+Hello
+  world
+\end{lstlisting}
+
+\subsection{Pretty Printing without Choices}
 
 Let's turn this informal definition into code. For the moment, we'll keep the implementation naive
-at the expense of efficiency (even to the extent of exponential runtime). We will later use it to
+at the expense of efficiency (even to the extent of exponential inefficiency). We will later use it to
 derive a more efficient implementation that provably behaves the same.
 
 First we need a data structure for the output of pretty printing, and some basic operations on it.
@@ -119,9 +133,13 @@ encountering $\err$:
 data Layout = LErr | Layout [String]
 \end{lstlisting}
 
-Layouts can be indented, flattened, or appended:
+Layouts can be displayed, flattened, indented, and appended:
 
 \begin{lstlisting}
+display :: Layout -> String
+display LErr = "Error!" -- convenient for testing
+display (Layout lines) = intercalate "\n" lines
+
 flatten :: Layout -> Layout
 flatten LErr = LErr
 flatten (Layout lines) =
@@ -145,23 +163,79 @@ append _ _ = LErr
 Pretty printing a document that contains no choices is completely straightforward:
 
 \begin{lstlisting}
--- Preliminary
-pp :: Int -> Doc -> Layout
-pp w Err = LErr
-pp w Empty = Layout [""]
-pp w (Text t) = Layout [t]
-pp w Newline = Layout ["", ""]
-pp w (Flat x) = flatten (pp w x)
-pp w (i :>> x) = indent (pp w x)
-pp w (x :+ y) = append (pp w x) (pp w y)
+-- Preliminary!
+pp :: Doc -> Layout
+pp Err = LErr
+pp Empty = Layout [""]
+pp (Text t) = Layout [t]
+pp Newline = Layout ["", ""]
+pp (Flat x) = flatten (pp x)
+pp (i :>> x) = indent (pp x)
+pp (x :+ y) = append (pp x) (pp y)
 \end{lstlisting}
 
 In fact, since we aren't making any choices, notice that we aren't even using the pretty printing
-width \texttt{w} yet (that is, the line width we would prefer not to exceed).
+width yet.
 
-To pretty print a document with choices, we must tell the program how to pick the "best" layout. As
-described above, it will be whichever layout does not exceed the maximum width \texttt{w} on the
-current line \texttt{n}:
+\subsection{Pretty Printing with Choices}
+
+Ideally, pretty printing would recursively walk the document and resolve any choices as it
+encountered them. However, this is not easy because at that point we have not printed what comes
+after the choice, which might effect how long the current line is. Instead, let's delay resolving
+any choices until we have processed the whole document. Thus \code{pp} will produce a decision tree
+of \code{Layout}s, with a branch for each \code{choice} and storing the line number at which the
+choice is to be made:
+
+\begin{lstlisting}
+data Layouts = Branch Int Layouts Layouts
+             | Leaf Layout
+\end{lstlisting}
+
+We need to extend our previous functions to handle \code{Layouts} as well:
+\begin{lstlisting}
+flatten' :: Layouts -> Layouts
+flatten' (Branch n x y) = Branch n (flatten' x) (flatten' y)
+flatten' (Leaf layout) = Leaf (flatten layout)
+
+indent' :: Int -> Layouts -> Layouts
+indent' i (Branch n x y) = Branch n (indent' i x) (indent' i y)
+indent' i (Leaf layout) = Leaf (indent i layout)
+
+append' :: Layouts -> Layouts -> Layouts
+append' (Branch n x y) z = Branch n (append' x z) (append' y z)
+append' (Leaf layout) (Branch n x y) =
+  Branch (n + numNewlines layout)
+         (append' (Leaf layout) x)
+         (append' (Leaf layout) y)
+append' (Leaf layout1) (Leaf layout2) = Leaf (append layout1 layout2)
+\end{lstlisting}
+This is mostly a pointwise extension (i.e., boilerplate), except that if \code{append'} is given two
+branches, see that it nests the right one into the left one rather than vice-versa. This represents
+a decision to resolve choices from left to right.
+
+The \code{pp} function is now trivial: it just calls the appropriate function:
+\begin{lstlisting}
+pp :: Doc -> Layouts
+pp Err = Leaf LErr
+pp Empty = Leaf (Layout [""])
+pp (Text t) = Leaf (Layout [t])
+pp Newline = Leaf (Layout ["", ""])
+pp (Flat x) = flatten' (pp x)
+pp (i :>> x) = indent' i (pp x)
+pp (x :+ y) = append' (pp x) (pp y)
+pp (x :| y) = Branch 0 (pp x) (pp y)
+\end{lstlisting}
+
+This produces a decision tree. We can resolve the decisions in the tree to get a single
+\code{Layout} by simple recursion:
+\begin{lstlisting}
+resolve :: Int -> Layouts -> Layout
+resolve _ (Leaf layout) = layout
+resolve w (Branch n x y) =
+  pick w n (resolve w x) (resolve w y)
+\end{lstlisting}
+where \code{pick} picks the "best" of two layouts. It avoids errors if possible, and otherwise picks
+whichever layout does not exceed the maximum width \code{w} on the current line \code{n}:
 \begin{lstlisting}
 pick :: Int -> Int -> Layout -> Layout -> Layout
 pick w _ LErr LErr = LErr
@@ -173,67 +247,46 @@ pick w n (Layout lines1) (Layout lines2) =
   else Layout lines2
 \end{lstlisting}
 
-The \texttt{pp} function needs two modifications to be able to handle choices. First, we must keep
-track of the current line number so that a choice can be resolved based on the current line.
-
-Second, we pass down a continuation: a function of type \texttt{Layout -> Layout} which pretty
-prints the rest of the document surrounding the current part of it. This continuation is necessary
-to answer the question "what would happen if we picked the first option in this choice?" For
-example, say we are currently printing the \texttt{,} within the larger document:
-
+A user-facing interface should obtain a decision tree, resolve the decisions, and display the
+resulting layout:
 \begin{lstlisting}
-Text "Hello" :+ Text "," :+ Text "World"
+pretty :: Int -> Doc -> String
+pretty w x = display (resolve w (pp x))
 \end{lstlisting}
 
-Then the continuation \texttt{k} would essentially be the function \texttt{$\backslash$s -> "Hello"
-++ s ++ "World"}, except that it would act on \texttt{Layout}s instead of strings.
+This is a complete and correct implementation. However, it is exponential time, as it tries
+resolving each choice both ways.
 
-With these modifications, we can finish the naive pretty printing function. It takes the maximum
-line width \texttt{w}, document to be printed, current line number \texttt{n}, and continuation
-\texttt{k}, and produces a \texttt{Layout}:
-
-\begin{lstlisting}
-pp :: Int -> Doc -> Int -> (Layout -> Layout) -> Layout
-pp w Err _ k = k LErr
-pp w Empty _ k = k (Layout [""])
-pp w (Text t) _ k = k (Layout [t])
-pp w Newline _ k = k (Layout ["", ""])
-pp w (i :>> x) n k = pp w x n (k . indent i)
-pp w (Flat x) n k = pp w x n (k . flatten)
-pp w (x :| y) n k = pick w n (pp w x n k) (pp w y n k)
-pp w (x :+ y) n k = pp w x n (\x ->
-  pp w y (n + numNewlines x) (\y -> k (append x y)))
-\end{lstlisting}
-
-This is a complete and correct implementation. Though it is exponential time, as it tries resolving
-each choice both ways. This makes it sound useless, but it is not! We can use it to prove algebraic
-laws about equivalence between `Doc`s, and then use these laws to derive a more efficient
-implementation that (provably) behaves the same.
+This makes it sound useless, but it is not! We can use it to prove algebraic laws about equivalence
+between \code{Doc}s, and then use these laws to derive a more efficient implementation that (provably)
+behaves the same.
 
 \section{Laws of Pretty Printing}
 
-This section lists equivalences between \texttt{Doc}s. An equivalence \texttt{x = y} between docs
-means:
-\[ \forall w, n, k.\; \texttt{pp w x n k = pp w y n k} \]
-All of the equivalences in this section can be proven from the implementation of \texttt{pp} using
-basic equational reasoning. The proofs are given in [TODO: the appendix, but for now proofs.md].
+This section lists equivalences between \code{Doc}s. An equivalence \code{x = y} between docs
+typically means that \code{pp x = pp y}. However, for a couple of the laws [FILL] it instead means
+that \code{x} and \code{y} are contextually equivalent in the expression \code{resolve w (pp C[x])},
+for all widths \code{w} and contexts \code{C}.
+
+All of the equivalences in this section can be proven from the implementation of \code{naivePP} using
+basic equational reasoning. The proofs are given in [TODO: the appendix, but for now proofs\_tree.md].
 
 \paragraph{Concatenation.}
 The concatenation of two documents just prints them one after another (with no space or newline in
 between). Thus concatenation with an empty document has no effect, and concatenation is associative.
 
-\begin{gather*}
-  \cat{\nil}{x} = \cat{x}{\nil} = x \tag{concat-unit} \\
-  \cat{(\cat{x}{y})}{z} = \cat{x}{(\cat{y}{z})} \tag{concat-assoc}
-\end{gather*}
+\begin{align*}
+  &\cat{\nil}{x} = \cat{x}{\nil} = x \tag{concat-unit} \\
+  &\cat{(\cat{x}{y})}{z} = \cat{x}{(\cat{y}{z})} \tag{concat-assoc}
+\end{align*}
 
 \paragraph{Text.}
 $\txt{t}$ is rendered exactly as is. Thus the empty string is the same as the empty document, and
 the concatenation of two texts just concatenates their strings.
 
 \begin{align*}
-  \texttt{""} &= \nil \tag{text-empty} \\
-  \cat{\txt{t1}}{\txt{t2}} &= (\txt{t1} \doubleplus \txt{t2}) \tag{text-concat}
+  \code{""} &= \nil \tag{text-empty} \\
+  \cat{\txt{t1}}{\txt{t2}} &= \txt{(t1 ++ t2)} \tag{text-concat}
 \end{align*}
 
 \paragraph{Indentation and Flattening.}
@@ -269,13 +322,16 @@ thus also empty documents) unchanged, but behave differently on newlines:
 \end{align*}
 
 Also, indentation respects addition: indenting by zero spaces is the same as not indenting at all,
-and indenting by $i$ spaces and then $j$ spaces is the same as indenting by $i+j$ spaces.
+and indenting by $i$ spaces and then $j$ spaces is the same as indenting by $i+j$ spaces. Along the
+same lines, flattening twice has no effect.
 
 \begin{align*}
   \ind{0}{x} &= x
     \tag{indent-identity} \\
   \ind{j}{(\ind{i}{x})} &= \ind{(i+j)}{x}
-    \tag{indent-compose}
+    \tag{indent-compose} \\
+  \flat{(\flat{x})} &= \flat{x}
+    \tag{flat-compose}
 \end{align*}
 
 \paragraph{Errors.}
@@ -320,12 +376,21 @@ first lines of $\cat{\nl}{y}$ and $\cat{\nl}{z}$, which are both empty! Thus it 
 $\cat{\nl}{y}$, regardless of $y$ and $z$.  As a result, the concatenation of a newline and a choice
 cannot be simplified.
 
-\section{Normal Form}
+\section{Efficient Implementation}
+
+We can use these laws to derive an efficient implementation. The first step is to see that they are
+sufficient to convert any document into a normal form, as follows:
+
+\begin{itemize}
+\item Eliminate \code{Nil} by converting it into text, using the ``text-empty" law.
+\item Lower each \code{Flat} and \code{(:>>)} (indent) to the leaves of the document. If it hits a
+newline, \code{Flat} will produce an \code{Err}, and \code{(:>>)} will insert spaces after the
+newline. This uses all of the ``indent" and ``flat" laws except for indent-identity.
+\item Raise all \code{Err}s up towards the root of the document. They will either eliminate an
+option from a choice via the ``error-choice" law, or cause the entire document to become an
+\code{Err}. This uses the four ``error" laws.
+\end{itemize}
 
 [FILL]
-
-\section{Implementation}
-
-We can use these laws to derive an efficient implementation.
 
 \end{document}
