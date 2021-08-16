@@ -9,7 +9,7 @@ mod styles;
 
 use partial_pretty_printer::{
     notation_constructors::lit, pretty_print, pretty_print_to_string,
-    /*testing::oracular_pretty_print,*/ Notation, PrettyDoc, Style, Width,
+    testing::oracular_pretty_print, Notation, PrettyDoc, Style, Width,
 };
 
 #[allow(unused)]
@@ -44,13 +44,11 @@ impl<'a> PrettyDoc<'a> for &'a SimpleDoc {
     }
 }
 
-fn compare_lines(message: &str, actual: &[String], expected: &[&str]) {
+fn compare_lines(message: &str, expected: String, actual: String) {
     if actual != expected {
         eprintln!(
             "{}\nEXPECTED:\n{}\nACTUAL:\n{}\n=========",
-            message,
-            expected.join("\n"),
-            actual.join("\n"),
+            message, expected, actual,
         );
         assert_eq!(actual, expected);
     }
@@ -111,27 +109,29 @@ pub fn print_region<'d, D: PrettyDoc<'d>>(
 #[allow(unused)]
 #[track_caller]
 pub fn assert_pp<'d, D: PrettyDoc<'d>>(doc: D, width: Width, expected_lines: &[&str]) {
-    /*
-    let oracle_lines = oracular_pretty_print(doc, width);
+    let oracle_result = oracular_pretty_print(doc, width);
     compare_lines(
-        "ORACLE DISAGREES WITH TEST CASE; THE TEST CASE IS WRONG",
-        expected_lines,
-        &oracle_lines,
+        "ORACLE DISAGREES WITH TEST CASE, SO THE TEST CASE MUST BE WRONG",
+        oracle_result,
+        expected_lines.join("\n"),
     );
-    */
     let lines = pretty_print_to_string(doc, width)
         .split('\n')
         .map(|s| s.to_owned())
         .collect::<Vec<_>>();
-    compare_lines("IN PRETTY PRINTING", &lines, expected_lines);
+    compare_lines(
+        "IN PRETTY PRINTING",
+        expected_lines.join("\n"),
+        lines.join("\n"),
+    );
     for path in all_paths(doc) {
         let (lines_above, mut lines_below) = print_above_and_below(doc, width, &path);
         let mut lines = lines_above;
         lines.append(&mut lines_below);
         compare_lines(
             &format!("IN PRETTY PRINTING AT PATH {:?}", path),
-            &lines,
-            expected_lines,
+            expected_lines.join("\n"),
+            lines.join("\n"),
         );
     }
 }
@@ -148,13 +148,13 @@ pub fn assert_pp_seek<'d, D: PrettyDoc<'d>>(
     let (lines_above, lines_below) = print_above_and_below(doc, width, path);
     compare_lines(
         &format!("IN DOWNWARD PRINTING AT PATH {:?}", path),
-        &lines_below,
-        expected_lines_below,
+        expected_lines_below.join("\n"),
+        lines_below.join("\n"),
     );
     compare_lines(
         &format!("IN UPWARD PRINTING AT PATH {:?}", path),
-        &lines_above,
-        expected_lines_above,
+        expected_lines_above.join("\n"),
+        lines_above.join("\n"),
     );
 }
 
@@ -170,7 +170,7 @@ pub fn assert_pp_region<'d, D: PrettyDoc<'d>>(
     let lines = print_region(doc, width, path, rows);
     compare_lines(
         &format!("IN PRINTING {} ROWS AT PATH {:?}", rows, path),
-        &lines,
-        expected_lines,
+        expected_lines.join("\n"),
+        lines.join("\n"),
     );
 }

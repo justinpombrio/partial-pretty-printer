@@ -10,12 +10,15 @@ pub trait PrettyDoc<'d>: Copy {
     /// The node's notation.
     fn notation(self) -> &'d Notation;
 
-    /// Get this node's number of children, or `None` if it contains text instead.
+    /// Get this node's number of children, or `None` if it contains text instead. `Some(0)` means
+    /// that this node contains no children, and no text.
     fn num_children(self) -> Option<usize>;
 
-    /// Get this node's text, or panic.
+    /// Get this node's text, or panic. The pretty printer will only call this method if
+    /// `num_children()` returns `None`. It is safe to panic otherwise.
     fn unwrap_text(self) -> &'d str;
 
-    /// Get this node's i'th child, or panic.
+    /// Get this node's i'th child, or panic. The pretty printer will only call this method if
+    /// `num_children()` returns `Some(n)` for `n > i`. It is safe to panic otherwise.
     fn unwrap_child(self, i: usize) -> Self;
 }

@@ -26,14 +26,14 @@
 //! In order to pretty print a document, it must implement the [`PrettyDoc`] trait:
 //!
 //! ```ignore
-//! pub trait PrettyDoc: Sized {
+//! pub trait PrettyDoc<'d>: Copy {
 //!     type Id: Eq + Copy;
 //!
-//!     fn id(&self) -> Self::Id;
-//!     fn notation(&self) -> &Notation;
-//!     fn num_children(&self) -> Option<usize>;
-//!     fn unwrap_text(&self) -> &str;
-//!     fn unwrap_child(&self, i: usize) -> Self;
+//!     fn id(self) -> Self::Id;
+//!     fn notation(self) -> &'d Notation;
+//!     fn num_children(self) -> Option<usize>;
+//!     fn unwrap_text(self) -> &'d str;
+//!     fn unwrap_child(self, i: usize) -> Self;
 //! }
 //! ```
 //!
@@ -124,6 +124,10 @@ pub use geometry::{Col, Height, Line, Pos, Size, Width};
 pub use notation::{Notation, RepeatInner};
 pub use pretty_printing::{pretty_print, pretty_print_to_string, LineContents, PrettyDoc};
 pub use style::{Color, ShadedStyle, Style};
+
+pub mod testing {
+    pub use super::pretty_printing::oracular_pretty_print;
+}
 
 pub mod pane {
     //! Print to multiple rectangular sub-panes of a window.
