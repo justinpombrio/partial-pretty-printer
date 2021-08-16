@@ -1,8 +1,4 @@
-#![feature(iterator_fold_self)]
-
-mod common;
-
-use common::SimpleDoc;
+use super::SimpleDoc;
 use partial_pretty_printer::{
     examples::json::{json_list, json_number, Json},
     notation_constructors::lit,
@@ -226,7 +222,7 @@ fn test_pane_styles() {
             },
         ),
     ];
-    let note = words.into_iter().fold_first(|n1, n2| n1 + n2).unwrap();
+    let note = words.into_iter().reduce(|n1, n2| n1 + n2).unwrap();
     pane_test(
         &SimpleDoc(note),
         vec![],

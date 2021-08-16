@@ -1,6 +1,15 @@
+mod basics;
+mod flow_wrap;
+mod iter_chain;
+mod json;
+mod let_list;
+mod panes;
+mod ruby_loop;
+mod styles;
+
 use partial_pretty_printer::{
-    notation_constructors::lit, pretty_print, pretty_print_to_string, Notation, PrettyDoc, Style,
-    Width,
+    notation_constructors::lit, pretty_print, pretty_print_to_string,
+    /*testing::oracular_pretty_print,*/ Notation, PrettyDoc, Style, Width,
 };
 
 #[allow(unused)]
@@ -102,6 +111,14 @@ pub fn print_region<'d, D: PrettyDoc<'d>>(
 #[allow(unused)]
 #[track_caller]
 pub fn assert_pp<'d, D: PrettyDoc<'d>>(doc: D, width: Width, expected_lines: &[&str]) {
+    /*
+    let oracle_lines = oracular_pretty_print(doc, width);
+    compare_lines(
+        "ORACLE DISAGREES WITH TEST CASE; THE TEST CASE IS WRONG",
+        expected_lines,
+        &oracle_lines,
+    );
+    */
     let lines = pretty_print_to_string(doc, width)
         .split('\n')
         .map(|s| s.to_owned())

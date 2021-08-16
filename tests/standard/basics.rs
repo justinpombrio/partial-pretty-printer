@@ -1,7 +1,8 @@
-mod common;
-
-use common::{all_paths, assert_pp, punct, SimpleDoc};
-use partial_pretty_printer::{notation_constructors::flat, Notation};
+use super::{all_paths, assert_pp, punct, SimpleDoc};
+use partial_pretty_printer::{
+    notation_constructors::{flat, nl},
+    Notation,
+};
 
 #[test]
 fn basics_empty() {
@@ -71,4 +72,16 @@ fn test_all_paths_fn() {
             vec![2, 1]
         ]
     );
+}
+
+#[test]
+fn hidden_error() {
+    let notation = punct("x") ^ flat(nl()) | punct("ok");
+    assert_pp(&SimpleDoc(notation), 3, &["ok"]);
+}
+
+#[test]
+fn tricky_suffix() {
+    let notation = (punct("a") | punct("bb")) + ((punct("x") + nl() + flat(nl())) | punct("yy"));
+    assert_pp(&SimpleDoc(notation), 3, &["ayy"]);
 }

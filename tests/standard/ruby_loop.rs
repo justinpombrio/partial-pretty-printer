@@ -1,6 +1,4 @@
-mod common;
-
-use common::{assert_pp, punct};
+use super::{assert_pp, punct};
 use once_cell::sync::Lazy;
 use partial_pretty_printer::notation_constructors::{child, flat, text};
 use partial_pretty_printer::{Notation, PrettyDoc, Style};

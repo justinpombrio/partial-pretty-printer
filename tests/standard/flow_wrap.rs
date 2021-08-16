@@ -1,8 +1,4 @@
-#![feature(box_into_boxed_slice)]
-
-mod common;
-
-use common::{assert_pp, assert_pp_seek, punct};
+use super::{assert_pp, assert_pp_seek, punct};
 use once_cell::sync::Lazy;
 use partial_pretty_printer::notation_constructors::{
     child, left, nl, repeat, right, surrounded, text,
