@@ -5,8 +5,6 @@ use crate::infra::span;
 use crate::style::{Shade, Style};
 use std::iter::Iterator;
 
-// TODO: "hl" -> "shade"
-
 /// Pretty print a document, focused at the node found by traversing `path` from the root.
 ///
 /// `width` is the desired line width. The algorithm will attempt to, but is not guaranteed to,
@@ -65,14 +63,12 @@ impl<'d> ToString for LineContents<'d> {
         span!("LineContents::to_string");
 
         let mut string = format!("{:spaces$}", "", spaces = self.spaces.0 as usize);
-        for (text, _style, _hl) in &self.contents {
+        for (text, _style, _shade) in &self.contents {
             string.push_str(text);
         }
         string
     }
 }
-
-////////////////////////////////////////
 
 /// Can seek to an arbitrary position within the document, while resolving as few choices as
 /// possible.
@@ -106,15 +102,15 @@ impl<'d, D: PrettyDoc<'d>> Seeker<'d, D> {
         }
 
         // Walk backward to the nearest Newline.
-        while let Some((indent, hl, notation)) = self.prev.pop() {
+        while let Some((indent, shade, notation)) = self.prev.pop() {
             match notation.case() {
                 Empty | Indent(_, _) | Flat(_) | Concat(_, _) | Choice(_, _) | Child(_, _) => {
                     unreachable!()
                 }
-                Literal(_) => self.next.push((indent, hl, notation)),
-                Text(_, _) => self.next.push((indent, hl, notation)),
+                Literal(_) => self.next.push((indent, shade, notation)),
+                Text(_, _) => self.next.push((indent, shade, notation)),
                 Newline => {
-                    self.next.push((indent, hl, notation));
+                    self.next.push((indent, shade, notation));
                     break;
                 }
             }
@@ -138,47 +134,47 @@ impl<'d, D: PrettyDoc<'d>> Seeker<'d, D> {
         span!("seek_child");
 
         let parent_doc_id = self.next.last().unwrap().2.doc_id();
-        'find_child: loop {
+        loop {
             // 1. Expand forward to the nearest `Choice` or `Child` belonging to `parent_doc`.
             //    (NOTE: more precise would be looking for Child(child_index) or a Choice
             //     containing it, but you can't tell right now what children a choice might
             //     contain.)
-            while let Some((indent, hl, notation)) = self.next.pop() {
+            while let Some((indent, shade, notation)) = self.next.pop() {
                 match notation.case() {
                     Empty => (),
-                    Literal(_) => self.prev.push((indent, hl, notation)),
-                    Newline => self.prev.push((indent, hl, notation)),
-                    Text(_, _) => self.prev.push((indent, hl, notation)),
-                    Indent(j, note) => self.next.push((indent.map(|i| i + j), hl, note)),
-                    Flat(note) => self.next.push((None, hl, note)),
+                    Literal(_) => self.prev.push((indent, shade, notation)),
+                    Newline => self.prev.push((indent, shade, notation)),
+                    Text(_, _) => self.prev.push((indent, shade, notation)),
+                    Indent(j, note) => self.next.push((indent.map(|i| i + j), shade, note)),
+                    Flat(note) => self.next.push((None, shade, note)),
                     Concat(left, right) => {
-                        self.next.push((indent, hl, right));
-                        self.next.push((indent, hl, left));
+                        self.next.push((indent, shade, right));
+                        self.next.push((indent, shade, left));
                     }
                     Choice(_, _) if notation.doc_id() == parent_doc_id => {
-                        self.next.push((indent, hl, notation));
+                        self.next.push((indent, shade, notation));
                         break;
                     }
-                    Choice(_, _) => self.prev.push((indent, hl, notation)),
+                    Choice(_, _) => self.prev.push((indent, shade, notation)),
                     Child(i, _) if notation.doc_id() == parent_doc_id && i == child_index => {
-                        self.next.push((indent, hl, notation));
+                        self.next.push((indent, shade, notation));
                         break;
                     }
-                    Child(_, _) => self.prev.push((indent, hl, notation)),
+                    Child(_, _) => self.prev.push((indent, shade, notation)),
                 }
             }
 
             // 2. Walk backward to the nearest Newline (or beginning of the doc).
             let mut prefix_len = 0;
-            while let Some((indent, hl, notation)) = self.prev.pop() {
+            while let Some((indent, shade, notation)) = self.prev.pop() {
                 match notation.case() {
                     Empty | Indent(_, _) | Flat(_) | Concat(_, _) => unreachable!(),
                     Literal(_) | Text(_, _) | Choice(_, _) | Child(_, _) => {
-                        self.next.push((indent, hl, notation))
+                        self.next.push((indent, shade, notation))
                     }
                     Newline => {
                         prefix_len = indent.unwrap();
-                        self.prev.push((indent, hl, notation));
+                        self.prev.push((indent, shade, notation));
                         break;
                     }
                 }
@@ -187,35 +183,37 @@ impl<'d, D: PrettyDoc<'d>> Seeker<'d, D> {
             // 3. Walk forward to the nearest Child or Choice, and resolve it. Go back to 1.
             //    If you hit `Child(i)` belonging to `parent_doc`, success.
             //    If you hit end of doc, panic (every child must be present).
-            while let Some((indent, hl, notation)) = self.next.pop() {
+            while let Some((indent, shade, notation)) = self.next.pop() {
                 match notation.case() {
                     Empty | Indent(_, _) | Flat(_) | Concat(_, _) | Newline => unreachable!(),
                     Literal(lit) => {
                         prefix_len += lit.len();
-                        self.prev.push((indent, hl, notation))
+                        self.prev.push((indent, shade, notation))
                     }
                     Text(text, _style) => {
                         prefix_len += text.chars().count() as Width;
-                        self.prev.push((indent, hl, notation));
+                        self.prev.push((indent, shade, notation));
                     }
                     Child(i, child) if notation.doc_id() == parent_doc_id && i == child_index => {
                         // Found!
-                        self.next.push((indent, hl, child));
+                        self.next.push((indent, shade, child));
                         return;
                     }
                     Child(_, child) => {
-                        self.next.push((indent, hl, child));
-                        continue 'find_child;
+                        self.next.push((indent, shade, child));
+                        break;
                     }
                     Choice(opt1, opt2) => {
                         let choice = choose(self.width, indent, prefix_len, opt1, opt2, &self.next);
-                        self.next.push((indent, hl, choice));
-                        continue 'find_child;
+                        self.next.push((indent, shade, choice));
+                        break;
                     }
                 }
             }
 
-            panic!("Missing child ({})", child_index);
+            if self.next.is_empty() {
+                panic!("Missing child ({})", child_index);
+            }
         }
     }
 
@@ -265,49 +263,49 @@ impl<'d, D: PrettyDoc<'d>> DownwardPrinter<'d, D> {
         // We should be at the start of a line (in which case we look a the Newline's indentation
         // level to see how many spaces are at the start of this line), or at the very end of the
         // document (in which case our iteration is done).
-        let (spaces, spaces_hl) = if let Some((indent, hl, notation)) = self.next.pop() {
+        let (spaces, spaces_shade) = if let Some((indent, shade, notation)) = self.next.pop() {
             assert!(matches!(notation.case(), Newline));
-            (indent.unwrap(), hl)
+            (indent.unwrap(), shade)
         } else {
             return None;
         };
 
         let mut contents = vec![];
         let mut prefix_len = spaces;
-        while let Some((indent, hl, notation)) = self.next.pop() {
+        while let Some((indent, shade, notation)) = self.next.pop() {
             match notation.case() {
                 Empty => (),
                 Literal(lit) => {
-                    contents.push((lit.str(), lit.style(), hl));
+                    contents.push((lit.str(), lit.style(), shade));
                     prefix_len += lit.len();
                 }
                 Text(text, style) => {
-                    contents.push((text, style, hl));
+                    contents.push((text, style, shade));
                     prefix_len += text_len(text);
                 }
                 Newline => {
-                    self.next.push((indent, hl, notation));
+                    self.next.push((indent, shade, notation));
                     return Some(LineContents {
-                        spaces: (spaces, spaces_hl),
+                        spaces: (spaces, spaces_shade),
                         contents,
                     });
                 }
-                Indent(j, note) => self.next.push((indent.map(|i| i + j), hl, note)),
-                Flat(note) => self.next.push((None, hl, note)),
+                Indent(j, note) => self.next.push((indent.map(|i| i + j), shade, note)),
+                Flat(note) => self.next.push((None, shade, note)),
                 Concat(left, right) => {
-                    self.next.push((indent, hl, right));
-                    self.next.push((indent, hl, left));
+                    self.next.push((indent, shade, right));
+                    self.next.push((indent, shade, left));
                 }
                 Choice(opt1, opt2) => {
                     let choice = choose(self.width, indent, prefix_len, opt1, opt2, &self.next);
-                    self.next.push((indent, hl, choice));
+                    self.next.push((indent, shade, choice));
                 }
-                Child(_, child_note) => self.next.push((indent, hl, child_note)),
+                Child(_, child_note) => self.next.push((indent, shade, child_note)),
             }
         }
 
         Some(LineContents {
-            spaces: (spaces, spaces_hl),
+            spaces: (spaces, spaces_shade),
             contents,
         })
     }
@@ -339,8 +337,8 @@ impl<'d, D: PrettyDoc<'d>> UpwardPrinter<'d, D> {
         // 1. Go to the start of the "last line", and remember its indentation. However, the "last
         //    line" might not be fully expanded, and could contain hidden newlines in it.
         self.seek_start_of_line();
-        let mut prefix_len = if let Some((indent, hl, notation)) = self.next.pop() {
-            self.prev.push((indent, hl, notation));
+        let mut prefix_len = if let Some((indent, shade, notation)) = self.next.pop() {
+            self.prev.push((indent, shade, notation));
             indent.unwrap()
         } else {
             return None;
@@ -349,25 +347,25 @@ impl<'d, D: PrettyDoc<'d>> UpwardPrinter<'d, D> {
         // 2. Start expanding the "last line". If we encounter a choice, resolve it, but then seek
         //    back to the "start of the last line" again, as where that is might have changed if
         //    the choice contained a newline.
-        while let Some((indent, hl, notation)) = self.next.pop() {
+        while let Some((indent, shade, notation)) = self.next.pop() {
             match notation.case() {
                 Literal(lit) => {
                     prefix_len += lit.len();
-                    self.prev.push((indent, hl, notation));
+                    self.prev.push((indent, shade, notation));
                 }
                 Text(text, _style) => {
                     prefix_len += text_len(text);
-                    self.prev.push((indent, hl, notation));
+                    self.prev.push((indent, shade, notation));
                 }
                 Choice(opt1, opt2) => {
                     let choice = choose(self.width, indent, prefix_len, opt1, opt2, &self.next);
-                    self.prev.push((indent, hl, choice));
+                    self.prev.push((indent, shade, choice));
 
                     // Reset everything. This is equivalent to a recursive call.
                     self.seek_end();
                     self.seek_start_of_line();
-                    prefix_len = if let Some((indent, _hl, notation)) = self.next.pop() {
-                        self.prev.push((indent, hl, notation));
+                    prefix_len = if let Some((indent, _shade, notation)) = self.next.pop() {
+                        self.prev.push((indent, shade, notation));
                         indent.unwrap()
                     } else {
                         return None;
@@ -380,19 +378,19 @@ impl<'d, D: PrettyDoc<'d>> UpwardPrinter<'d, D> {
         }
 
         self.seek_start_of_line();
-        let (indent, hl, _notation) = self.next.pop().unwrap();
-        let (spaces, spaces_hl) = (indent.unwrap(), hl);
+        let (indent, shade, _notation) = self.next.pop().unwrap();
+        let (spaces, spaces_shade) = (indent.unwrap(), shade);
 
         let mut contents = vec![];
-        while let Some((_indent, hl, notation)) = self.next.pop() {
+        while let Some((_indent, shade, notation)) = self.next.pop() {
             match notation.case() {
-                NotationCase::Literal(lit) => contents.push((lit.str(), lit.style(), hl)),
-                NotationCase::Text(text, style) => contents.push((text, style, hl)),
+                NotationCase::Literal(lit) => contents.push((lit.str(), lit.style(), shade)),
+                NotationCase::Text(text, style) => contents.push((text, style, shade)),
                 _ => panic!("display_line: expected only literals and text"),
             }
         }
         Some(LineContents {
-            spaces: (spaces, spaces_hl),
+            spaces: (spaces, spaces_shade),
             contents,
         })
     }
@@ -400,8 +398,8 @@ impl<'d, D: PrettyDoc<'d>> UpwardPrinter<'d, D> {
     fn seek_end(&mut self) {
         span!("seek_end");
 
-        while let Some((indent, hl, notation)) = self.next.pop() {
-            self.prev.push((indent, hl, notation));
+        while let Some((indent, shade, notation)) = self.next.pop() {
+            self.prev.push((indent, shade, notation));
         }
     }
 
@@ -413,23 +411,23 @@ impl<'d, D: PrettyDoc<'d>> UpwardPrinter<'d, D> {
 
         span!("seek_start_of_line");
 
-        while let Some((indent, hl, notation)) = self.prev.pop() {
+        while let Some((indent, shade, notation)) = self.prev.pop() {
             match notation.case() {
                 Empty => (),
-                Text(_, _) => self.next.push((indent, hl, notation)),
-                Literal(_) => self.next.push((indent, hl, notation)),
+                Text(_, _) => self.next.push((indent, shade, notation)),
+                Literal(_) => self.next.push((indent, shade, notation)),
                 Newline => {
-                    self.next.push((indent, hl, notation));
+                    self.next.push((indent, shade, notation));
                     return;
                 }
-                Indent(j, note) => self.prev.push((indent.map(|i| i + j), hl, note)),
-                Flat(note) => self.prev.push((None, hl, note)),
+                Indent(j, note) => self.prev.push((indent.map(|i| i + j), shade, note)),
+                Flat(note) => self.prev.push((None, shade, note)),
                 Concat(left, right) => {
-                    self.prev.push((indent, hl, left));
-                    self.prev.push((indent, hl, right));
+                    self.prev.push((indent, shade, left));
+                    self.prev.push((indent, shade, right));
                 }
-                Choice(_, _) => self.next.push((indent, hl, notation)),
-                Child(_, note) => self.prev.push((indent, hl, note)),
+                Choice(_, _) => self.next.push((indent, shade, notation)),
+                Child(_, note) => self.prev.push((indent, shade, note)),
             }
         }
     }
@@ -446,8 +444,6 @@ impl<'d, D: PrettyDoc<'d>> UpwardPrinter<'d, D> {
         println!();
     }
 }
-
-/////////////////////////////////////////////////////////////////////////////////////
 
 /// Determine which of the two options of the choice to select. Pick the first option if it fits,
 /// or if the second option is invalid.
@@ -516,7 +512,7 @@ fn fits<'d, D: PrettyDoc<'d>>(width: Width, chunks: Vec<(bool, NotationRef<'d, D
             Choice(opt1, opt2) => {
                 // opt2 must always be strictly smaller!
                 // TODO: As an optimization, pre-compute whether opt2 has an unconditional newline
-                if is_valid_entry_point(flat, opt2) {
+                if is_valid(flat, opt2) {
                     chunks.push((flat, opt2));
                 } else {
                     chunks.push((flat, opt1));
@@ -527,25 +523,25 @@ fn fits<'d, D: PrettyDoc<'d>>(width: Width, chunks: Vec<(bool, NotationRef<'d, D
     true
 }
 
-fn is_valid_entry_point<'d, D: PrettyDoc<'d>>(flat: bool, notation: NotationRef<'d, D>) -> bool {
-    // There are a _lot_ of calls to `is_valid`, and the profiler, though extremely fast, could
-    // slow it down. So only profile the initial call.
+// A wrapper around the recursive function, so that the profiler doesn't get invoked on each
+// recursion.
+fn is_valid<'d, D: PrettyDoc<'d>>(flat: bool, notation: NotationRef<'d, D>) -> bool {
     span!("is_valid");
-    is_valid(flat, notation)
+    is_valid_rec(flat, notation)
 }
 
-fn is_valid<'d, D: PrettyDoc<'d>>(flat: bool, notation: NotationRef<'d, D>) -> bool {
+fn is_valid_rec<'d, D: PrettyDoc<'d>>(flat: bool, notation: NotationRef<'d, D>) -> bool {
     use NotationCase::*;
 
     match notation.case() {
         Empty | Literal(_) | Text(_, _) => true,
         Newline => !flat,
-        Flat(note) => is_valid(true, note),
-        Indent(_, note) => is_valid(flat, note),
+        Flat(note) => is_valid_rec(true, note),
+        Indent(_, note) => is_valid_rec(flat, note),
         // TODO: As an optimization, pre-compute whether opt2 has an unconditional newline.
-        Choice(opt1, opt2) => is_valid(flat, opt1) || is_valid(flat, opt2),
-        Concat(note1, note2) => is_valid(flat, note1) && is_valid(flat, note2),
-        Child(_, child_note) => !flat || is_valid(flat, child_note),
+        Choice(opt1, opt2) => is_valid_rec(flat, opt1) || is_valid_rec(flat, opt2),
+        Concat(note1, note2) => is_valid_rec(flat, note1) && is_valid_rec(flat, note2),
+        Child(_, child_note) => !flat || is_valid_rec(flat, child_note),
     }
 }
 
