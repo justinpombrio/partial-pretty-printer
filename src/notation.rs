@@ -104,10 +104,10 @@ impl fmt::Display for Notation {
             Empty => write!(f, "ε"),
             Newline => write!(f, "↵"),
             Text(_) => write!(f, "TEXT"),
-            Literal(lit) => write!(f, "{}", lit.string),
+            Literal(lit) => write!(f, "'{}'", lit.string),
             Flat(note) => write!(f, "Flat({})", note),
-            Indent(i, note) => write!(f, "⇒{}({})", i, note),
-            Concat(left, right) => write!(f, "({} + {})", left, right),
+            Indent(i, note) => write!(f, "{}⇒({})", i, note),
+            Concat(left, right) => write!(f, "{} + {}", left, right),
             Choice(opt1, opt2) => write!(f, "({} | {})", opt1, opt2),
             IfEmptyText(opt1, opt2) => write!(f, "IfEmptyText({} | {})", opt1, opt2),
             Child(i) => write!(f, "${}", i),
@@ -118,7 +118,7 @@ impl fmt::Display for Notation {
             ),
             Left => write!(f, "$Left"),
             Right => write!(f, "$Right"),
-            Surrounded => write!(f, "$Surrounded"),
+            Surrounded => write!(f, "$Surr"),
         }
     }
 }

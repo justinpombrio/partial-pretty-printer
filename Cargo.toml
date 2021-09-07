@@ -9,6 +9,14 @@ edition = "2018"
 [dependencies]
 once_cell = "*"
 thiserror = "*"
+[dependencies.no-nonsense-flamegraphs]
+    version = "0.2.*"
+    git = "https://github.com/justinpombrio/no-nonsense-flamegraphs"
+    optional = true
 
 [profile.release]
 debug = true
+
+[features]
+default = []
+profile = ["no-nonsense-flamegraphs"]

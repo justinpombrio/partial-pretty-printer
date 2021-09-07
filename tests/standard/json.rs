@@ -280,4 +280,12 @@ fn json_tree_bench(bencher: &mut Bencher) {
     bencher.iter(|| {
         print_region(&big_tree, 120, &[3, 1, 15, 3, 1, 10], 80);
     });
+
+    #[cfg(feature = "profile")]
+    {
+        use no_nonsense_flamegraphs::span;
+
+        span!("Json bench test");
+        print_region(&big_tree, 120, &[3, 1, 15, 3, 1, 10], 80);
+    }
 }

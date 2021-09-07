@@ -1,6 +1,7 @@
 use super::notation_ref::{NotationCase, NotationRef};
 use super::pretty_doc::PrettyDoc;
 use crate::geometry::Width;
+use crate::infra::span;
 use crate::style::{Shade, Style};
 use std::iter::Iterator;
 
@@ -63,6 +64,8 @@ pub fn pretty_print<'d, D: PrettyDoc<'d>>(
     impl Iterator<Item = LineContents<'d>>,
     impl Iterator<Item = LineContents<'d>>,
 ) {
+    span!("Pretty Print");
+
     let notation = NotationRef::new(doc);
     let seeker = Seeker::new(notation, width);
     seeker.seek(path)
@@ -84,6 +87,8 @@ pub fn pretty_print_to_string<'d, D: PrettyDoc<'d>>(doc: D, width: Width) -> Str
 
 impl<'d> ToString for LineContents<'d> {
     fn to_string(&self) -> String {
+        span!("LineContents::to_string");
+
         let mut string = format!("{:spaces$}", "", spaces = self.spaces.0 as usize);
         for (text, _style, _hl) in &self.contents {
             string.push_str(text);
@@ -103,6 +108,8 @@ impl<'d, D: PrettyDoc<'d>> Seeker<'d, D> {
 
     fn seek(mut self, path: &[usize]) -> (UpwardPrinter<'d, D>, DownwardPrinter<'d, D>) {
         use NotationCase::*;
+
+        span!("seek");
 
         // Seek to the descendant given by `path`.
         // Highlight the descendency chain as we go.
@@ -149,6 +156,8 @@ impl<'d, D: PrettyDoc<'d>> Seeker<'d, D> {
 
     fn seek_child(&mut self, child_index: usize) {
         use NotationCase::*;
+
+        span!("seek_child");
 
         let parent_doc_id = self.next.last().unwrap().2.doc_id();
         'find_child: loop {
@@ -221,8 +230,8 @@ impl<'d, D: PrettyDoc<'d>> Seeker<'d, D> {
                         continue 'find_child;
                     }
                     Choice(opt1, opt2) => {
-                        let suffix_len = compute_suffix_len(&self.next);
-                        let choice = choose(self.width, indent, prefix_len, opt1, opt2, suffix_len);
+                        let choice =
+                            old_choose(self.width, indent, prefix_len, opt1, opt2, &self.next);
                         self.next.push((indent, hl, choice));
                         continue 'find_child;
                     }
@@ -267,6 +276,8 @@ impl<'d, D: PrettyDoc<'d>> DownwardPrinter<'d, D> {
     fn print_first_line(&mut self) -> Option<LineContents<'d>> {
         use NotationCase::*;
 
+        span!("print_first_line");
+
         if self.at_end {
             return None;
         }
@@ -299,8 +310,7 @@ impl<'d, D: PrettyDoc<'d>> DownwardPrinter<'d, D> {
                     self.next.push((indent, hl, left));
                 }
                 Choice(opt1, opt2) => {
-                    let suffix_len = compute_suffix_len(&self.next);
-                    let choice = choose(self.width, indent, prefix_len, opt1, opt2, suffix_len);
+                    let choice = old_choose(self.width, indent, prefix_len, opt1, opt2, &self.next);
                     self.next.push((indent, hl, choice));
                 }
                 Child(_, child_note) => self.next.push((indent, hl, child_note)),
@@ -327,6 +337,8 @@ impl<'d, D: PrettyDoc<'d>> UpwardPrinter<'d, D> {
     fn print_last_line(&mut self) -> Option<LineContents<'d>> {
         use NotationCase::*;
 
+        span!("print_last_line");
+
         if self.at_beginning {
             return None;
         }
@@ -348,8 +360,7 @@ impl<'d, D: PrettyDoc<'d>> UpwardPrinter<'d, D> {
                     self.prev.push((indent, hl, notation));
                 }
                 Choice(opt1, opt2) => {
-                    let suffix_len = compute_suffix_len(&self.next);
-                    let choice = choose(self.width, indent, prefix_len, opt1, opt2, suffix_len);
+                    let choice = old_choose(self.width, indent, prefix_len, opt1, opt2, &self.next);
                     self.prev.push((indent, hl, choice));
                     self.seek_end();
                     let newline_info = self.seek_start_of_last_line(false);
@@ -385,6 +396,8 @@ impl<'d, D: PrettyDoc<'d>> UpwardPrinter<'d, D> {
     }
 
     fn seek_end(&mut self) {
+        span!("seek_end");
+
         while let Some((indent, hl, notation)) = self.next.pop() {
             self.prev.push((indent, hl, notation));
         }
@@ -396,6 +409,8 @@ impl<'d, D: PrettyDoc<'d>> UpwardPrinter<'d, D> {
     // Maintains the invariant that `next` only ever contains `Literal` and `Choice` notations.
     fn seek_start_of_last_line(&mut self, delete_newline: bool) -> Option<(Width, Shade)> {
         use NotationCase::*;
+
+        span!("seek_start_of_last_line");
 
         assert!(self.next.is_empty());
         while let Some((indent, hl, notation)) = self.prev.pop() {
@@ -433,6 +448,119 @@ impl<'d, D: PrettyDoc<'d>> UpwardPrinter<'d, D> {
         }
         println!();
     }
+}
+
+/////////////////////////////////////////////////////////////////////////////////////
+
+/// Determine which of the two options of the choice to select. Pick the first option if it fits,
+/// or if the second option is invalid.
+fn choose<'d, D: PrettyDoc<'d>>(
+    width: Width,
+    indent: Option<Width>,
+    prefix_len: Width,
+    opt1: NotationRef<'d, D>,
+    opt2: NotationRef<'d, D>,
+    suffix: &[Chunk<'d, D>],
+) -> NotationRef<'d, D> {
+    span!("choose");
+
+    use std::iter;
+    let flat = indent.is_none();
+    let chunks = suffix
+        .iter()
+        .map(|(i, _, n)| (i.is_none(), *n))
+        .chain(iter::once((flat, opt1)))
+        .collect();
+    if fits(width.saturating_sub(prefix_len), chunks) && is_valid(flat, opt1)
+        || !is_valid(flat, opt2)
+    {
+        opt1
+    } else {
+        opt2
+    }
+}
+
+/// Determine whether the first line of the chunks fits within the `remaining` space.
+fn fits<'d, D: PrettyDoc<'d>>(
+    mut remaining: Width,
+    mut chunks: Vec<(bool, NotationRef<'d, D>)>,
+) -> bool {
+    use NotationCase::*;
+
+    span!("fits");
+
+    while let Some((flat, notation)) = chunks.pop() {
+        match notation.case() {
+            Empty => (),
+            Literal(lit) => {
+                let lit_len = lit.len();
+                if lit_len <= remaining {
+                    remaining -= lit_len;
+                } else {
+                    return false;
+                }
+            }
+            Text(text, _) => {
+                let text_len = text.chars().count() as Width;
+                if text_len <= remaining {
+                    remaining -= text_len;
+                } else {
+                    return false;
+                }
+            }
+            // TODO: correct?
+            Newline => return !flat,
+            Flat(note) => chunks.push((true, note)),
+            Indent(_, note) => chunks.push((flat, note)),
+            Child(_, note) => chunks.push((flat, note)),
+            Concat(note1, note2) => {
+                chunks.push((flat, note2));
+                chunks.push((flat, note1));
+            }
+            Choice(opt1, opt2) => {
+                // opt2 must always be strictly smaller!
+                // TODO: As an optimization, pre-compute whether opt2 has an unconditional newline
+                if is_valid_entry_point(flat, opt2) {
+                    chunks.push((flat, opt2));
+                } else {
+                    chunks.push((flat, opt1));
+                }
+            }
+        }
+    }
+    true
+}
+
+fn is_valid_entry_point<'d, D: PrettyDoc<'d>>(flat: bool, notation: NotationRef<'d, D>) -> bool {
+    // There are a _lot_ of calls to this, and the profiler, though extremely fast, could slow it
+    // down.
+    span!("is_valid");
+    is_valid(flat, notation)
+}
+
+fn is_valid<'d, D: PrettyDoc<'d>>(flat: bool, notation: NotationRef<'d, D>) -> bool {
+    use NotationCase::*;
+
+    match notation.case() {
+        Empty | Literal(_) | Text(_, _) => true,
+        Newline => !flat,
+        Flat(note) => is_valid(true, note),
+        Indent(_, note) => is_valid(flat, note),
+        // TODO: As an optimization, pre-compute whether opt2 has an unconditional newline
+        Choice(opt1, opt2) => is_valid(flat, opt1) || is_valid(flat, opt2),
+        Concat(note1, note2) => is_valid(flat, note1) && is_valid(flat, note2),
+        Child(_, child_note) => !flat || is_valid(flat, child_note),
+    }
+}
+
+/////////////////////////////////////////////////////////////////////////////////////
+
+fn min_first_line_len_entry_point<'d, D: PrettyDoc<'d>>(
+    notation: NotationRef<'d, D>,
+    flat: bool,
+) -> Option<FirstLineLen> {
+    span!("min_first_line_len");
+    min_first_line_len(notation, flat)
 }
 
 // Returns None if impossible.
@@ -492,10 +620,12 @@ fn min_first_line_len<'d, D: PrettyDoc<'d>>(
 }
 
 fn compute_suffix_len<'d, D: PrettyDoc<'d>>(next_chunks: &[Chunk<'d, D>]) -> Width {
+    span!("compute_suffix_len");
+
     let mut len = 0;
     for (indent, _, notation) in next_chunks.iter().rev() {
         let flat = indent.is_none();
-        let note_len = min_first_line_len(*notation, flat).unwrap();
+        let note_len = min_first_line_len_entry_point(*notation, flat).unwrap();
         len += note_len.len;
         if note_len.has_newline {
             break;
@@ -504,15 +634,16 @@ fn compute_suffix_len<'d, D: PrettyDoc<'d>>(next_chunks: &[Chunk<'d, D>]) -> Wid
     len
 }
 
-fn choose<'d, D: PrettyDoc<'d>>(
+fn old_choose<'d, D: PrettyDoc<'d>>(
     width: Width,
     indent: Option<Width>,
     prefix_len: Width,
     note1: NotationRef<'d, D>,
     note2: NotationRef<'d, D>,
-    suffix_len: Width,
+    suffix: &[Chunk<'d, D>],
 ) -> NotationRef<'d, D> {
     // Print note1 if it fits, or if it's possible but note2 isn't.
+    let suffix_len = compute_suffix_len(suffix);
     let flat = indent.is_none();
     if let Some(len1) = min_first_line_len(note1, flat) {
         let fits = if len1.has_newline {
