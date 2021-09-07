@@ -5,44 +5,7 @@ use crate::infra::span;
 use crate::style::{Shade, Style};
 use std::iter::Iterator;
 
-/// (indent, is_in_cursor, notation)
-type Chunk<'d, D> = (Option<Width>, Shade, NotationRef<'d, D>);
-
-/// The contents of a single pretty printed line.
-pub struct LineContents<'d> {
-    /// The indentation of this line in spaces, and the shade of those spaces.
-    pub spaces: (Width, Shade),
-    /// A sequence of (string, style, shade) triples, to be displayed after `spaces`, in order from
-    /// left to right, with no spacing in between.
-    pub contents: Vec<(&'d str, Style, Shade)>,
-}
-
-#[derive(Clone, Debug)]
-pub struct FirstLineLen {
-    pub len: Width,
-    pub has_newline: bool,
-}
-
-struct Seeker<'d, D: PrettyDoc<'d>> {
-    width: Width,
-    prev: Vec<Chunk<'d, D>>,
-    next: Vec<Chunk<'d, D>>,
-}
-
-struct DownwardPrinter<'d, D: PrettyDoc<'d>> {
-    width: Width,
-    next: Vec<Chunk<'d, D>>,
-    spaces: (Width, Shade),
-    at_end: bool,
-}
-
-struct UpwardPrinter<'d, D: PrettyDoc<'d>> {
-    width: Width,
-    prev: Vec<Chunk<'d, D>>,
-    // INVARIANT: only ever contains `Literal`, `Text`, and `Choice` notations.
-    next: Vec<Chunk<'d, D>>,
-    at_beginning: bool,
-}
+// TODO: "hl" -> "shade"
 
 /// Pretty print a document, focused at the node found by traversing `path` from the root.
 ///
@@ -67,7 +30,7 @@ pub fn pretty_print<'d, D: PrettyDoc<'d>>(
     span!("Pretty Print");
 
     let notation = NotationRef::new(doc);
-    let seeker = Seeker::new(notation, width);
+    let seeker = Seeker::new(width, notation);
     seeker.seek(path)
 }
 
@@ -85,6 +48,18 @@ pub fn pretty_print_to_string<'d, D: PrettyDoc<'d>>(doc: D, width: Width) -> Str
     string
 }
 
+/// (indent, is_in_cursor, notation)
+type Chunk<'d, D> = (Option<Width>, Shade, NotationRef<'d, D>);
+
+/// The contents of a single pretty printed line.
+pub struct LineContents<'d> {
+    /// The indentation of this line in spaces, and the shade of those spaces.
+    pub spaces: (Width, Shade),
+    /// A sequence of (string, style, shade) triples, to be displayed after `spaces`, in order from
+    /// left to right, with no spacing in between.
+    pub contents: Vec<(&'d str, Style, Shade)>,
+}
+
 impl<'d> ToString for LineContents<'d> {
     fn to_string(&self) -> String {
         span!("LineContents::to_string");
@@ -97,11 +72,22 @@ impl<'d> ToString for LineContents<'d> {
     }
 }
 
+////////////////////////////////////////
+
+/// Can seek to an arbitrary position within the document, while resolving as few choices as
+/// possible.
+struct Seeker<'d, D: PrettyDoc<'d>> {
+    width: Width,
+    prev: Vec<Chunk<'d, D>>,
+    next: Vec<Chunk<'d, D>>,
+}
+
 impl<'d, D: PrettyDoc<'d>> Seeker<'d, D> {
-    fn new(notation: NotationRef<'d, D>, width: Width) -> Seeker<'d, D> {
+    fn new(width: Width, notation: NotationRef<'d, D>) -> Seeker<'d, D> {
+        let fake_nl = notation.make_fake_start_of_doc_newline();
         Seeker {
             width,
-            prev: vec![],
+            prev: vec![(Some(0), Shade::background(), fake_nl)],
             next: vec![(Some(0), Shade::background(), notation)],
         }
     }
@@ -111,8 +97,7 @@ impl<'d, D: PrettyDoc<'d>> Seeker<'d, D> {
 
         span!("seek");
 
-        // Seek to the descendant given by `path`.
-        // Highlight the descendency chain as we go.
+        // Seek to the descendant given by `path`. Highlight the descendency chain as we go.
         let mut path = path.iter();
         self.highlight(path.len());
         while let Some(child_index) = path.next() {
@@ -120,9 +105,7 @@ impl<'d, D: PrettyDoc<'d>> Seeker<'d, D> {
             self.highlight(path.len());
         }
 
-        // Walk backward to the nearest Newline (or beginning of the doc).
-        let mut spaces = (0, Shade::background());
-        let mut at_beginning = true;
+        // Walk backward to the nearest Newline.
         while let Some((indent, hl, notation)) = self.prev.pop() {
             match notation.case() {
                 Empty | Indent(_, _) | Flat(_) | Concat(_, _) | Choice(_, _) | Child(_, _) => {
@@ -131,9 +114,7 @@ impl<'d, D: PrettyDoc<'d>> Seeker<'d, D> {
                 Literal(_) => self.next.push((indent, hl, notation)),
                 Text(_, _) => self.next.push((indent, hl, notation)),
                 Newline => {
-                    // drop the newline, but take note of it by setting at_beginning=false.
-                    at_beginning = false;
-                    spaces = (indent.unwrap(), hl);
+                    self.next.push((indent, hl, notation));
                     break;
                 }
             }
@@ -143,13 +124,10 @@ impl<'d, D: PrettyDoc<'d>> Seeker<'d, D> {
             width: self.width,
             prev: self.prev,
             next: vec![],
-            at_beginning,
         };
         let downward_printer = DownwardPrinter {
             width: self.width,
             next: self.next,
-            spaces,
-            at_end: false,
         };
         (upward_printer, downward_printer)
     }
@@ -230,8 +208,7 @@ impl<'d, D: PrettyDoc<'d>> Seeker<'d, D> {
                         continue 'find_child;
                     }
                     Choice(opt1, opt2) => {
-                        let choice =
-                            old_choose(self.width, indent, prefix_len, opt1, opt2, &self.next);
+                        let choice = choose(self.width, indent, prefix_len, opt1, opt2, &self.next);
                         self.next.push((indent, hl, choice));
                         continue 'find_child;
                     }
@@ -272,18 +249,31 @@ impl<'d, D: PrettyDoc<'d>> Seeker<'d, D> {
     }
 }
 
+/// Constructed at an arbitrary position within the document. Prints lines from there one at a
+/// time, going down.
+struct DownwardPrinter<'d, D: PrettyDoc<'d>> {
+    width: Width,
+    next: Vec<Chunk<'d, D>>,
+}
+
 impl<'d, D: PrettyDoc<'d>> DownwardPrinter<'d, D> {
     fn print_first_line(&mut self) -> Option<LineContents<'d>> {
         use NotationCase::*;
 
         span!("print_first_line");
 
-        if self.at_end {
+        // We should be at the start of a line (in which case we look a the Newline's indentation
+        // level to see how many spaces are at the start of this line), or at the very end of the
+        // document (in which case our iteration is done).
+        let (spaces, spaces_hl) = if let Some((indent, hl, notation)) = self.next.pop() {
+            assert!(matches!(notation.case(), Newline));
+            (indent.unwrap(), hl)
+        } else {
             return None;
-        }
+        };
 
         let mut contents = vec![];
-        let mut prefix_len = self.spaces.0;
+        let mut prefix_len = spaces;
         while let Some((indent, hl, notation)) = self.next.pop() {
             match notation.case() {
                 Empty => (),
@@ -296,12 +286,11 @@ impl<'d, D: PrettyDoc<'d>> DownwardPrinter<'d, D> {
                     prefix_len += text_len(text);
                 }
                 Newline => {
-                    let contents = LineContents {
-                        spaces: self.spaces,
+                    self.next.push((indent, hl, notation));
+                    return Some(LineContents {
+                        spaces: (spaces, spaces_hl),
                         contents,
-                    };
-                    self.spaces = (indent.unwrap(), hl);
-                    return Some(contents);
+                    });
                 }
                 Indent(j, note) => self.next.push((indent.map(|i| i + j), hl, note)),
                 Flat(note) => self.next.push((None, hl, note)),
@@ -310,16 +299,15 @@ impl<'d, D: PrettyDoc<'d>> DownwardPrinter<'d, D> {
                     self.next.push((indent, hl, left));
                 }
                 Choice(opt1, opt2) => {
-                    let choice = old_choose(self.width, indent, prefix_len, opt1, opt2, &self.next);
+                    let choice = choose(self.width, indent, prefix_len, opt1, opt2, &self.next);
                     self.next.push((indent, hl, choice));
                 }
                 Child(_, child_note) => self.next.push((indent, hl, child_note)),
             }
         }
 
-        self.at_end = true;
         Some(LineContents {
-            spaces: self.spaces,
+            spaces: (spaces, spaces_hl),
             contents,
         })
     }
@@ -333,22 +321,34 @@ impl<'d, D: PrettyDoc<'d>> DownwardPrinter<'d, D> {
     }
 }
 
+/// Constructed at an arbitrary position within the document. Prints lines from there one at a
+/// time, going up.
+struct UpwardPrinter<'d, D: PrettyDoc<'d>> {
+    width: Width,
+    prev: Vec<Chunk<'d, D>>,
+    // INVARIANT: only ever contains `Literal`, `Text`, and `Choice` notations.
+    next: Vec<Chunk<'d, D>>,
+}
+
 impl<'d, D: PrettyDoc<'d>> UpwardPrinter<'d, D> {
     fn print_last_line(&mut self) -> Option<LineContents<'d>> {
         use NotationCase::*;
 
         span!("print_last_line");
 
-        if self.at_beginning {
+        // 1. Go to the start of the "last line", and remember its indentation. However, the "last
+        //    line" might not be fully expanded, and could contain hidden newlines in it.
+        self.seek_start_of_line();
+        let mut prefix_len = if let Some((indent, hl, notation)) = self.next.pop() {
+            self.prev.push((indent, hl, notation));
+            indent.unwrap()
+        } else {
             return None;
-        }
-
-        // TODO: This is really a separate fn, if the arg is false?
-        let newline_info = self.seek_start_of_last_line(false);
-        let mut prefix_len = match newline_info {
-            None => 0,
-            Some((spaces, _)) => spaces,
         };
+
+        // 2. Start expanding the "last line". If we encounter a choice, resolve it, but then seek
+        //    back to the "start of the last line" again, as where that is might have changed if
+        //    the choice contained a newline.
         while let Some((indent, hl, notation)) = self.next.pop() {
             match notation.case() {
                 Literal(lit) => {
@@ -360,13 +360,17 @@ impl<'d, D: PrettyDoc<'d>> UpwardPrinter<'d, D> {
                     self.prev.push((indent, hl, notation));
                 }
                 Choice(opt1, opt2) => {
-                    let choice = old_choose(self.width, indent, prefix_len, opt1, opt2, &self.next);
+                    let choice = choose(self.width, indent, prefix_len, opt1, opt2, &self.next);
                     self.prev.push((indent, hl, choice));
+
+                    // Reset everything. This is equivalent to a recursive call.
                     self.seek_end();
-                    let newline_info = self.seek_start_of_last_line(false);
-                    prefix_len = match newline_info {
-                        None => 0,
-                        Some((spaces, _)) => spaces,
+                    self.seek_start_of_line();
+                    prefix_len = if let Some((indent, _hl, notation)) = self.next.pop() {
+                        self.prev.push((indent, hl, notation));
+                        indent.unwrap()
+                    } else {
+                        return None;
                     };
                 }
                 Empty | Newline | Indent(_, _) | Flat(_) | Concat(_, _) | Child(_, _) => {
@@ -375,14 +379,9 @@ impl<'d, D: PrettyDoc<'d>> UpwardPrinter<'d, D> {
             }
         }
 
-        let spaces;
-        if let Some((indent, hl)) = self.seek_start_of_last_line(true) {
-            self.at_beginning = false;
-            spaces = (indent, hl);
-        } else {
-            self.at_beginning = true;
-            spaces = (0, Shade::background());
-        }
+        self.seek_start_of_line();
+        let (indent, hl, _notation) = self.next.pop().unwrap();
+        let (spaces, spaces_hl) = (indent.unwrap(), hl);
 
         let mut contents = vec![];
         while let Some((_indent, hl, notation)) = self.next.pop() {
@@ -392,7 +391,10 @@ impl<'d, D: PrettyDoc<'d>> UpwardPrinter<'d, D> {
                 _ => panic!("display_line: expected only literals and text"),
             }
         }
-        Some(LineContents { spaces, contents })
+        Some(LineContents {
+            spaces: (spaces, spaces_hl),
+            contents,
+        })
     }
 
     fn seek_end(&mut self) {
@@ -403,26 +405,22 @@ impl<'d, D: PrettyDoc<'d>> UpwardPrinter<'d, D> {
         }
     }
 
-    /// Move the "printing cursor" from the very end to the start of the last line. If there is a
-    /// preceding newline, return the indentation and shade. Otherwise -- i.e., if this is the last
-    /// remaining line -- return None.
+    /// Move the "printing cursor" to just before the previous newline. (Or do nothing if there is
+    /// no such newline.)
     // Maintains the invariant that `next` only ever contains `Literal` and `Choice` notations.
-    fn seek_start_of_last_line(&mut self, delete_newline: bool) -> Option<(Width, Shade)> {
+    fn seek_start_of_line(&mut self) {
         use NotationCase::*;
 
-        span!("seek_start_of_last_line");
+        span!("seek_start_of_line");
 
-        assert!(self.next.is_empty());
         while let Some((indent, hl, notation)) = self.prev.pop() {
             match notation.case() {
                 Empty => (),
                 Text(_, _) => self.next.push((indent, hl, notation)),
                 Literal(_) => self.next.push((indent, hl, notation)),
                 Newline => {
-                    if !delete_newline {
-                        self.prev.push((indent, hl, notation));
-                    }
-                    return Some((indent.unwrap(), hl));
+                    self.next.push((indent, hl, notation));
+                    return;
                 }
                 Indent(j, note) => self.prev.push((indent.map(|i| i + j), hl, note)),
                 Flat(note) => self.prev.push((None, hl, note)),
@@ -434,7 +432,6 @@ impl<'d, D: PrettyDoc<'d>> UpwardPrinter<'d, D> {
                 Child(_, note) => self.prev.push((indent, hl, note)),
             }
         }
-        None
     }
 
     #[allow(unused)]
@@ -481,13 +478,13 @@ fn choose<'d, D: PrettyDoc<'d>>(
 }
 
 /// Determine whether the first line of the chunks fits within the `remaining` space.
-fn fits<'d, D: PrettyDoc<'d>>(
-    mut remaining: Width,
-    mut chunks: Vec<(bool, NotationRef<'d, D>)>,
-) -> bool {
+fn fits<'d, D: PrettyDoc<'d>>(width: Width, chunks: Vec<(bool, NotationRef<'d, D>)>) -> bool {
     use NotationCase::*;
 
     span!("fits");
+
+    let mut remaining = width;
+    let mut chunks = chunks;
 
     while let Some((flat, notation)) = chunks.pop() {
         match notation.case() {
@@ -508,7 +505,6 @@ fn fits<'d, D: PrettyDoc<'d>>(
                     return false;
                 }
             }
-            // TODO: correct?
             Newline => return !flat,
             Flat(note) => chunks.push((true, note)),
             Indent(_, note) => chunks.push((flat, note)),
@@ -532,8 +528,8 @@ fn fits<'d, D: PrettyDoc<'d>>(
 }
 
 fn is_valid_entry_point<'d, D: PrettyDoc<'d>>(flat: bool, notation: NotationRef<'d, D>) -> bool {
-    // There are a _lot_ of calls to this, and the profiler, though extremely fast, could slow it
-    // down.
+    // There are a _lot_ of calls to `is_valid`, and the profiler, though extremely fast, could
+    // slow it down. So only profile the initial call.
     span!("is_valid");
     is_valid(flat, notation)
 }
@@ -546,123 +542,10 @@ fn is_valid<'d, D: PrettyDoc<'d>>(flat: bool, notation: NotationRef<'d, D>) -> b
         Newline => !flat,
         Flat(note) => is_valid(true, note),
         Indent(_, note) => is_valid(flat, note),
-        // TODO: As an optimization, pre-compute whether opt2 has an unconditional newline
+        // TODO: As an optimization, pre-compute whether opt2 has an unconditional newline.
         Choice(opt1, opt2) => is_valid(flat, opt1) || is_valid(flat, opt2),
         Concat(note1, note2) => is_valid(flat, note1) && is_valid(flat, note2),
         Child(_, child_note) => !flat || is_valid(flat, child_note),
-    }
-}
-
-/////////////////////////////////////////////////////////////////////////////////////
-
-fn min_first_line_len_entry_point<'d, D: PrettyDoc<'d>>(
-    notation: NotationRef<'d, D>,
-    flat: bool,
-) -> Option<FirstLineLen> {
-    span!("min_first_line_len");
-    min_first_line_len(notation, flat)
-}
-
-// Returns None if impossible.
-fn min_first_line_len<'d, D: PrettyDoc<'d>>(
-    notation: NotationRef<'d, D>,
-    flat: bool,
-) -> Option<FirstLineLen> {
-    use NotationCase::*;
-
-    match notation.case() {
-        Empty => Some(FirstLineLen {
-            len: 0,
-            has_newline: false,
-        }),
-        Literal(lit) => {
-            let lit_len = lit.len();
-            Some(FirstLineLen {
-                len: lit_len,
-                has_newline: false,
-            })
-        }
-        Text(text, _style) => {
-            let text_len = text_len(text);
-            Some(FirstLineLen {
-                len: text_len,
-                has_newline: false,
-            })
-        }
-        Newline => {
-            if flat {
-                None
-            } else {
-                Some(FirstLineLen {
-                    len: 0,
-                    has_newline: true,
-                })
-            }
-        }
-        Flat(note) => min_first_line_len(note, true),
-        Indent(_, note) => min_first_line_len(note, flat),
-        // Note2 must always be smaller
-        Choice(note1, note2) => {
-            min_first_line_len(note2, flat).or_else(|| min_first_line_len(note1, flat))
-        }
-        Concat(note1, note2) => min_first_line_len(note1, flat).and_then(|len1| {
-            if len1.has_newline {
-                Some(len1)
-            } else {
-                min_first_line_len(note2, flat).map(|len2| FirstLineLen {
-                    len: len1.len + len2.len,
-                    has_newline: len2.has_newline,
-                })
-            }
-        }),
-        Child(_, child_note) => min_first_line_len(child_note, flat),
-    }
-}
-
-fn compute_suffix_len<'d, D: PrettyDoc<'d>>(next_chunks: &[Chunk<'d, D>]) -> Width {
-    span!("compute_suffix_len");
-
-    let mut len = 0;
-    for (indent, _, notation) in next_chunks.iter().rev() {
-        let flat = indent.is_none();
-        let note_len = min_first_line_len_entry_point(*notation, flat).unwrap();
-        len += note_len.len;
-        if note_len.has_newline {
-            break;
-        }
-    }
-    len
-}
-
-fn old_choose<'d, D: PrettyDoc<'d>>(
-    width: Width,
-    indent: Option<Width>,
-    prefix_len: Width,
-    note1: NotationRef<'d, D>,
-    note2: NotationRef<'d, D>,
-    suffix: &[Chunk<'d, D>],
-) -> NotationRef<'d, D> {
-    // Print note1 if it fits, or if it's possible but note2 isn't.
-    let suffix_len = compute_suffix_len(suffix);
-    let flat = indent.is_none();
-    if let Some(len1) = min_first_line_len(note1, flat) {
-        let fits = if len1.has_newline {
-            prefix_len + len1.len <= width
-        } else {
-            prefix_len + len1.len + suffix_len <= width
-        };
-        if fits {
-            note1
-        } else {
-            // (impossibility logic is here)
-            if min_first_line_len(note2, flat).is_none() {
-                note1
-            } else {
-                note2
-            }
-        }
-    } else {
-        note2
     }
 }
 

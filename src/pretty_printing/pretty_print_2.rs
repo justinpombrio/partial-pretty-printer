@@ -72,12 +72,6 @@ pub struct LineContents<'d> {
     pub contents: Vec<(&'d str, Style, Shade)>,
 }
 
-#[derive(Clone, Debug)]
-pub struct FirstLineLen {
-    pub len: Width,
-    pub has_newline: bool,
-}
-
 impl<'d> ToString for LineContents<'d> {
     fn to_string(&self) -> String {
         span!("LineContents::to_string");
