@@ -45,9 +45,6 @@ pick w n (Layout lines1) (Layout lines2) =
   then Layout lines1
   else Layout lines2
 
-numNewlines :: Layout -> Int
-numNewlines LErr = 0 -- doesn't matter
-numNewlines (Layout lines) = length lines - 1
 
 data Layouts = Branch Int Layouts Layouts
              | Leaf Layout
@@ -62,11 +59,15 @@ indent' i (Leaf layout) = Leaf (indent i layout)
 
 append' :: Layouts -> Layouts -> Layouts
 append' (Branch n x y) z = Branch n (append' x z) (append' y z)
+append' (Leaf layout1) (Leaf layout2) = Leaf (append layout1 layout2)
 append' (Leaf layout) (Branch n x y) =
   Branch (n + numNewlines layout)
          (append' (Leaf layout) x)
          (append' (Leaf layout) y)
-append' (Leaf layout1) (Leaf layout2) = Leaf (append layout1 layout2)
+  where
+    numNewlines :: Layout -> Int
+    numNewlines LErr = 0 -- doesn't matter
+    numNewlines (Layout lines) = length lines - 1
 
 resolve :: Int -> Layouts -> Layout
 resolve _ (Leaf layout) = layout
