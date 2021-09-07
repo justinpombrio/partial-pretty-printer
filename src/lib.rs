@@ -112,6 +112,7 @@
 //! Everything is measured in characters and 0-indexed.
 
 mod geometry;
+mod infra;
 mod notation;
 mod pane_printing;
 mod pretty_printing;

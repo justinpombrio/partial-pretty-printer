@@ -10,6 +10,14 @@ use std::fmt::Debug;
 use std::iter;
 use std::marker::PhantomData;
 
+// It's hard to test styles directly. No one would want to read or write test cases that used
+// enormous debug-printed Style objects. Instead, these tests use a textual format. The first line
+// is the text of the line, and subsequent lines show the style of the character above them:
+//
+// - Line 2 shows the Base16 style, as a hex char
+// - Line 3 shows whether the char is bold (b), underlined (u), both (!), or neither (.).
+// - Line 4 shows the shading (a-x), and whether the colors are reversed (capitalized).
+
 #[derive(Debug, Clone)]
 struct SimpleLabel<'d, D: PrettyDoc<'d> + Clone + Debug>(
     Option<(D, Vec<usize>)>,

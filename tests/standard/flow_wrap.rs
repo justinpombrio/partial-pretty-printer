@@ -130,6 +130,12 @@ fn flow_wrap() {
     );
     assert_pp(
         &doc,
+        59,
+        //0    5   10   15   20   25   30   35   40   45   50   55   60
+        &["¶    Oh, woe, is, me, the, turbofish, remains, undefeated□"],
+    );
+    assert_pp(
+        &doc,
         46,
         //  0    5   10   15   20   25   30   35   40   45   50   55   60
         &[

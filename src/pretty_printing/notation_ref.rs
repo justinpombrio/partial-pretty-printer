@@ -4,6 +4,8 @@ use crate::notation::{Literal, Notation, RepeatInner};
 use crate::style::Style;
 use std::fmt;
 
+const START_OF_DOC: &'static Notation = &Notation::Newline;
+
 #[derive(Debug)]
 pub struct NotationRef<'d, D: PrettyDoc<'d>> {
     doc: D,
@@ -80,6 +82,15 @@ impl<'d, D: PrettyDoc<'d>> NotationRef<'d, D> {
 
     pub fn new(doc: D) -> NotationRef<'d, D> {
         NotationRef::from_parts(doc, doc.notation(), RepeatPos::None)
+    }
+
+    // Turns out it's _really_ convenient to put a fake newline at the start of the document.
+    pub fn make_fake_start_of_doc_newline(&self) -> NotationRef<'d, D> {
+        NotationRef {
+            doc: self.doc,
+            notation: START_OF_DOC,
+            repeat_pos: RepeatPos::None,
+        }
     }
 
     pub fn doc_id(&self) -> D::Id {
