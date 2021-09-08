@@ -14,6 +14,9 @@ thiserror = "*"
     git = "https://github.com/justinpombrio/no-nonsense-flamegraphs"
     optional = true
 
+[dev-dependencies]
+rand = "*"
+
 [profile.release]
 debug = true
 

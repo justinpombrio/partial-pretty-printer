@@ -1,4 +1,4 @@
-use super::{all_paths, assert_pp, punct, SimpleDoc};
+use crate::standard::pretty_testing::{all_paths, assert_pp, punct, SimpleDoc};
 use partial_pretty_printer::{
     notation_constructors::{flat, nl},
     Notation,

@@ -1,4 +1,4 @@
-use super::{assert_pp, assert_pp_seek, punct};
+use crate::standard::pretty_testing::{assert_pp, assert_pp_seek, punct};
 use once_cell::sync::Lazy;
 use partial_pretty_printer::notation_constructors::{
     child, left, nl, repeat, right, surrounded, text,

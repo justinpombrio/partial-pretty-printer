@@ -2,5 +2,6 @@
 // file. Is there a better way to do this?
 
 #![feature(test)]
+#![feature(shrink_to)]
 
 mod standard;

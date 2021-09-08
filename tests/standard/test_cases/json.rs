@@ -1,6 +1,6 @@
 extern crate test;
 
-use super::{assert_pp, assert_pp_region, assert_pp_seek, print_region};
+use crate::standard::pretty_testing::{assert_pp, assert_pp_region, assert_pp_seek, print_region};
 use partial_pretty_printer::examples::json::{
     json_bool, json_dict, json_dict_entry, json_list, json_null, json_number, json_string, Json,
 };

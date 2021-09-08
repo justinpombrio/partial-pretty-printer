@@ -1,4 +1,4 @@
-use super::SimpleDoc;
+use crate::standard::pretty_testing::SimpleDoc;
 use partial_pretty_printer::{
     examples::json::{json_list, json_number, Json},
     notation_constructors::lit,
