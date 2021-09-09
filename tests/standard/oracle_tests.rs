@@ -1,16 +1,19 @@
+use crate::standard::generative_testing::{generate_all, generate_random, Generator, Picker};
 use crate::standard::pretty_testing::{assert_pp_without_expectation, SimpleDoc};
-use crate::standard::random_testing;
 use partial_pretty_printer::{
     notation_constructors::{empty, flat, lit, nl},
     Notation, Style,
 };
 
-impl random_testing::Arbitrary for Notation {
-    // TODO: construct error notations
-    fn make(mut size: u32, mut gen: random_testing::Gen) -> Notation {
+struct SimpleNotationGenerator;
+
+impl Generator for SimpleNotationGenerator {
+    type Value = Notation;
+
+    fn generate<P: Picker>(&self, mut size: u32, picker: &mut P) -> Notation {
         assert_ne!(size, 0);
         if size == 1 {
-            match gen.pick(5) {
+            match picker.pick_int(5) {
                 0 => empty(),
                 1 => nl(),
                 2 => lit("a", Style::default()),
@@ -19,30 +22,30 @@ impl random_testing::Arbitrary for Notation {
                 _ => unreachable!(),
             }
         } else if size == 2 {
-            match gen.pick(2) {
-                0 => flat(Notation::make(1, gen)),
-                1 => 2 >> Notation::make(1, gen),
+            match picker.pick_int(2) {
+                0 => flat(self.generate(1, picker)),
+                1 => 2 >> self.generate(1, picker),
                 _ => unreachable!(),
             }
         } else {
             size -= 1;
-            match gen.pick(4) {
+            match picker.pick_int(4) {
                 0 => {
-                    let left_size = gen.pick(size - 1) + 1;
+                    let left_size = picker.pick_int(size - 1) + 1;
                     let right_size = size - left_size;
-                    let left = Notation::make(left_size, gen.reborrow());
-                    let right = Notation::make(right_size, gen);
+                    let left = self.generate(left_size, picker);
+                    let right = self.generate(right_size, picker);
                     left + right
                 }
                 1 => {
-                    let left_size = gen.pick(size - 1) + 1;
+                    let left_size = picker.pick_int(size - 1) + 1;
                     let right_size = size - left_size;
-                    let left = Notation::make(left_size, gen.reborrow());
-                    let right = Notation::make(right_size, gen);
+                    let left = self.generate(left_size, picker);
+                    let right = self.generate(right_size, picker);
                     left | right
                 }
-                2 => flat(Notation::make(size, gen)),
-                3 => 2 >> Notation::make(size, gen),
+                2 => flat(self.generate(size, picker)),
+                3 => 2 >> self.generate(size, picker),
                 _ => unreachable!(),
             }
         }
@@ -52,7 +55,8 @@ impl random_testing::Arbitrary for Notation {
 #[test]
 fn oracle_tests() {
     // TODO: random notations too
-    for notation in random_testing::all::<Notation>(5) {
+    for notation in generate_all(SimpleNotationGenerator, 5) {
+        // TODO: don't print
         println!("{}", notation);
         let doc = SimpleDoc(notation);
         for width in 1..=8 {
