@@ -111,12 +111,15 @@
 //!
 //! Everything is measured in characters and 0-indexed.
 
+// TODO: Notation -> ValidNotation. Validate all test case notations.
+
 mod geometry;
 mod infra;
 mod notation;
 mod pane_printing;
 mod pretty_printing;
 mod style;
+mod validate;
 
 pub mod examples;
 pub mod notation_constructors;
@@ -125,6 +128,7 @@ pub use geometry::{Col, Height, Line, Pos, Size, Width};
 pub use notation::{Notation, RepeatInner};
 pub use pretty_printing::{pretty_print, pretty_print_to_string, LineContents, PrettyDoc};
 pub use style::{Color, ShadedStyle, Style};
+pub use validate::Arity;
 
 pub mod testing {
     pub use super::pretty_printing::oracular_pretty_print;

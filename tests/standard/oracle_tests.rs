@@ -2,7 +2,7 @@ use crate::standard::generative_testing::{generate_all, generate_random, Generat
 use crate::standard::pretty_testing::{assert_pp_without_expectation, SimpleDoc};
 use partial_pretty_printer::{
     notation_constructors::{empty, flat, lit, nl},
-    Notation, Style,
+    Arity, Notation, Style,
 };
 
 struct SimpleNotationGenerator;
@@ -54,13 +54,22 @@ impl Generator for SimpleNotationGenerator {
 
 #[test]
 fn oracle_tests() {
-    // TODO: random notations too
-    for notation in generate_all(SimpleNotationGenerator, 5) {
-        // TODO: don't print
-        println!("{}", notation);
-        let doc = SimpleDoc(notation);
-        for width in 1..=8 {
-            assert_pp_without_expectation(&doc, width);
+    let seed = [0; 32];
+
+    let small_notations = (1..7).flat_map(|size| generate_all(SimpleNotationGenerator, size));
+    let random_notations =
+        (1..100).flat_map(|size| generate_random(SimpleNotationGenerator, size, seed).take(1000));
+    let notations = small_notations.chain(random_notations);
+
+    for notation in notations {
+        if notation.validate(Arity::Fixed(0)).is_ok() {
+            let doc = SimpleDoc(notation);
+            for width in 1..=8 {
+                assert_pp_without_expectation(&doc, width);
+            }
+        } else {
+            // TODO: don't print
+            println!("INVALID {}", notation);
         }
     }
 }

@@ -1,3 +1,4 @@
+use super::geometry::Width;
 use super::notation::{Literal, Notation, RepeatInner};
 use super::style::Style;
 
@@ -24,6 +25,10 @@ pub fn lit(s: &str, style: Style) -> Notation {
 
 pub fn flat(n: Notation) -> Notation {
     Notation::Flat(Box::new(n))
+}
+
+pub fn indent(i: Width, n: Notation) -> Notation {
+    Notation::Indent(i, Box::new(n))
 }
 
 pub fn left() -> Notation {

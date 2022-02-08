@@ -4,5 +4,6 @@ mod iter_chain;
 mod json;
 mod let_list;
 mod panes;
+mod regression;
 mod ruby_loop;
 mod styles;

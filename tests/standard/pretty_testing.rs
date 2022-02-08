@@ -35,12 +35,20 @@ impl<'a> PrettyDoc<'a> for &'a SimpleDoc {
     }
 }
 
-fn compare_lines(message: &str, expected: String, actual: String) {
+#[track_caller]
+fn compare_lines(message: &str, expected: String, actual: String, doc: Option<&str>) {
     if actual != expected {
-        eprintln!(
-            "{}\nEXPECTED:\n{}\nACTUAL:\n{}\n=========",
-            message, expected, actual,
-        );
+        if let Some(doc) = doc {
+            eprintln!(
+                "{}\nDOC:\n{}\nEXPECTED:\n{}\nACTUAL:\n{}\n=========",
+                message, doc, expected, actual,
+            );
+        } else {
+            eprintln!(
+                "{}\nEXPECTED:\n{}\nACTUAL:\n{}\n=========",
+                message, expected, actual,
+            );
+        }
         assert_eq!(actual, expected);
     }
 }
@@ -109,12 +117,18 @@ pub fn assert_pp_without_expectation<'d, D: PrettyDoc<'d>>(doc: D, width: Width)
 
 #[track_caller]
 fn assert_pp_impl<'d, D: PrettyDoc<'d>>(doc: D, width: Width, expected_lines: Option<&[&str]>) {
+    let contents = if expected_lines.is_some() {
+        None
+    } else {
+        Some(format!("{}", doc.notation()))
+    };
     let oracle_result = oracular_pretty_print(doc, width);
     if let Some(expected_lines) = expected_lines {
         compare_lines(
             "ORACLE DISAGREES WITH TEST CASE, SO TEST CASE MUST BE WRONG",
             oracle_result.clone(),
             expected_lines.join("\n"),
+            None,
         );
     }
     let lines = pretty_print_to_string(doc, width)
@@ -122,18 +136,20 @@ fn assert_pp_impl<'d, D: PrettyDoc<'d>>(doc: D, width: Width, expected_lines: Op
         .map(|s| s.to_owned())
         .collect::<Vec<_>>();
     compare_lines(
-        "IN PRETTY PRINTING",
+        &format!("IN PRETTY PRINTING WITH WIDTH {}", width),
         oracle_result.clone(),
         lines.join("\n"),
+        contents.as_ref().map(|s| s.as_str()),
     );
     for path in all_paths(doc) {
         let (lines_above, mut lines_below) = print_above_and_below(doc, width, &path);
         let mut lines = lines_above;
         lines.append(&mut lines_below);
         compare_lines(
-            &format!("IN PRETTY PRINTING AT PATH {:?}", path),
+            &format!("IN PRETTY PRINTING WITH WIDTH {} AT PATH {:?}", width, path),
             oracle_result.clone(),
             lines.join("\n"),
+            contents.as_ref().map(|s| s.as_str()),
         );
     }
 }
@@ -151,11 +167,13 @@ pub fn assert_pp_seek<'d, D: PrettyDoc<'d>>(
         &format!("IN DOWNWARD PRINTING AT PATH {:?}", path),
         expected_lines_below.join("\n"),
         lines_below.join("\n"),
+        None,
     );
     compare_lines(
         &format!("IN UPWARD PRINTING AT PATH {:?}", path),
         expected_lines_above.join("\n"),
         lines_above.join("\n"),
+        None,
     );
 }
 
@@ -172,5 +190,6 @@ pub fn assert_pp_region<'d, D: PrettyDoc<'d>>(
         &format!("IN PRINTING {} ROWS AT PATH {:?}", rows, path),
         expected_lines.join("\n"),
         lines.join("\n"),
+        None,
     );
 }
