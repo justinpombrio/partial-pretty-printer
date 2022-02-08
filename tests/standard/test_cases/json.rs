@@ -222,6 +222,8 @@ fn make_json_tree(id: u32, size: usize) -> Json {
     ])
 }
 
+// 200 microseconds to print the middle 10 lines of a 400,000 line doc. So something like
+// 20μs/line.
 #[bench]
 fn json_tree_bench(bencher: &mut Bencher) {
     let little_tree = make_json_tree(0, 2);
