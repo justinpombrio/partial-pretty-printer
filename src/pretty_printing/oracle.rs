@@ -135,7 +135,7 @@ fn pp<'d, D: PrettyDoc<'d>>(
                 cont(x_lay.clone().append(y_lay))
             })
         }),
-        Choice((x, _), (y, _)) => {
+        Choice(x, y) => {
             let x_lay = pp(width, line, x, cont);
             let y_lay = pp(width, line, y, cont);
             x_lay.pick(y_lay, width, line)

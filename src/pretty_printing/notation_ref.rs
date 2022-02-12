@@ -29,7 +29,7 @@ pub enum NotationCase<'d, D: PrettyDoc<'d>> {
     Flat(NotationRef<'d, D>),
     Indent(Width, NotationRef<'d, D>),
     Concat(NotationRef<'d, D>, NotationRef<'d, D>),
-    Choice((NotationRef<'d, D>, bool), (NotationRef<'d, D>, bool)),
+    Choice(NotationRef<'d, D>, NotationRef<'d, D>),
     Child(usize, NotationRef<'d, D>),
 }
 
@@ -56,10 +56,9 @@ impl<'d, D: PrettyDoc<'d>> NotationRef<'d, D> {
             Notation::Concat(left, right) => {
                 NotationCase::Concat(self.subnotation(left), self.subnotation(right))
             }
-            Notation::Choice((left, ln), (right, rn)) => NotationCase::Choice(
-                (self.subnotation(left), *ln),
-                (self.subnotation(right), *rn),
-            ),
+            Notation::Choice(left, right) => {
+                NotationCase::Choice(self.subnotation(left), self.subnotation(right))
+            }
             Notation::Child(i) => NotationCase::Child(*i, self.child(*i)),
             Notation::Left => {
                 if let RepeatPos::Join(_, i) = self.repeat_pos {

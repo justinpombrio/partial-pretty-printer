@@ -141,11 +141,9 @@ impl Notation {
                 let flattened2 = note2.validate_rec(ctx, flat)?;
                 Ok(flattened1.concat(flattened2))
             }
-            Choice((note1, nl1), (note2, nl2)) => {
+            Choice(note1, note2) => {
                 let flattened1 = note1.validate_rec(ctx, flat)?;
-                *nl1 = flattened1.newline;
                 let flattened2 = note2.validate_rec(ctx, flat)?;
-                *nl2 = flattened2.newline;
                 Ok(flattened1.choice(flattened2))
             }
             IfEmptyText(note1, note2) => {

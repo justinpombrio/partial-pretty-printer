@@ -451,26 +451,20 @@ fn choose<'d, D: PrettyDoc<'d>>(
     width: Width,
     indent: Option<Width>,
     prefix_len: Width,
-    opt1: (NotationRef<'d, D>, bool),
-    opt2: (NotationRef<'d, D>, bool),
+    opt1: NotationRef<'d, D>,
+    opt2: NotationRef<'d, D>,
     suffix: &[Chunk<'d, D>],
 ) -> NotationRef<'d, D> {
     span!("choose");
 
     use std::iter;
 
-    let (opt1, nl1) = opt1;
-    let (opt2, nl2) = opt2;
     let flat = indent.is_none();
-
-    // If one of the options is illegal, pick the other. (If both are illegal, pick the second.)
-    if flat && nl1 {
-        return opt2;
-    } else if flat && nl2 {
+    if flat {
         return opt1;
     }
 
-    // Otherwise, pick the first option iff it fits.
+    // Pick the first option iff it fits.
     let chunks = suffix
         .iter()
         .map(|(i, _, n)| (i.is_none(), *n))
@@ -519,12 +513,8 @@ fn fits<'d, D: PrettyDoc<'d>>(width: Width, chunks: Vec<(bool, NotationRef<'d, D
                 chunks.push((flat, note2));
                 chunks.push((flat, note1));
             }
-            Choice((opt1, nl1), (opt2, nl2)) => {
-                // We should almost always pick the second option, because by the notation
-                // requirement its first line must be at least as short as the first option's first
-                // line. But if the second option is invalid and the first isn't, we should pick
-                // the first.
-                if flat && nl2 && !nl1 {
+            Choice(opt1, opt2) => {
+                if flat {
                     chunks.push((flat, opt1));
                 } else {
                     chunks.push((flat, opt2));

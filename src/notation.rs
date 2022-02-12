@@ -3,13 +3,18 @@ use crate::style::Style;
 use std::fmt;
 use std::ops::{Add, BitOr, BitXor, Shr};
 
-// ASSUMPTION:
-// In every choice `X | Y`, `min_first_line_len(Y) <= min_first_line_len(X)`.
+// TODO: Nail down this assumption further, I don't think this is _quite_ right.
 
 /// Describes how to display a syntactic construct. When constructing a Notation, you must obey one
 /// requirement. If you do not, the pretty printer may choose poor layouts.
 ///
-/// > For every choice `(x | y)`, the first line of `y` is no longer than the first line of `y`.
+/// > For every choice `(x | y)`:
+/// > - If it is printed non-flat, then the first line of `x` is short than (or equal to) the first
+/// >   line of `y`.
+/// > - If it is printed flat, then the first line of `y` is short than (or equal to) the first
+/// >   line of `x`.
+///
+/// the first line of `y` is no longer than the first line of `y`.
 #[derive(Clone, Debug)]
 pub enum Notation {
     /// Display nothing. Identical to `Literal("")`.
@@ -30,9 +35,8 @@ pub enum Notation {
     /// affected.
     Concat(Box<Notation>, Box<Notation>),
     /// Display the left notation if its first line fits within the required width; otherwise
-    /// display the right. The `bool`s are for internal usage, and will be set and used internally
-    /// later; it does not matter what value you use.
-    Choice((Box<Notation>, bool), (Box<Notation>, bool)),
+    /// display the right.
+    Choice(Box<Notation>, Box<Notation>),
     /// Display the first notation in case this tree has empty text,
     /// otherwise show the second notation.
     IfEmptyText(Box<Notation>, Box<Notation>),
@@ -112,7 +116,7 @@ impl fmt::Display for Notation {
             Flat(note) => write!(f, "Flat({})", note),
             Indent(i, note) => write!(f, "{}⇒({})", i, note),
             Concat(left, right) => write!(f, "{} + {}", left, right),
-            Choice((opt1, _), (opt2, _)) => write!(f, "({} | {})", opt1, opt2),
+            Choice(opt1, opt2) => write!(f, "({} | {})", opt1, opt2),
             IfEmptyText(opt1, opt2) => write!(f, "IfEmptyText({} | {})", opt1, opt2),
             Child(i) => write!(f, "${}", i),
             Repeat(repeat) => write!(
@@ -141,7 +145,7 @@ impl BitOr<Notation> for Notation {
 
     /// Shorthand for `Choice`.
     fn bitor(self, other: Notation) -> Notation {
-        Notation::Choice((Box::new(self), false), (Box::new(other), false))
+        Notation::Choice(Box::new(self), Box::new(other))
     }
 }
 

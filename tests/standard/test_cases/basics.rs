@@ -36,7 +36,7 @@ fn basics_indent() {
 
 #[test]
 fn basics_flat() {
-    let notation = flat((punct("a") ^ punct("b")) | punct("long"));
+    let notation = flat(punct("long") | (punct("a") ^ punct("b")));
     assert_pp(&SimpleDoc::new(notation), 2, &["long"]);
 }
 

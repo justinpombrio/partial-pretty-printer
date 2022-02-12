@@ -1,4 +1,3 @@
-// TODO: describe invariants
 //! # Partial Pretty Printer
 //!
 //! This is a pretty printing library for tree-shaped documents, such as ASTs. Given declarative
