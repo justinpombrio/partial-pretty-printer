@@ -90,8 +90,8 @@ $\nil$ prints nothing at all, $\txt{t}$ prints a string verbatim, and $\nl$ prin
 $\cat{x}{y}$ is the \emph{concatenation} of $x$ and $y$: it first prints $x$, then $y$, with no
 separation.
 
-Parts of a document can be indented. $\ind{i}{x}$ indents $x$ by $i$ spaces (specifically, it
-inserts $i$ spaces after every newline in $x$.) $\flat{x}$, on the other hand, \emph{disallows}
+Parts of a document can be indented. $\ind{i}{x}$ indents $x$ by $i$ spaces, or more specifically, it
+inserts $i$ spaces after every newline in $x$. $\flat{x}$, on the other hand, \emph{disallows}
 newlines: it produces an error $\err$ if it encounters a newline in $x$. This is only useful in
 conjunction with choices, described next.
 
@@ -123,7 +123,7 @@ Hello
 
 Let's turn this informal definition into code. For the moment, we'll keep the implementation naive
 at the expense of efficiency (even to the extent of exponential inefficiency). We will later use it to
-derive a more efficient implementation that provably behaves the same.
+derive a more efficient implementation that behaves the same.
 
 First we need a data structure for the output of pretty printing, and some basic operations on it.
 The output---call it a \emph{layout}---is either a list of lines, or an error in case of
@@ -258,8 +258,8 @@ This is a complete and correct implementation. However, it is exponential time, 
 resolving each choice both ways.
 
 This makes it sound useless, but it is not! We can use it to prove algebraic laws about equivalence
-between \code{Doc}s, and then use these laws to derive a more efficient implementation that (provably)
-behaves the same.
+between \code{Doc}s, and then use these laws to derive a more efficient implementation that behaves
+the same.
 
 \section{Laws of Pretty Printing}
 
@@ -377,6 +377,42 @@ $\cat{\nl}{y}$, regardless of $y$ and $z$.  As a result, the concatenation of a 
 cannot be simplified.
 
 \section{Efficient Implementation}
+
+We can use these laws to derive an efficient implementation, through a mix of formal and informal
+reasoning. This implementation won't be a simple printing function; instead it will be a data
+structure that supports seeking to different parts of the document and partially expanding them.
+This makes it possible to print only the relevant part of a document, without fully examining the
+rest of it.
+
+Let's call the data structure \code{Partial}, for a partially expanded document. It will roughly
+consist of a list of concatenated \code{Doc}s, but with some modifications:
+\begin{itemize}
+  \item Newlines will turn out to be important for printing. Thus instead of storing a list of
+    \code{Doc}s joined by concatenation, it will store a list of "blocks" joined by newlines.
+    Specifically, the content of each block will be joined by \code{\_ :+ \_}, but the blocks will
+    be joined by \code{\_ :+ \nl :+ \_}. For brevity, let's introduce a shorthand for this:
+    \begin{lstlisting}
+       x </> y = x :+ $\nl$ :+ y
+    \end{lstlisting}
+    Each block will have a few parts: (i) a number of spaces that its first line is indented by,
+    (ii) the text it starts with, which will be important for resolving choices, and finally (iii)
+    a list of \code{Doc}s joined by concatenation.
+  \item We'll want to lower (i.e. distribute) \code{Flat} and indent (\code{(:>>)}) as we encounter
+    them. Thus instead of storing \code{Doc}s, the \code{Partial} data structure will store a pair
+    \code{(Maybe Int, Doc)}, where \code{(Nothing, x)} represents \code{Flat x} and \code{(Just i,
+    x)} represents \code{i :>> x}.
+  \item Finally, \code{Partial} needs a notion of the "current place" in the partially expanded
+    document. Thus it will follow a pattern like a gap buffer: if the "cursor" is in the middle of a
+    list, that list is split in two: a list of elements before the cursor in reverse order, and a
+    list of elements after the cursor in forward order.
+\end{itemize}
+
+Putting this all together yields:
+\begin{lstlisting}
+data Partial = Partial Int [Block] Block [(Maybe Int, Doc)] [Block]
+
+data Block = Block 
+\end{lstlisting}
 
 We can use these laws to derive an efficient implementation. The first step is to see that they are
 sufficient to convert any document into a normal form, as follows:
