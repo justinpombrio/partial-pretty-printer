@@ -1,3 +1,4 @@
+// TODO: describe invariants
 //! # Partial Pretty Printer
 //!
 //! This is a pretty printing library for tree-shaped documents, such as ASTs. Given declarative
@@ -30,7 +31,7 @@
 //!     type Id: Eq + Copy;
 //!
 //!     fn id(self) -> Self::Id;
-//!     fn notation(self) -> &'d Notation;
+//!     fn notation(self) -> &'d ValidNotation;
 //!     fn num_children(self) -> Option<usize>;
 //!     fn unwrap_text(self) -> &'d str;
 //!     fn unwrap_child(self, i: usize) -> Self;
@@ -117,6 +118,7 @@ mod notation;
 mod pane_printing;
 mod pretty_printing;
 mod style;
+mod valid_notation;
 
 pub mod examples;
 pub mod notation_constructors;
@@ -125,6 +127,7 @@ pub use geometry::{Col, Height, Line, Pos, Size, Width};
 pub use notation::{Notation, RepeatInner};
 pub use pretty_printing::{pretty_print, pretty_print_to_string, LineContents, PrettyDoc};
 pub use style::{Color, ShadedStyle, Style};
+pub use valid_notation::{NotationError, ValidNotation};
 
 pub mod testing {
     pub use super::pretty_printing::oracular_pretty_print;

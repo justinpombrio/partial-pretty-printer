@@ -2,6 +2,7 @@ use crate::notation::{Notation, RepeatInner};
 use crate::notation_constructors::{child, flat, left, lit, nl, repeat, right, surrounded, text};
 use crate::pretty_printing::PrettyDoc;
 use crate::style::{Color, Style};
+use crate::valid_notation::ValidNotation;
 use once_cell::sync::Lazy;
 use std::fmt::Debug;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -42,13 +43,18 @@ fn constant(s: &'static str) -> Notation {
     )
 }
 
-static JSON_NULL_NOTATION: Lazy<Notation> = Lazy::new(|| constant("null"));
-static JSON_TRUE_NOTATION: Lazy<Notation> = Lazy::new(|| constant("true"));
-static JSON_FALSE_NOTATION: Lazy<Notation> = Lazy::new(|| constant("false"));
-static JSON_STRING_NOTATION: Lazy<Notation> =
-    Lazy::new(|| punct("\"") + text(Style::color(Color::Base0B)) + punct("\""));
-static JSON_NUMBER_NOTATION: Lazy<Notation> = Lazy::new(|| text(Style::color(Color::Base09)));
-static JSON_LIST_NOTATION: Lazy<Notation> = Lazy::new(|| {
+static JSON_NULL_NOTATION: Lazy<ValidNotation> = Lazy::new(|| constant("null").validate().unwrap());
+static JSON_TRUE_NOTATION: Lazy<ValidNotation> = Lazy::new(|| constant("true").validate().unwrap());
+static JSON_FALSE_NOTATION: Lazy<ValidNotation> =
+    Lazy::new(|| constant("false").validate().unwrap());
+static JSON_STRING_NOTATION: Lazy<ValidNotation> = Lazy::new(|| {
+    (punct("\"") + text(Style::color(Color::Base0B)) + punct("\""))
+        .validate()
+        .unwrap()
+});
+static JSON_NUMBER_NOTATION: Lazy<ValidNotation> =
+    Lazy::new(|| text(Style::color(Color::Base09)).validate().unwrap());
+static JSON_LIST_NOTATION: Lazy<ValidNotation> = Lazy::new(|| {
     repeat(RepeatInner {
         empty: punct("[]"),
         lone: punct("[") + child(0) + punct("]"),
@@ -59,19 +65,24 @@ static JSON_LIST_NOTATION: Lazy<Notation> = Lazy::new(|| {
             single | multi
         },
     })
+    .validate()
+    .unwrap()
 });
-static JSON_DICT_ENTRY_NOTATION: Lazy<Notation> = Lazy::new(|| child(0) + punct(": ") + child(1));
-static JSON_DICT_NOTATION: Lazy<Notation> = Lazy::new(|| {
+static JSON_DICT_ENTRY_NOTATION: Lazy<ValidNotation> =
+    Lazy::new(|| (child(0) + punct(": ") + child(1)).validate().unwrap());
+static JSON_DICT_NOTATION: Lazy<ValidNotation> = Lazy::new(|| {
     repeat(RepeatInner {
         empty: punct("{}"),
         lone: {
-            let single = punct("{") + left() + punct("}");
-            let multi = (punct("{") + (4 >> left())) ^ punct("}");
+            let single = punct("{") + child(0) + punct("}");
+            let multi = (punct("{") + (4 >> child(0))) ^ punct("}");
             single | multi
         },
         join: left() + punct(",") + nl() + right(),
         surround: (punct("{") + (4 >> surrounded())) ^ punct("}"),
     })
+    .validate()
+    .unwrap()
 });
 
 enum JsonContents<'a> {
@@ -104,7 +115,7 @@ impl<'a> PrettyDoc<'a> for &'a Json {
         self.id
     }
 
-    fn notation(self) -> &'a Notation {
+    fn notation(self) -> &'a ValidNotation {
         use JsonData::*;
 
         match &self.data {

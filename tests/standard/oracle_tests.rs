@@ -1,4 +1,4 @@
-use crate::standard::generative_testing::{generate_all, generate_random, Generator, Picker};
+use crate::standard::generative_testing::{generate_all, Generator, Picker};
 use crate::standard::pretty_testing::{assert_pp_without_expectation, SimpleDoc};
 use partial_pretty_printer::{
     notation_constructors::{empty, flat, lit, nl},
@@ -58,9 +58,12 @@ fn oracle_tests() {
     for notation in generate_all(SimpleNotationGenerator, 5) {
         // TODO: don't print
         println!("{}", notation);
-        let doc = SimpleDoc(notation);
-        for width in 1..=8 {
-            assert_pp_without_expectation(&doc, width);
+        if let Ok(doc) = SimpleDoc::try_new(notation) {
+            for width in 1..=8 {
+                assert_pp_without_expectation(&doc, width);
+            }
+        } else {
+            println!("  (invalid)");
         }
     }
 }

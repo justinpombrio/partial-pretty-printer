@@ -7,44 +7,44 @@ use partial_pretty_printer::{
 #[test]
 fn basics_empty() {
     let notation = Notation::Empty;
-    assert_pp(&SimpleDoc(notation), 80, &[""]);
+    assert_pp(&SimpleDoc::new(notation), 80, &[""]);
 }
 
 #[test]
 fn basics_literal() {
     let notation = punct("Hello world!");
-    assert_pp(&SimpleDoc(notation), 80, &["Hello world!"]);
+    assert_pp(&SimpleDoc::new(notation), 80, &["Hello world!"]);
 }
 
 #[test]
 fn basics_concat() {
     let notation = punct("Hello") + punct(" world!");
-    assert_pp(&SimpleDoc(notation), 80, &["Hello world!"]);
+    assert_pp(&SimpleDoc::new(notation), 80, &["Hello world!"]);
 }
 
 #[test]
 fn basics_newline() {
     let notation = punct("Hello") ^ punct("world!");
-    assert_pp(&SimpleDoc(notation), 80, &["Hello", "world!"]);
+    assert_pp(&SimpleDoc::new(notation), 80, &["Hello", "world!"]);
 }
 
 #[test]
 fn basics_indent() {
     let notation = punct("Hello") + (2 >> punct("world!"));
-    assert_pp(&SimpleDoc(notation), 80, &["Hello", "  world!"]);
+    assert_pp(&SimpleDoc::new(notation), 80, &["Hello", "  world!"]);
 }
 
 #[test]
 fn basics_flat() {
     let notation = flat((punct("a") ^ punct("b")) | punct("long"));
-    assert_pp(&SimpleDoc(notation), 2, &["long"]);
+    assert_pp(&SimpleDoc::new(notation), 2, &["long"]);
 }
 
 #[test]
 fn basics_choice() {
     let notation = punct("Hello world!") | punct("Hello") ^ punct("world!");
-    assert_pp(&SimpleDoc(notation.clone()), 12, &["Hello world!"]);
-    assert_pp(&SimpleDoc(notation), 11, &["Hello", "world!"]);
+    assert_pp(&SimpleDoc::new(notation.clone()), 12, &["Hello world!"]);
+    assert_pp(&SimpleDoc::new(notation), 11, &["Hello", "world!"]);
 }
 
 #[test]
@@ -75,13 +75,15 @@ fn test_all_paths_fn() {
 }
 
 #[test]
+#[should_panic]
 fn hidden_error() {
     let notation = punct("x") ^ flat(nl()) | punct("ok");
-    assert_pp(&SimpleDoc(notation), 3, &["ok"]);
+    assert_pp(&SimpleDoc::new(notation), 3, &["ok"]);
 }
 
 #[test]
+#[should_panic]
 fn tricky_suffix() {
     let notation = (punct("a") | punct("bb")) + ((punct("x") + nl() + flat(nl())) | punct("yy"));
-    assert_pp(&SimpleDoc(notation), 3, &["ayy"]);
+    assert_pp(&SimpleDoc::new(notation), 3, &["ayy"]);
 }

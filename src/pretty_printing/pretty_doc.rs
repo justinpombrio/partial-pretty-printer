@@ -1,4 +1,4 @@
-use crate::notation::Notation;
+use crate::valid_notation::ValidNotation;
 
 /// A node in a "document" that supports the necessary methods to be pretty-printed.
 pub trait PrettyDoc<'d>: Copy {
@@ -8,7 +8,7 @@ pub trait PrettyDoc<'d>: Copy {
     fn id(self) -> Self::Id;
 
     /// The node's notation.
-    fn notation(self) -> &'d Notation;
+    fn notation(self) -> &'d ValidNotation;
 
     /// Get this node's number of children, or `None` if it contains text instead. `Some(0)` means
     /// that this node contains no children, and no text.

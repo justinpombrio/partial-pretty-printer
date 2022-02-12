@@ -232,7 +232,7 @@ fn test_pane_styles() {
     ];
     let note = words.into_iter().reduce(|n1, n2| n1 + n2).unwrap();
     pane_test(
-        &SimpleDoc(note),
+        &SimpleDoc::new(note),
         vec![],
         80,
         "|Hello, world!\n\

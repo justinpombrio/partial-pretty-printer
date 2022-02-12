@@ -1,7 +1,7 @@
 use crate::standard::pretty_testing::{assert_pp, punct};
 use once_cell::sync::Lazy;
 use partial_pretty_printer::notation_constructors::{child, flat, text};
-use partial_pretty_printer::{Notation, PrettyDoc, Style};
+use partial_pretty_printer::{PrettyDoc, Style, ValidNotation};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -18,8 +18,8 @@ enum IterChainData {
     Times(Box<[IterChain; 2]>),
 }
 
-static VAR_NOTATION: Lazy<Notation> = Lazy::new(|| text(Style::plain()));
-static METHOD_CALL_NOTATION: Lazy<Notation> = Lazy::new(|| {
+static VAR_NOTATION: Lazy<ValidNotation> = Lazy::new(|| text(Style::plain()).validate().unwrap());
+static METHOD_CALL_NOTATION: Lazy<ValidNotation> = Lazy::new(|| {
     // foobaxxle.bar(arg)
     //
     // -- Disallowing this layout:
@@ -37,14 +37,17 @@ static METHOD_CALL_NOTATION: Lazy<Notation> = Lazy::new(|| {
     let single = punct(".") + child(1) + punct("(") + flat(child(2)) + punct(")");
     let two_lines = punct(".") + child(1) + punct("(") + flat(child(2)) + punct(")");
     let multi = (punct(".") + child(1) + punct("(") + (4 >> child(2))) ^ punct(")");
-    child(0) + (single | (4 >> (two_lines | multi)))
+    (child(0) + (single | (4 >> (two_lines | multi))))
+        .validate()
+        .unwrap()
 });
-static CLOSURE_NOTATION: Lazy<Notation> = Lazy::new(|| {
+static CLOSURE_NOTATION: Lazy<ValidNotation> = Lazy::new(|| {
     let single = punct("|") + child(0) + punct("| { ") + child(1) + punct(" }");
     let multi = (punct("|") + child(0) + punct("| {") + (4 >> child(1))) ^ punct("}");
-    single | multi
+    (single | multi).validate().unwrap()
 });
-static TIMES_NOTATION: Lazy<Notation> = Lazy::new(|| child(0) + punct(" * ") + child(1));
+static TIMES_NOTATION: Lazy<ValidNotation> =
+    Lazy::new(|| (child(0) + punct(" * ") + child(1)).validate().unwrap());
 
 enum Contents<'d> {
     Text(&'d str),
@@ -72,7 +75,7 @@ impl<'d> PrettyDoc<'d> for &'d IterChain {
         self.id
     }
 
-    fn notation(self) -> &'d Notation {
+    fn notation(self) -> &'d ValidNotation {
         use IterChainData::*;
 
         match self.data {

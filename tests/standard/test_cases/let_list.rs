@@ -3,7 +3,7 @@ use once_cell::sync::Lazy;
 use partial_pretty_printer::notation_constructors::{
     child, left, nl, repeat, right, surrounded, text,
 };
-use partial_pretty_printer::{Notation, PrettyDoc, RepeatInner, Style};
+use partial_pretty_printer::{PrettyDoc, RepeatInner, Style, ValidNotation};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -21,14 +21,19 @@ enum LetListData {
     List(Vec<LetList>),
 }
 
-static NUM_NOTATION: Lazy<Notation> = Lazy::new(|| text(Style::plain()));
-static VAR_NOTATION: Lazy<Notation> = Lazy::new(|| text(Style::plain()));
-static PHI_NOTATION: Lazy<Notation> =
-    Lazy::new(|| punct("1 + sqrt(5)") ^ punct("-----------") ^ punct("     2"));
-static LET_NOTATION: Lazy<Notation> = Lazy::new(|| {
-    punct("let ") + child(0) + punct(" =") + (punct(" ") | nl()) + child(1) + punct(";")
+static NUM_NOTATION: Lazy<ValidNotation> = Lazy::new(|| text(Style::plain()).validate().unwrap());
+static VAR_NOTATION: Lazy<ValidNotation> = Lazy::new(|| text(Style::plain()).validate().unwrap());
+static PHI_NOTATION: Lazy<ValidNotation> = Lazy::new(|| {
+    (punct("1 + sqrt(5)") ^ punct("-----------") ^ punct("     2"))
+        .validate()
+        .unwrap()
 });
-static LIST_NOTATION: Lazy<Notation> = Lazy::new(|| {
+static LET_NOTATION: Lazy<ValidNotation> = Lazy::new(|| {
+    (punct("let ") + child(0) + punct(" =") + (punct(" ") | nl()) + child(1) + punct(";"))
+        .validate()
+        .unwrap()
+});
+static LIST_NOTATION: Lazy<ValidNotation> = Lazy::new(|| {
     repeat(RepeatInner {
         empty: punct("[]"),
         lone: punct("[") + child(0) + punct("]"),
@@ -39,6 +44,8 @@ static LIST_NOTATION: Lazy<Notation> = Lazy::new(|| {
             single | multi
         },
     })
+    .validate()
+    .unwrap()
 });
 
 enum Contents<'d> {
@@ -68,7 +75,7 @@ impl<'d> PrettyDoc<'d> for &'d LetList {
         self.id
     }
 
-    fn notation(self) -> &'d Notation {
+    fn notation(self) -> &'d ValidNotation {
         use LetListData::*;
 
         match &self.data {

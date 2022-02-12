@@ -1,6 +1,7 @@
 use partial_pretty_printer::{
     notation_constructors::lit, pretty_print, pretty_print_to_string,
-    testing::oracular_pretty_print, Notation, PrettyDoc, Style, Width,
+    testing::oracular_pretty_print, Notation, NotationError, PrettyDoc, Style, ValidNotation,
+    Width,
 };
 
 #[allow(unused)]
@@ -9,7 +10,17 @@ pub fn punct(s: &'static str) -> Notation {
 }
 
 #[derive(Debug, Clone)]
-pub struct SimpleDoc(pub Notation);
+pub struct SimpleDoc(pub ValidNotation);
+
+impl SimpleDoc {
+    pub fn new(notation: Notation) -> SimpleDoc {
+        SimpleDoc(notation.validate().expect("Invalid notation"))
+    }
+
+    pub fn try_new(notation: Notation) -> Result<SimpleDoc, NotationError> {
+        Ok(SimpleDoc(notation.validate()?))
+    }
+}
 
 impl<'a> PrettyDoc<'a> for &'a SimpleDoc {
     type Id = usize;
@@ -18,7 +29,7 @@ impl<'a> PrettyDoc<'a> for &'a SimpleDoc {
         0
     }
 
-    fn notation(self) -> &'a Notation {
+    fn notation(self) -> &'a ValidNotation {
         &self.0
     }
 
@@ -122,7 +133,7 @@ fn assert_pp_impl<'d, D: PrettyDoc<'d>>(doc: D, width: Width, expected_lines: Op
         .map(|s| s.to_owned())
         .collect::<Vec<_>>();
     compare_lines(
-        "IN PRETTY PRINTING",
+        &format!("IN PRETTY PRINTING WITH WIDTH {}", width),
         oracle_result.clone(),
         lines.join("\n"),
     );

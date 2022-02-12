@@ -3,7 +3,7 @@ use once_cell::sync::Lazy;
 use partial_pretty_printer::notation_constructors::{
     child, left, nl, repeat, right, surrounded, text,
 };
-use partial_pretty_printer::{Notation, PrettyDoc, RepeatInner, Style};
+use partial_pretty_printer::{PrettyDoc, RepeatInner, Style, ValidNotation};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -19,8 +19,8 @@ enum FlowWrapData {
     Paragraph(Box<[FlowWrap; 1]>),
 }
 
-static WORD_NOTATION: Lazy<Notation> = Lazy::new(|| text(Style::plain()));
-static WORDS_NOTATION: Lazy<Notation> = Lazy::new(|| {
+static WORD_NOTATION: Lazy<ValidNotation> = Lazy::new(|| text(Style::plain()).validate().unwrap());
+static WORDS_NOTATION: Lazy<ValidNotation> = Lazy::new(|| {
     let soft_break = || punct(" ") | nl();
     repeat(RepeatInner {
         empty: punct(""),
@@ -28,8 +28,11 @@ static WORDS_NOTATION: Lazy<Notation> = Lazy::new(|| {
         join: left() + punct(",") + soft_break() + right(),
         surround: punct("    ") + surrounded(),
     })
+    .validate()
+    .unwrap()
 });
-static PARAGRAPH_NOTATION: Lazy<Notation> = Lazy::new(|| punct("¶") + child(0) + punct("□"));
+static PARAGRAPH_NOTATION: Lazy<ValidNotation> =
+    Lazy::new(|| (punct("¶") + child(0) + punct("□")).validate().unwrap());
 
 enum Contents<'d> {
     Text(&'d str),
@@ -56,7 +59,7 @@ impl<'d> PrettyDoc<'d> for &'d FlowWrap {
         self.id
     }
 
-    fn notation(self) -> &'d Notation {
+    fn notation(self) -> &'d ValidNotation {
         use FlowWrapData::*;
 
         match &self.data {

@@ -29,7 +29,7 @@ pub enum NotationCase<'d, D: PrettyDoc<'d>> {
     Flat(NotationRef<'d, D>),
     Indent(Width, NotationRef<'d, D>),
     Concat(NotationRef<'d, D>, NotationRef<'d, D>),
-    Choice(NotationRef<'d, D>, NotationRef<'d, D>),
+    Choice((NotationRef<'d, D>, bool), (NotationRef<'d, D>, bool)),
     Child(usize, NotationRef<'d, D>),
 }
 
@@ -56,9 +56,10 @@ impl<'d, D: PrettyDoc<'d>> NotationRef<'d, D> {
             Notation::Concat(left, right) => {
                 NotationCase::Concat(self.subnotation(left), self.subnotation(right))
             }
-            Notation::Choice(left, right) => {
-                NotationCase::Choice(self.subnotation(left), self.subnotation(right))
-            }
+            Notation::Choice((left, ln), (right, rn)) => NotationCase::Choice(
+                (self.subnotation(left), *ln),
+                (self.subnotation(right), *rn),
+            ),
             Notation::Child(i) => NotationCase::Child(*i, self.child(*i)),
             Notation::Left => {
                 if let RepeatPos::Join(_, i) = self.repeat_pos {
@@ -81,7 +82,7 @@ impl<'d, D: PrettyDoc<'d>> NotationRef<'d, D> {
     }
 
     pub fn new(doc: D) -> NotationRef<'d, D> {
-        NotationRef::from_parts(doc, doc.notation(), RepeatPos::None)
+        NotationRef::from_parts(doc, &doc.notation().0, RepeatPos::None)
     }
 
     // Turns out it's _really_ convenient to put a fake newline at the start of the document.
@@ -183,7 +184,7 @@ impl<'d, D: PrettyDoc<'d>> NotationRef<'d, D> {
 
     fn child(&self, index: usize) -> NotationRef<'d, D> {
         let child = self.doc.unwrap_child(index);
-        NotationRef::from_parts(child, child.notation(), RepeatPos::None)
+        NotationRef::from_parts(child, &child.notation().0, RepeatPos::None)
     }
 }
 

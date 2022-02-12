@@ -446,27 +446,37 @@ impl<'d, D: PrettyDoc<'d>> UpwardPrinter<'d, D> {
 }
 
 /// Determine which of the two options of the choice to select. Pick the first option if it fits,
-/// or if the second option is invalid.
+/// or if it's valid but the second option isn't.
 fn choose<'d, D: PrettyDoc<'d>>(
     width: Width,
     indent: Option<Width>,
     prefix_len: Width,
-    opt1: NotationRef<'d, D>,
-    opt2: NotationRef<'d, D>,
+    opt1: (NotationRef<'d, D>, bool),
+    opt2: (NotationRef<'d, D>, bool),
     suffix: &[Chunk<'d, D>],
 ) -> NotationRef<'d, D> {
     span!("choose");
 
     use std::iter;
+
+    let (opt1, nl1) = opt1;
+    let (opt2, nl2) = opt2;
     let flat = indent.is_none();
+
+    // If one of the options is illegal, pick the other. (If both are illegal, pick the second.)
+    if flat && nl1 {
+        return opt2;
+    } else if flat && nl2 {
+        return opt1;
+    }
+
+    // Otherwise, pick the first option iff it fits.
     let chunks = suffix
         .iter()
         .map(|(i, _, n)| (i.is_none(), *n))
         .chain(iter::once((flat, opt1)))
         .collect();
-    if fits(width.saturating_sub(prefix_len), chunks) && is_valid(flat, opt1)
-        || !is_valid(flat, opt2)
-    {
+    if width >= prefix_len && fits(width - prefix_len, chunks) {
         opt1
     } else {
         opt2
@@ -509,40 +519,20 @@ fn fits<'d, D: PrettyDoc<'d>>(width: Width, chunks: Vec<(bool, NotationRef<'d, D
                 chunks.push((flat, note2));
                 chunks.push((flat, note1));
             }
-            Choice(opt1, opt2) => {
-                // opt2 must always be strictly smaller!
-                // TODO: As an optimization, pre-compute whether opt2 has an unconditional newline
-                if is_valid(flat, opt2) {
-                    chunks.push((flat, opt2));
-                } else {
+            Choice((opt1, nl1), (opt2, nl2)) => {
+                // We should almost always pick the second option, because by the notation
+                // requirement its first line must be at least as short as the first option's first
+                // line. But if the second option is invalid and the first isn't, we should pick
+                // the first.
+                if flat && nl2 && !nl1 {
                     chunks.push((flat, opt1));
+                } else {
+                    chunks.push((flat, opt2));
                 }
             }
         }
     }
     true
-}
-
-// A wrapper around the recursive function, so that the profiler doesn't get invoked on each
-// recursion.
-fn is_valid<'d, D: PrettyDoc<'d>>(flat: bool, notation: NotationRef<'d, D>) -> bool {
-    span!("is_valid");
-    is_valid_rec(flat, notation)
-}
-
-fn is_valid_rec<'d, D: PrettyDoc<'d>>(flat: bool, notation: NotationRef<'d, D>) -> bool {
-    use NotationCase::*;
-
-    match notation.case() {
-        Empty | Literal(_) | Text(_, _) => true,
-        Newline => !flat,
-        Flat(note) => is_valid_rec(true, note),
-        Indent(_, note) => is_valid_rec(flat, note),
-        // TODO: As an optimization, pre-compute whether opt2 has an unconditional newline.
-        Choice(opt1, opt2) => is_valid_rec(flat, opt1) || is_valid_rec(flat, opt2),
-        Concat(note1, note2) => is_valid_rec(flat, note1) && is_valid_rec(flat, note2),
-        Child(_, child_note) => !flat || is_valid_rec(flat, child_note),
-    }
 }
 
 fn text_len(text: &str) -> Width {
