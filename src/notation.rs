@@ -8,13 +8,12 @@ use std::ops::{Add, BitOr, BitXor, Shr};
 /// Describes how to display a syntactic construct. When constructing a Notation, you must obey one
 /// requirement. If you do not, the pretty printer may choose poor layouts.
 ///
-/// > For every choice `(x | y)`:
-/// > - If it is printed non-flat, then the first line of `x` is short than (or equal to) the first
-/// >   line of `y`.
-/// > - If it is printed flat, then the first line of `y` is short than (or equal to) the first
-/// >   line of `x`.
+/// > For every choice `(x | y)`, the first line of `x` is shorter than (or equal to) the first
+///   line of `y`.
 ///
-/// the first line of `y` is no longer than the first line of `y`.
+/// Additionally, whenever possible the leftmost option of a choice should be flat (contain no
+/// newlines). This allows containing notations to use the `Flat` constructor to attempt to fit it
+/// in one line.
 #[derive(Clone, Debug)]
 pub enum Notation {
     /// Display nothing. Identical to `Literal("")`.
@@ -25,7 +24,8 @@ pub enum Notation {
     Text(Style),
     /// Literal text. Cannot contain a newline.
     Literal(Box<Literal>),
-    /// Only consider single-line options of the contained notation.
+    /// Use the leftmost option of every choice in the contained notation. This will typically not
+    /// contain any newlines; hence the name "flat".
     Flat(Box<Notation>),
     /// Indent all lines of the contained notation except the first to the right by the given
     /// number of spaces.
@@ -34,8 +34,9 @@ pub enum Notation {
     /// last character of the left notation. The right notation's indentation level is not
     /// affected.
     Concat(Box<Notation>, Box<Notation>),
-    /// Display the left notation if its first line fits within the required width; otherwise
-    /// display the right.
+    /// Display the left notation if its first line fits within the required width or if we're
+    /// inside a `Flat`. Otherwise display the right. Make sure your choice obeys the `Notation`
+    /// requirements.
     Choice(Box<Notation>, Box<Notation>),
     /// Display the first notation in case this tree has empty text,
     /// otherwise show the second notation.

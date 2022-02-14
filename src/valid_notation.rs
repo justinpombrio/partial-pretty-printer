@@ -10,8 +10,6 @@ pub struct ValidNotation(pub(crate) Notation);
 
 #[derive(Debug, Clone)]
 pub enum NotationError {
-    FlattenedNewline,
-    FlattenedChild,
     LeftOutsideOfJoin,
     RightOutsideOfJoin,
     SurroundedOutsideOfSurround,
@@ -23,44 +21,20 @@ impl fmt::Display for NotationError {
         use NotationError::*;
 
         match self {
-            FlattenedNewline => {
-                write!(
-                    f,
-                    "The Notation contained a Flat around a Newline. There is no reason to
-            have this, since the purpose of Flat is to disallow Newlines. To fix this, either
-            remove the Flat or the Newline."
-                )
-            }
-            FlattenedChild => {
-                write!(
-                    f,
-                    "The Notation contains Children, but lacks any choice in which none
-            of the Children are Flattened. This is required in case all of the children contain
-            unconditional Newlines."
-                )
-            }
             LeftOutsideOfJoin => {
-                write!(f, "The Notations contains a `Left` used outside of `RepeatInner.join`, but `Left` is only meaningful inside `join`.")
+                write!(f, "The Notation contains a `Left` used outside of `RepeatInner.join`, but `Left` is only meaningful inside `join`.")
             }
             RightOutsideOfJoin => {
-                write!(f, "The Notations contains a `Right` used outside of `RepeatInner.join`, but `Right` is only meaningful inside `join`.")
+                write!(f, "The Notation contains a `Right` used outside of `RepeatInner.join`, but `Right` is only meaningful inside `join`.")
             }
             SurroundedOutsideOfSurround => {
-                write!(f, "The Notations contains a `Surrounded` used outside of `RepeatInner.surround`, but `Surrounded` is only meaningful inside `surround`.")
+                write!(f, "The Notation contains a `Surrounded` used outside of `RepeatInner.surround`, but `Surrounded` is only meaningful inside `surround`.")
             }
             NestedRepeat => {
                 write!(f, "The Notation contains a nested `Repeat`, but one Repeat is not allowed to occur inside another.")
             }
         }
     }
-}
-
-#[derive(Debug, Clone, Copy)]
-struct FlatThings {
-    /// Does this notation contain an _unconditional_ newline?
-    newline: bool,
-    /// Does this notation contain an _unconditional_ flattened child?
-    flat_child: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -71,111 +45,60 @@ enum Context {
     Surround,
 }
 
-impl FlatThings {
-    fn none() -> FlatThings {
-        FlatThings {
-            newline: false,
-            flat_child: false,
-        }
-    }
-
-    fn newline() -> FlatThings {
-        FlatThings {
-            newline: true,
-            flat_child: false,
-        }
-    }
-
-    fn flat_child() -> FlatThings {
-        FlatThings {
-            newline: false,
-            flat_child: true,
-        }
-    }
-
-    fn concat(self: FlatThings, other: FlatThings) -> FlatThings {
-        FlatThings {
-            newline: self.newline || other.newline,
-            flat_child: self.flat_child || other.flat_child,
-        }
-    }
-
-    fn choice(self: FlatThings, other: FlatThings) -> FlatThings {
-        FlatThings {
-            newline: self.newline && other.newline,
-            flat_child: self.flat_child && other.flat_child,
-        }
-    }
-}
-
 impl Notation {
     pub fn validate(mut self) -> Result<ValidNotation, NotationError> {
-        let validation_info = self.validate_rec(Context::Notation, false)?;
-        if validation_info.flat_child {
-            return Err(NotationError::FlattenedChild);
-        }
+        self.validate_rec(Context::Notation)?;
         Ok(ValidNotation(self))
     }
 
-    fn validate_rec(&mut self, ctx: Context, flat: bool) -> Result<FlatThings, NotationError> {
+    fn validate_rec(&mut self, ctx: Context) -> Result<(), NotationError> {
         use crate::Notation::*;
         use Context::*;
         use NotationError::*;
 
         match self {
-            Empty => Ok(FlatThings::none()),
-            Text(_) => Ok(FlatThings::none()),
-            Literal(_) => Ok(FlatThings::none()),
-            Newline => Ok(FlatThings::newline()),
-            Flat(note) => {
-                let flattened = note.validate_rec(ctx, true)?;
-                if flattened.newline {
-                    Err(FlattenedNewline)
-                } else {
-                    Ok(flattened)
-                }
-            }
-            Indent(_, note) => note.validate_rec(ctx, flat),
+            Empty => Ok(()),
+            Text(_) => Ok(()),
+            Literal(_) => Ok(()),
+            Newline => Ok(()),
+            Flat(note) => note.validate_rec(ctx),
+            Indent(_, note) => note.validate_rec(ctx),
             Concat(note1, note2) => {
-                let flattened1 = note1.validate_rec(ctx, flat)?;
-                let flattened2 = note2.validate_rec(ctx, flat)?;
-                Ok(flattened1.concat(flattened2))
+                note1.validate_rec(ctx)?;
+                note2.validate_rec(ctx)?;
+                Ok(())
             }
             Choice(note1, note2) => {
-                let flattened1 = note1.validate_rec(ctx, flat)?;
-                let flattened2 = note2.validate_rec(ctx, flat)?;
-                Ok(flattened1.choice(flattened2))
+                note1.validate_rec(ctx)?;
+                note2.validate_rec(ctx)?;
+                Ok(())
             }
             IfEmptyText(note1, note2) => {
-                let flattened1 = note1.validate_rec(ctx, flat)?;
-                let flattened2 = note2.validate_rec(ctx, flat)?;
-                Ok(flattened1.choice(flattened2))
+                note1.validate_rec(ctx)?;
+                note2.validate_rec(ctx)?;
+                Ok(())
             }
-            Child(_) if flat => Ok(FlatThings::flat_child()),
-            Child(_) => Ok(FlatThings::none()),
-            Repeat(repeat) if ctx == Notation => repeat.validate_rec(flat),
+            Child(_) => Ok(()),
+            Repeat(repeat) if ctx == Notation => repeat.validate_rec(),
             Repeat(_) => Err(NestedRepeat),
-            Left if ctx == Join && flat => Ok(FlatThings::flat_child()),
-            Right if ctx == Join && flat => Ok(FlatThings::flat_child()),
-            Left if ctx == Join => Ok(FlatThings::none()),
-            Right if ctx == Join => Ok(FlatThings::none()),
+            Left if ctx == Join => Ok(()),
+            Right if ctx == Join => Ok(()),
             Left => Err(LeftOutsideOfJoin),
             Right => Err(RightOutsideOfJoin),
-            Surrounded if ctx == Surround && flat => Ok(FlatThings::flat_child()),
-            Surrounded if ctx == Surround => Ok(FlatThings::none()),
+            Surrounded if ctx == Surround => Ok(()),
             Surrounded => Err(SurroundedOutsideOfSurround),
         }
     }
 }
 
 impl RepeatInner {
-    fn validate_rec(&mut self, flat: bool) -> Result<FlatThings, NotationError> {
+    fn validate_rec(&mut self) -> Result<(), NotationError> {
         use Context::*;
 
-        let f_empty = self.empty.validate_rec(InRepeat, flat)?;
-        let f_lone = self.lone.validate_rec(InRepeat, flat)?;
-        let f_join = self.join.validate_rec(Join, flat)?;
-        let f_surround = self.surround.validate_rec(Surround, flat)?;
-        Ok(f_empty.concat(f_lone.concat(f_join.concat(f_surround))))
+        self.empty.validate_rec(InRepeat)?;
+        self.lone.validate_rec(InRepeat)?;
+        self.join.validate_rec(Join)?;
+        self.surround.validate_rec(Surround)?;
+        Ok(())
     }
 }
