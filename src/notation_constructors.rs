@@ -1,43 +1,102 @@
-use super::notation::{Literal, Notation, RepeatInner};
-use super::style::Style;
+use crate::geometry::Width;
+use crate::measure::Measure;
+use crate::notation::{MeasuredNotation, Notation};
+use crate::style::Style;
+use std::ops::{Add, BitOr, BitXor, Shr};
 
-pub fn empty() -> Notation {
-    Notation::Empty
+/// Display nothing. Identical to `lit("")`.
+pub fn empty() -> MeasuredNotation {
+    MeasuredNotation {
+        measure: Measure::flat(0),
+        notation: Box::new(Notation::Empty),
+    }
 }
 
-pub fn nl() -> Notation {
-    Notation::Newline
+/// Display a newline. If this is inside an `indent`, the new line will be indented.
+pub fn nl() -> MeasuredNotation {
+    MeasuredNotation {
+        measure: Measure::nonflat(0),
+        notation: Box::new(Notation::Newline),
+    }
 }
 
-pub fn child(i: usize) -> Notation {
-    Notation::Child(i)
+/// Literal text. Cannot contain a newline.
+pub fn lit(s: &str, style: Style) -> MeasuredNotation {
+    let len = s.chars().count() as Width;
+    MeasuredNotation {
+        measure: Measure::flat(len),
+        notation: Box::new(Notation::Literal(s.to_owned(), style)),
+    }
 }
 
-pub fn text(style: Style) -> Notation {
-    Notation::Text(style)
+/// Only consider single-line options of the contained notation.
+pub fn flat(note: MeasuredNotation) -> MeasuredNotation {
+    MeasuredNotation {
+        measure: note.measure.flattened(),
+        notation: Box::new(Notation::Flat(note)),
+    }
 }
 
-pub fn lit(s: &str, style: Style) -> Notation {
-    let literal = Literal::new(s, style);
-    Notation::Literal(Box::new(literal))
+/// Indent all lines of the contained notation except the first to the right by the given
+/// number of spaces.
+pub fn indent(ind: Width, note: MeasuredNotation) -> MeasuredNotation {
+    MeasuredNotation {
+        measure: note.measure,
+        notation: Box::new(Notation::Indent(ind, note)),
+    }
 }
 
-pub fn flat(n: Notation) -> Notation {
-    Notation::Flat(Box::new(n))
+/// Display both notations. The first character of the right notation immediately follows the
+/// last character of the left notation. The right notation's indentation level is not
+/// affected.
+pub fn concat(left: MeasuredNotation, right: MeasuredNotation) -> MeasuredNotation {
+    MeasuredNotation {
+        measure: left.measure.concat(right.measure),
+        notation: Box::new(Notation::Concat(left, right)),
+    }
 }
 
-pub fn left() -> Notation {
-    Notation::Left
+/// Display the left notation if its first line fits within the required width; otherwise
+/// display the right.
+pub fn choice(left: MeasuredNotation, right: MeasuredNotation) -> MeasuredNotation {
+    MeasuredNotation {
+        measure: left.measure.choice(right.measure),
+        notation: Box::new(Notation::Choice(left, right)),
+    }
 }
 
-pub fn right() -> Notation {
-    Notation::Right
+impl Add<MeasuredNotation> for MeasuredNotation {
+    type Output = MeasuredNotation;
+
+    /// Shorthand for `concat`.
+    fn add(self, other: MeasuredNotation) -> MeasuredNotation {
+        concat(self, other)
+    }
 }
 
-pub fn surrounded() -> Notation {
-    Notation::Surrounded
+impl BitOr<MeasuredNotation> for MeasuredNotation {
+    type Output = MeasuredNotation;
+
+    /// Shorthand for `choice`.
+    fn bitor(self, other: MeasuredNotation) -> MeasuredNotation {
+        choice(self, other)
+    }
 }
 
-pub fn repeat(repeat: RepeatInner) -> Notation {
-    Notation::Repeat(Box::new(repeat))
+impl BitXor<MeasuredNotation> for MeasuredNotation {
+    type Output = MeasuredNotation;
+
+    /// Shorthand for `X + newline() + Y`.
+    fn bitxor(self, other: MeasuredNotation) -> MeasuredNotation {
+        self + nl() + other
+    }
+}
+
+impl Shr<MeasuredNotation> for Width {
+    type Output = MeasuredNotation;
+
+    /// Shorthand for nesting (indented newline)
+    fn shr(self, notation: MeasuredNotation) -> MeasuredNotation {
+        indent(self, concat(nl(), notation))
+    }
 }
