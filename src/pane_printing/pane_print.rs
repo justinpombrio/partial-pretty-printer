@@ -1,7 +1,7 @@
 use super::pane::{Pane, PaneError};
 use super::pane_notation::{Label, PaneNotation, PaneSize};
 use super::pretty_window::PrettyWindow;
-use crate::geometry::{Height, Pos, Width};
+use crate::geometry::{Height, Pos, Rectangle, Width};
 use crate::pretty_printing::{pretty_print, PrettyDoc};
 use crate::style::{Shade, ShadedStyle};
 
@@ -24,6 +24,8 @@ pub fn pane_print<'d, L: Label, D: PrettyDoc<'d>, W: PrettyWindow>(
     let mut pane = Pane::new(window)?;
     pane_print_rec(&mut pane, note, get_content)
 }
+
+type DynSizeFn<'l, W> = Box<dyn FnOnce(usize) -> Result<usize, PaneError<W>> + 'l>;
 
 fn pane_print_rec<'d, L: Label, D: PrettyDoc<'d>, W: PrettyWindow>(
     pane: &mut Pane<W>,
@@ -66,81 +68,91 @@ fn pane_print_rec<'d, L: Label, D: PrettyDoc<'d>, W: PrettyWindow>(
             }
         }
         PaneNotation::Horz(panes) => {
-            let child_notes: Vec<_> = panes.iter().map(|(_, note)| note).collect();
-            let total_fixed: usize = panes.iter().filter_map(|(size, _)| size.get_fixed()).sum();
-            let total_width = pane.rect.width() as usize;
-            let mut available_width = total_width.saturating_sub(total_fixed);
-            let child_sizes = panes
-                .iter()
-                .map(|(size, notation)| match *size {
-                    PaneSize::Dynamic => {
-                        // Convert dynamic width into a fixed width, based on the currrent document.
-                        if let PaneNotation::Doc { label, .. } = notation {
-                            let (doc, path) = get_content(label.clone())
-                                .ok_or_else(|| PaneError::MissingLabel(format!("{:?}", label)))?;
-                            let width =
-                                doc_width(doc, &path, pane.rect.height(), available_width as Width);
-                            let width = width as usize;
-                            available_width -= width;
-                            Ok(PaneSize::Fixed(width))
-                        } else {
-                            // Dynamic may only be used on Doc subpanes!
-                            Err(PaneError::InvalidNotation)
-                        }
-                    }
-                    size => Ok(size), // pass through all other pane sizes
-                })
-                .collect::<Result<Vec<_>, _>>()?;
+            let mut dynamic_sizes: Vec<DynSizeFn<W>> = vec![];
+            for (size, notation) in panes {
+                if let PaneSize::Dynamic = size {
+                    let label = if let PaneNotation::Doc { label, .. } = notation {
+                        label.clone()
+                    } else {
+                        return Err(PaneError::InvalidUseOfDynamic);
+                    };
+                    let height = pane.rect.height();
+                    let func = move |available_width: usize| {
+                        let (doc, path) = get_content(label.clone())
+                            .ok_or_else(|| PaneError::MissingLabel(format!("{:?}", label)))?;
+                        Ok(doc_width(doc, &path, height, available_width as Width) as usize)
+                    };
+                    dynamic_sizes.push(Box::new(func) as DynSizeFn<W>);
+                }
+            }
 
-            let widths: Vec<_> = divvy(total_width, &child_sizes)
+            let child_sizes = &panes.iter().map(|(size, _)| *size).collect::<Vec<_>>();
+            let widths: Vec<_> = divvy(pane.rect.width() as usize, &child_sizes, dynamic_sizes)?
                 .into_iter()
                 .map(|n| n as Width)
                 .collect();
 
-            let rects = pane.rect.horz_splits(&widths);
-            for (rect, child_note) in rects.zip(child_notes.into_iter()) {
+            // Split this pane's rectangle horizontally (a.k.a. vertical slices) into multiple subpanes.
+            let mut col = pane.rect.min_col;
+            let pane_rect = pane.rect;
+            let rects = widths.into_iter().map(|width| {
+                let old_col = col;
+                col += width;
+                Rectangle {
+                    min_col: old_col,
+                    max_col: col,
+                    min_line: pane_rect.min_line,
+                    max_line: pane_rect.max_line,
+                }
+            });
+
+            let child_notes = &panes.iter().map(|(_, note)| note).collect::<Vec<_>>();
+            for (rect, child_note) in rects.into_iter().zip(child_notes.iter()) {
                 let mut child_pane = pane.sub_pane(rect).ok_or(PaneError::NotSubPane)?;
                 pane_print_rec(&mut child_pane, child_note, get_content)?;
             }
         }
         PaneNotation::Vert(panes) => {
-            let child_notes: Vec<_> = panes.iter().map(|(_, note)| note).collect();
-            let total_fixed: usize = panes.iter().filter_map(|(size, _)| size.get_fixed()).sum();
-            let total_height = pane.rect.height() as usize;
-            let mut available_height = total_height.saturating_sub(total_fixed);
-            let child_sizes = panes
-                .iter()
-                .map(|(size, notation)| match *size {
-                    PaneSize::Dynamic => {
-                        // Convert dynamic height into a fixed height, based on the currrent document.
-                        if let PaneNotation::Doc { label, .. } = notation {
-                            let (doc, path) = get_content(label.clone())
-                                .ok_or_else(|| PaneError::MissingLabel(format!("{:?}", label)))?;
-                            let height = doc_height(
-                                doc,
-                                &path,
-                                pane.rect.width(),
-                                available_height as Height,
-                            );
-                            let height = height as usize;
-                            available_height -= height;
-                            Ok(PaneSize::Fixed(height))
-                        } else {
-                            // Dynamic may only be used on Doc subpanes!
-                            Err(PaneError::InvalidNotation)
-                        }
-                    }
-                    size => Ok(size), // pass through all other pane sizes
-                })
-                .collect::<Result<Vec<_>, _>>()?;
+            let mut dynamic_sizes: Vec<DynSizeFn<W>> = vec![];
+            for (size, notation) in panes {
+                if let PaneSize::Dynamic = size {
+                    let label = if let PaneNotation::Doc { label, .. } = notation {
+                        label.clone()
+                    } else {
+                        return Err(PaneError::InvalidUseOfDynamic);
+                    };
+                    let width = pane.rect.width();
+                    let func = move |available_height: usize| {
+                        let (doc, path) = get_content(label.clone())
+                            .ok_or_else(|| PaneError::MissingLabel(format!("{:?}", label)))?;
+                        Ok(doc_height(doc, &path, width, available_height as Height) as usize)
+                    };
+                    dynamic_sizes.push(Box::new(func) as DynSizeFn<W>);
+                }
+            }
 
-            let heights: Vec<_> = divvy(total_height, &child_sizes)
+            let child_sizes = &panes.iter().map(|(size, _)| *size).collect::<Vec<_>>();
+            let heights: Vec<_> = divvy(pane.rect.height() as usize, &child_sizes, dynamic_sizes)?
                 .into_iter()
                 .map(|n| n as Height)
                 .collect();
 
-            let rects = pane.rect.vert_splits(&heights);
-            for (rect, child_note) in rects.zip(child_notes.into_iter()) {
+            // Split this pane's rectangle vertically (a.k.a. horizontal slices) into multiple subpanes.
+            let mut line = pane.rect.min_line;
+            let pane_rect = pane.rect;
+            let rects = heights.into_iter().map(|height| {
+                let old_line = line;
+                line += height;
+                Rectangle {
+                    min_col: pane_rect.min_col,
+                    max_col: pane_rect.max_col,
+                    min_line: old_line,
+                    max_line: line,
+                }
+            });
+
+            let child_notes = &panes.iter().map(|(_, note)| note).collect::<Vec<_>>();
+            for (rect, child_note) in rects.zip(child_notes.iter()) {
                 let mut child_pane = pane.sub_pane(rect).ok_or(PaneError::NotSubPane)?;
                 pane_print_rec(&mut child_pane, child_note, get_content)?;
             }
@@ -182,16 +194,29 @@ fn doc_width<'d>(
 /// some are proprortional: first satisfy all of the fixed demands, then allocate the rest of the
 /// space proportionally. If there is not enough space to satisfy the fixed demands, it's
 /// first-come first-served among the fixed demands and the proportional demands get nothing.
-fn divvy(cookies: usize, demands: &[PaneSize]) -> Vec<usize> {
+fn divvy<'d, W: PrettyWindow>(
+    cookies: usize,
+    demands: &[PaneSize],
+    dynamic_sizes: Vec<DynSizeFn<W>>,
+) -> Result<Vec<usize>, PaneError<W>> {
     // Allocate cookies for all the fixed demands.
     let fixed_demands = demands
         .iter()
         .filter_map(|demand| demand.get_fixed())
         .collect::<Vec<_>>();
-    let (fixed_allocation, cookies) = fixedly_divide(cookies, &fixed_demands);
+    let (fixed_allocation, mut cookies) = fixedly_divide(cookies, &fixed_demands);
     let mut fixed_allocation = fixed_allocation.into_iter();
 
-    // Now divvy up any remaining cookies among the proportional demands.
+    // Allocate remaining cookies among the dynamic demands.
+    let mut dynamic_allocation = vec![];
+    for func in dynamic_sizes {
+        let given_cookies = func(cookies)?;
+        cookies -= given_cookies;
+        dynamic_allocation.push(given_cookies);
+    }
+    let mut dynamic_allocation = dynamic_allocation.into_iter();
+
+    // Allocate remaining cookies among the proportional demands.
     let proportional_demands = demands
         .iter()
         .filter_map(|demand| demand.get_proportional())
@@ -200,16 +225,16 @@ fn divvy(cookies: usize, demands: &[PaneSize]) -> Vec<usize> {
         proportionally_divide(cookies, &proportional_demands).into_iter();
 
     // And finally merge the two allocations
-    demands
+    Ok(demands
         .iter()
         .map(|demand| match demand {
-            PaneSize::Fixed(_) => fixed_allocation.next().expect("bug in divvy"),
-            PaneSize::Proportional(_) => proportional_allocation.next().expect("bug in divvy"),
-            PaneSize::Dynamic => {
-                panic!("All Dynamic sizes should have been replaced by Fixed sizes by now!")
-            }
+            PaneSize::Fixed(_) => fixed_allocation.next().expect("bug in divvy (fixed)"),
+            PaneSize::Proportional(_) => proportional_allocation
+                .next()
+                .expect("bug in divvy (proportional)"),
+            PaneSize::Dynamic => dynamic_allocation.next().expect("bug in divvy (dynamic)"),
         })
-        .collect::<Vec<_>>()
+        .collect::<Vec<_>>())
 }
 
 /// Divvy `cookies` up among children, where each child requires a fixed number of cookies,

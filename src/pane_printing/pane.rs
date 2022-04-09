@@ -19,8 +19,10 @@ pub enum PaneError<W: PrettyWindow> {
     #[error("requested pane is not a subpane of the current pane")]
     NotSubPane,
 
-    #[error("invalid pane notation")]
-    InvalidNotation,
+    #[error(
+        "invalid pane notation: PaneSize::Dyanmic may only be used in a PaneNotation::Doc pane"
+    )]
+    InvalidUseOfDynamic,
 
     #[error("missing document in pane notation: {0}")]
     MissingLabel(String),
