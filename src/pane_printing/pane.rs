@@ -19,9 +19,6 @@ pub enum PaneError<W: PrettyWindow> {
     #[error("requested pane is not a subpane of the current pane")]
     NotSubPane,
 
-    #[error("pane notation layout demands cannot be satisfied")]
-    ImpossibleDemands,
-
     #[error("invalid pane notation")]
     InvalidNotation,
 

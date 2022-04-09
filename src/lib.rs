@@ -1,5 +1,3 @@
-//! # Partial Pretty Printer
-//!
 //! This is a pretty printing library for tree-shaped documents, such as ASTs. Given declarative
 //! rules for how to display each sort of node in a document, it prints the document with a
 //! desired line width.
@@ -10,7 +8,7 @@
 //! to print 50 lines in the middle of a 100,000 line document, it can typically do that in ~50
 //! units of work, rather than ~50,000 units of work.
 //!
-//! ## Installation
+//! # Installation
 //!
 //! This crate [TODO: will be] on crates.io, and can be imported with:
 //!
@@ -21,9 +19,21 @@
 //!
 //! It is currently unstable, and if you use it you should expect to encounter breaking changes.
 //!
-//! ## Usage
+//! # Quick Reference
 //!
-//! In order to pretty print a document, it must implement the [`PrettyDoc`] trait:
+//! You can:
+//!
+//! - Print a [`PrettyDoc`] to a `String` using [`pretty_print_to_string`].
+//! - Print a node in a [`PrettyDoc`] to get lazy iterators over [`LineContents`] using
+//! [`pretty_print`].  This lets you (i) use colors and (ii) print just part of a document for
+//! efficiency.
+//! - Make a character-grid based UI with nested panes, using the [`pane`] module.
+//!
+//! Continue reading for details.
+//!
+//! # Usage
+//!
+//! In order to pretty print a document, the document must implement the [`PrettyDoc`] trait:
 //!
 //! ```ignore
 //! pub trait PrettyDoc<'d>: Copy {
@@ -41,17 +51,25 @@
 //!
 //! - a unique id for that node,
 //! - a notation for displaying that sort of node, and
-//! - an accessor for the contents of the node, which is either a slice of contained nodes, of a
-//!   string.
+//! - accessors for the contents of that node, which is either a sequence of ccontained nodes, or a
+//! string.
 //!
-//! ### Pretty Printing Functions
+//! [Read more](trait.PrettyDoc.html)
 //!
-//! There are two pretty printing functions. The simpler one is [`pretty_print_to_string`], which
+//! ## Pretty Printing Functions
+//!
+//! There are two ways to pretty print a `PrettyDoc`.
+//! The simpler one is [`pretty_print_to_string`], which
 //! prints the entirety of the document, with a preferred line width, to a string:
 //!
 //! ```ignore
-//! fn pretty_print_to_string<D: PrettyDoc>(doc: &'d D, width: Width) -> String;
+//! fn pretty_print_to_string<D: PrettyDoc>(
+//!     doc: &'d D,
+//!     width: Width
+//! ) -> String;
 //! ```
+//!
+//! ([`Width`] is just an alias for an integer type, currently `u16`.)
 //!
 //! This provides a simple interface, but does not take full advantage of this library. To do so,
 //! you can use the more versatile [`pretty_print`] function:
@@ -85,23 +103,16 @@
 //! }
 //! ```
 //!
-//! The contents of the line can contain styles, which can be set in the [`Notation`]s returned by
-//! [`PrettyDoc`]. Additionally, there cursor highlighting information in the form of a _shade_ for
+//! The contents of the line can contain styles, which are set in the [`Notation`]s returned by
+//! [`PrettyDoc`]. Additionally, there is cursor highlighting information in the form of a _shade_ for
 //! the background color. `spaces` is the indentation level of the line, and the shade of those
 //! spaces.
 //!
-//! ### Pane Printing
-//!
-//! Besides pretty printing, this library can also perform "pane printing": a simple mechanism for
-//! splitting a window into multiple rectangular panes, each of which can display a document via
-//! pretty printing. This is meant for implementing terminal UIs. For more details see the [`pane`]
-//! module.
-//!
-//! ### Notation Design
+//! ## Notation Design
 //!
 //! TODO
 //!
-//! ### Other Types
+//! ## Other Types
 //!
 //! A character position [`Pos`] has a [`Line`] and [`Col`]. `Line` and `Col` are type aliases for
 //! integer types.
@@ -109,7 +120,14 @@
 //! A size [`Size`] has a [`Width`] and [`Height`]. `Width` and `Height` are type aliases for
 //! integer types.
 //!
-//! Everything is measured in characters and 0-indexed.
+//! Everything is measured in characters and is 0-indexed.
+//!
+//! ## Pane Printing
+//!
+//! Besides pretty printing, this library can also perform "pane printing": a simple mechanism for
+//! splitting a window into multiple rectangular panes, each of which can display a document via
+//! pretty printing. This is meant for implementing terminal UIs. For more details see the [`pane`]
+//! module.
 
 mod geometry;
 mod infra;
@@ -125,7 +143,7 @@ pub mod notation_constructors;
 pub use geometry::{Col, Height, Line, Pos, Size, Width};
 pub use notation::{Notation, RepeatInner};
 pub use pretty_printing::{pretty_print, pretty_print_to_string, LineContents, PrettyDoc};
-pub use style::{Color, ShadedStyle, Style};
+pub use style::{Color, Shade, ShadedStyle, Style};
 pub use valid_notation::{NotationError, ValidNotation};
 
 pub mod testing {
@@ -165,10 +183,10 @@ pub mod pane {
     //!   directly, instead it references them by `Label`. (`Label` is a trait alias: `trait Label:
     //!   Clone + Debug {}`.)
     //! - `get_content` is a function to look up a document by label. It returns both the document, and
-    //!   the path to the node in the document to focus on. (The empty path `vec![]` will focus on the
+    //!   the [Path] to the node in the document to focus on. (The empty path `vec![]` will focus on the
     //!   top of the document.)
     pub use super::pane_printing::{
-        pane_print, Label, PaneNotation, PaneSize, PlainText, PrettyWindow, RenderOptions,
+        pane_print, Label, PaneNotation, PaneSize, Path, PlainText, PrettyWindow, RenderOptions,
         WidthStrategy,
     };
 }

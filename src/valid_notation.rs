@@ -4,7 +4,8 @@ use std::fmt;
 // TODO:
 // - Check over this validation. It probably misses some subtle points.
 
-/// A Notation that has passed validation. Obtain one with `Notation.validate()`.
+/// A Notation that has passed validation. Obtain one by constructing a [Notation] and then calling
+/// [Notation::validate].
 #[derive(Clone, Debug)]
 pub struct ValidNotation(pub(crate) Notation);
 

@@ -9,10 +9,10 @@ pub trait Label: Clone + fmt::Debug {}
 #[derive(Clone, Debug)]
 pub enum PaneNotation<L: Label> {
     /// Split the pane into multiple subpanes from left to right, each with its own `PaneNotation`.
-    /// Each subpane has the same height as this `Pane`, and a width determined by its `PaneSize`.
+    /// Each subpane has the same height as this `Pane`, and a width determined by its [`PaneSize`].
     Horz(Vec<(PaneSize, PaneNotation<L>)>),
     /// Split the pane into multiple subpanes from top to bottom, each with its own `PaneNotation`.
-    /// Each subpane has the same width as this `Pane`, and a height determined by its `PaneSize`.
+    /// Each subpane has the same width as this `Pane`, and a height determined by its [`PaneSize`].
     Vert(Vec<(PaneSize, PaneNotation<L>)>),
     /// Render a `PrettyDocument` into this `Pane`. The given `DocLabel` will be used to
     /// dynamically look up a `PrettyDocument` every time the `Pane` is rendered.
@@ -26,7 +26,13 @@ pub enum PaneNotation<L: Label> {
     Empty,
 }
 
-/// Specify the size of a subpane within a vertically or horizontally concatenated set of subpanes.
+/// Specify the size of a subpane within a vertically ([`PaneNotation::Vert`]) or horizontally
+/// ([`PaneNotation::Horz`]) concatenated set of subpanes. Space is divvied up among all the panes
+/// in a `Horz` or `Vert`, in this priority order:
+///
+/// 1. `Fixed`
+/// 2. `Dynamic`
+/// 3. `Proportional`
 #[derive(Clone, Copy, Debug)]
 pub enum PaneSize {
     /// Give the subpane exactly this number of rows of height (for

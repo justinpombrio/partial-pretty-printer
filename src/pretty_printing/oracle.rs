@@ -105,7 +105,7 @@ impl fmt::Display for Layout {
 
 /// For testing!
 ///
-/// Pretty print the document with the given width. Prints "[error]" in case of error (Flat of
+/// Pretty print the document with the given width. Prints "\\[error\\]" in case of error (Flat of
 /// Newline). This is only meant for testing. It's slow: roughly exponential in the size of the doc
 /// / doubly exponential in the size of the output.
 pub fn oracular_pretty_print<'d, D: PrettyDoc<'d>>(doc: D, width: Width) -> String {

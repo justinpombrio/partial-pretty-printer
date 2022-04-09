@@ -93,7 +93,6 @@ fn pane_print_rec<'d, L: Label, D: PrettyDoc<'d>, W: PrettyWindow>(
                 .collect::<Result<Vec<_>, _>>()?;
 
             let widths: Vec<_> = divvy(total_width, &child_sizes)
-                .ok_or(PaneError::ImpossibleDemands)?
                 .into_iter()
                 .map(|n| n as Width)
                 .collect();
@@ -136,7 +135,6 @@ fn pane_print_rec<'d, L: Label, D: PrettyDoc<'d>, W: PrettyWindow>(
                 .collect::<Result<Vec<_>, _>>()?;
 
             let heights: Vec<_> = divvy(total_height, &child_sizes)
-                .ok_or(PaneError::ImpossibleDemands)?
                 .into_iter()
                 .map(|n| n as Height)
                 .collect();
@@ -151,6 +149,8 @@ fn pane_print_rec<'d, L: Label, D: PrettyDoc<'d>, W: PrettyWindow>(
     Ok(())
 }
 
+/// Determine how many lines a document would take to print. If it would take more than
+/// `max_height` lines, stops and returns `max_height` instead.
 fn doc_height<'d>(
     doc: impl PrettyDoc<'d>,
     path: &[usize],
@@ -161,6 +161,8 @@ fn doc_height<'d>(
     downward_printer.take(max_height as usize).count() as Height
 }
 
+/// Determine how many columns a document would take to print, if given `height` lines. If it would
+/// use more than `max_width` columns, returns `max_width` instead.
 fn doc_width<'d>(
     doc: impl PrettyDoc<'d>,
     path: &[usize],
@@ -176,32 +178,54 @@ fn doc_width<'d>(
     width
 }
 
-fn divvy(cookies: usize, demands: &[PaneSize]) -> Option<Vec<usize>> {
-    let total_fixed: usize = demands.iter().filter_map(|demand| demand.get_fixed()).sum();
-    if total_fixed > cookies {
-        return None; // Impossible to satisfy the demands!
-    }
+/// Divvy space ("cookies") up among various PaneSize demands. Some demands are fixed size, and
+/// some are proprortional: first satisfy all of the fixed demands, then allocate the rest of the
+/// space proportionally. If there is not enough space to satisfy the fixed demands, it's
+/// first-come first-served among the fixed demands and the proportional demands get nothing.
+fn divvy(cookies: usize, demands: &[PaneSize]) -> Vec<usize> {
+    // Allocate cookies for all the fixed demands.
+    let fixed_demands = demands
+        .iter()
+        .filter_map(|demand| demand.get_fixed())
+        .collect::<Vec<_>>();
+    let (fixed_allocation, cookies) = fixedly_divide(cookies, &fixed_demands);
+    let mut fixed_allocation = fixed_allocation.into_iter();
 
-    let hungers: Vec<_> = demands
+    // Now divvy up any remaining cookies among the proportional demands.
+    let proportional_demands = demands
         .iter()
         .filter_map(|demand| demand.get_proportional())
-        .collect();
-
+        .collect::<Vec<_>>();
     let mut proportional_allocation =
-        proportionally_divide(cookies - total_fixed, &hungers).into_iter();
+        proportionally_divide(cookies, &proportional_demands).into_iter();
 
-    Some(
-        demands
-            .iter()
-            .map(|demand| match demand {
-                PaneSize::Fixed(n) => *n,
-                PaneSize::Proportional(_) => proportional_allocation.next().expect("bug in divvy"),
-                PaneSize::Dynamic => {
-                    panic!("All Dynamic sizes should have been replaced by Fixed sizes by now!")
-                }
-            })
-            .collect(),
-    )
+    // And finally merge the two allocations
+    demands
+        .iter()
+        .map(|demand| match demand {
+            PaneSize::Fixed(_) => fixed_allocation.next().expect("bug in divvy"),
+            PaneSize::Proportional(_) => proportional_allocation.next().expect("bug in divvy"),
+            PaneSize::Dynamic => {
+                panic!("All Dynamic sizes should have been replaced by Fixed sizes by now!")
+            }
+        })
+        .collect::<Vec<_>>()
+}
+
+/// Divvy `cookies` up among children, where each child requires a fixed number of cookies,
+/// returning the allocation and the number of remaining cookies. If there aren't enough cookies,
+/// it's first-come first-serve.
+fn fixedly_divide(cookies: usize, child_hungers: &[usize]) -> (Vec<usize>, usize) {
+    let mut cookies = cookies;
+    let cookie_allocation = child_hungers
+        .iter()
+        .map(|hunger| {
+            let cookies_given = cookies.min(*hunger);
+            cookies -= cookies_given;
+            cookies_given
+        })
+        .collect::<Vec<_>>();
+    (cookie_allocation, cookies)
 }
 
 /// Divvy `cookies` up among children as fairly as possible, where the `i`th
