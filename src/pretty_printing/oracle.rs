@@ -4,102 +4,70 @@ use crate::geometry::{Line, Width};
 use std::fmt;
 
 #[derive(Debug, Clone)]
-enum Layout {
-    Lines(Vec<(Width, String)>),
-    Error,
-}
+struct Layout(Vec<(Width, String)>);
 
 impl Layout {
-    fn empty() -> Layout {
-        Layout::Lines(vec![(0, String::new())])
-    }
-
     fn text(s: &str) -> Layout {
-        Layout::Lines(vec![(0, s.to_string())])
+        Layout(vec![(0, s.to_string())])
     }
 
     fn newline() -> Layout {
-        Layout::Lines(vec![(0, String::new()), (0, String::new())])
+        Layout(vec![(0, String::new()), (0, String::new())])
     }
 
-    fn indent(self, ind: Width) -> Layout {
-        match self {
-            Layout::Error => Layout::Error,
-            Layout::Lines(mut lines) => {
-                for i in 1..lines.len() {
-                    lines[i].0 += ind;
-                }
-                Layout::Lines(lines)
-            }
+    fn indent(mut self, ind: Width) -> Layout {
+        for line in &mut self.0 {
+            line.0 += ind;
         }
+        self
     }
 
-    fn flatten(self) -> Layout {
-        match self {
-            Layout::Error => Layout::Error,
-            Layout::Lines(lines) if lines.len() == 1 => Layout::Lines(lines),
-            Layout::Lines(_) => Layout::Error,
+    fn append(mut self, other: Layout) -> Layout {
+        let mut other_iter = other.0.into_iter();
+        let suffix = other_iter.next().unwrap().1;
+        let lines = &mut self.0;
+        lines.last_mut().unwrap().1.push_str(&suffix);
+        for line in other_iter {
+            lines.push(line);
         }
+        self
     }
 
-    fn append(self, other: Layout) -> Layout {
-        match (self, other) {
-            (Layout::Error, _) => Layout::Error,
-            (_, Layout::Error) => Layout::Error,
-            (Layout::Lines(x), Layout::Lines(y)) => {
-                let mut y_iter = y.into_iter();
-                let suffix = y_iter.next().unwrap().1;
-                let mut lines = x;
-                lines.last_mut().unwrap().1.push_str(&suffix);
-                for line in y_iter {
-                    lines.push(line);
-                }
-                Layout::Lines(lines)
-            }
+    fn pick(self, other: Layout, flat: bool, width: Width, line: Line) -> Layout {
+        let x_lines = self.0;
+        let y_lines = other.0;
+
+        if flat {
+            return Layout(x_lines);
         }
-    }
 
-    fn pick(self, other: Layout, width: Width, line: Line) -> Layout {
-        match (self, other) {
-            (Layout::Error, lay) => lay,
-            (lay, Layout::Error) => lay,
-            (Layout::Lines(x_lines), Layout::Lines(y_lines)) => {
-                let x_line_len = {
-                    let (spaces, string) = &x_lines[line as usize];
-                    spaces + string.chars().count() as Width
-                };
-                if x_line_len <= width {
-                    Layout::Lines(x_lines)
-                } else {
-                    Layout::Lines(y_lines)
-                }
-            }
+        let x_line_len = {
+            let (spaces, string) = &x_lines[line as usize];
+            spaces + string.chars().count() as Width
+        };
+        if x_line_len <= width {
+            Layout(x_lines)
+        } else {
+            Layout(y_lines)
         }
     }
 
     fn num_newlines(&self) -> Line {
-        match self {
-            Layout::Error => 0,
-            Layout::Lines(lines) => (lines.len() - 1) as Line,
-        }
+        (self.0.len() - 1) as Line
     }
 }
 
 impl fmt::Display for Layout {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Layout::Error => write!(f, "[error]"),
-            Layout::Lines(lines) => {
-                let len = lines.len();
-                for (i, (spaces, line)) in lines.into_iter().enumerate() {
-                    write!(f, "{:spaces$}{}", "", line, spaces = *spaces as usize)?;
-                    if i + 1 != len {
-                        write!(f, "\n")?;
-                    }
-                }
-                Ok(())
+        let lines = &self.0;
+        let len = lines.len();
+        for (i, (spaces, line)) in lines.into_iter().enumerate() {
+            write!(f, "{:spaces$}{}", "", line, spaces = *spaces as usize)?;
+            if i + 1 != len {
+                write!(f, "\n")?;
             }
         }
+        Ok(())
     }
 }
 
@@ -123,12 +91,9 @@ fn pp<'d, D: PrettyDoc<'d>>(
     use NotationCase::*;
 
     match notation.case() {
-        Empty => cont(Layout::empty()),
         Literal(s) => cont(Layout::text(s.str())),
-        Newline => cont(Layout::newline()),
+        Newline => cont(Layout::newline().indent(notation.indentation())),
         Text(s, _) => cont(Layout::text(s)),
-        Indent(i, x) => pp(width, line, x, &|lay| cont(lay.indent(i))),
-        Flat(x) => pp(width, line, x, &|lay| cont(lay.flatten())),
         Child(_, x) => pp(width, line, x, cont),
         Concat(x, y) => pp(width, line, x, &|x_lay| {
             pp(width, line + x_lay.num_newlines(), y, &|y_lay| {
@@ -138,15 +103,15 @@ fn pp<'d, D: PrettyDoc<'d>>(
         Choice(x, y) => {
             let x_lay = pp(width, line, x, cont);
             let y_lay = pp(width, line, y, cont);
-            x_lay.pick(y_lay, width, line)
+            x_lay.pick(y_lay, notation.is_flat(), width, line)
         }
     }
 }
 
 #[test]
 fn test_layout() {
-    let ab = Layout::Lines(vec![(1, "a".to_owned()), (1, "bb".to_owned())]);
-    let cd = Layout::Lines(vec![(2, "ccc".to_owned()), (2, "dddd".to_owned())]);
+    let ab = Layout(vec![(1, "a".to_owned()), (1, "bb".to_owned())]);
+    let cd = Layout(vec![(2, "ccc".to_owned()), (2, "dddd".to_owned())]);
     let abcd = ab.append(cd);
     assert_eq!(format!("{}", abcd), " a\n bbccc\n  dddd");
 
@@ -155,5 +120,5 @@ fn test_layout() {
     let newline = Layout::newline();
     let hello_world = hello.append(newline).append(world);
     assert_eq!(format!("{}", hello_world), "Hello\nworld!");
-    assert_eq!(format!("{}", hello_world.indent(2)), "Hello\n  world!");
+    assert_eq!(format!("{}", hello_world.indent(2)), "  Hello\n  world!");
 }

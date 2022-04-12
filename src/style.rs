@@ -74,7 +74,7 @@ pub struct Shade(pub u8);
 
 impl Style {
     /// Typically, ordinary white on black.
-    pub fn plain() -> Self {
+    pub const fn plain() -> Self {
         Style {
             color: Color::Base05,
             bold: false,

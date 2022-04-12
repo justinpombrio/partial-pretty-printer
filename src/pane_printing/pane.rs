@@ -83,7 +83,7 @@ where
     }
 
     fn print(&mut self, pos: Pos, string: &str, style: ShadedStyle) -> Result<(), PaneError<W>> {
-        if !self.may_be_in_pane(pos) {
+        if !self.might_be_in_pane(pos) {
             // Trying to print outside the pane.
             return Ok(());
         }
@@ -109,7 +109,7 @@ where
         len: Width,
         style: ShadedStyle,
     ) -> Result<(), PaneError<W>> {
-        if !self.may_be_in_pane(pos) {
+        if !self.might_be_in_pane(pos) {
             // Trying to print outside the pane.
             return Ok(());
         }
@@ -118,7 +118,7 @@ where
             .map_err(PaneError::PrettyWindowErr)
     }
 
-    fn may_be_in_pane(&self, start_pos: Pos) -> bool {
+    fn might_be_in_pane(&self, start_pos: Pos) -> bool {
         start_pos.line >= self.rect.min_line
             && start_pos.line < self.rect.max_line
             && start_pos.col < self.rect.max_col

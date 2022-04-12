@@ -58,6 +58,12 @@ pub enum Notation {
     Surrounded,
 }
 
+pub static EMPTY_LITERAL: &Literal = &Literal {
+    string: String::new(),
+    len: 0,
+    style: Style::plain(),
+};
+
 #[derive(Clone, Debug)]
 pub struct Literal {
     string: String,
