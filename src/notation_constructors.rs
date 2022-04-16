@@ -28,11 +28,12 @@ pub fn lit(s: &str, style: Style) -> Notation {
 }
 
 pub fn half_nestled(ind: Width, left_ws: &str, n: Notation) -> Notation {
-    group(indent(ind, ws(left_ws) + n))
+    lit(left_ws, Style::plain()) + flat(n.clone()) | indent(ind, nl() + n)
 }
 
 pub fn nestled(ind: Width, left_ws: &str, n: Notation, right_ws: &str) -> Notation {
-    group(indent(ind, ws(left_ws) + n) + ws(right_ws))
+    lit(left_ws, Style::plain()) + flat(n.clone()) + lit(right_ws, Style::plain())
+        | indent(ind, nl() + n) + nl()
 }
 
 pub fn indent(i: Width, n: Notation) -> Notation {

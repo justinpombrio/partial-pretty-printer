@@ -1,6 +1,6 @@
 use crate::standard::pretty_testing::{all_paths, assert_pp, punct, SimpleDoc};
 use partial_pretty_printer::{
-    notation_constructors::{flat, group, if_flat, nl, ws},
+    notation_constructors::{flat, group, if_flat, indent, nestled, nl, ws},
     Notation,
 };
 
@@ -38,6 +38,9 @@ fn basics_indent() {
 fn basics_flat() {
     let notation = flat(punct("long") | (punct("a") ^ punct("b")));
     assert_pp(&SimpleDoc::new(notation), 2, &["long"]);
+
+    let notation = flat(nl()) | punct("****");
+    assert_pp(&SimpleDoc::new(notation), 2, &["****"]);
 }
 
 #[test]
@@ -75,6 +78,17 @@ fn basics_group() {
     let notation = punct("(") + group(ws(" ")) + punct(")");
     assert_pp(&SimpleDoc::new(notation.clone()), 50, &["( )"]);
     assert_pp(&SimpleDoc::new(notation), 1, &["(", ")"]);
+}
+
+#[test]
+fn basics_nestled() {
+    let inner = punct("**") + nl() + punct("**");
+    let notation = punct("[") + (flat(inner.clone()) | indent(2, nl() + inner) + nl()) + punct("]");
+    assert_pp(
+        &SimpleDoc::new(notation.clone()),
+        10,
+        &["[", "  **", "  **", "]"],
+    );
 }
 
 #[test]

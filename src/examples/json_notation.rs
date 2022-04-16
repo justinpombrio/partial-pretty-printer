@@ -81,8 +81,6 @@ static JSON_DICT_NOTATION: Lazy<ValidNotation> = Lazy::new(|| {
         lone: punct("{") + nestled(4, " ", child(0), " ") + punct("}"),
         join: left() + punct(",") + nl() + right(),
         surround: punct("{") + (4 >> surrounded()) + nl() + punct("}"),
-        // join: left() + punct(",") + ws(" ") + right(),
-        // surround: punct("{") + nestled(4, " ", surrounded(), " ") + punct("}"),
     })
     .validate()
     .unwrap()

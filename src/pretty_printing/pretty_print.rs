@@ -496,7 +496,7 @@ fn fits<'d, D: PrettyDoc<'d>>(width: Width, chunks: Vec<NotationRef<'d, D>>) -> 
                     return false;
                 }
             }
-            Newline => return true,
+            Newline => return !notation.is_flat(),
             Child(_, note) => chunks.push(note),
             Concat(note1, note2) => {
                 chunks.push(note2);

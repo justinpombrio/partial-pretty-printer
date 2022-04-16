@@ -222,6 +222,7 @@ fn make_json_tree(id: u32, size: usize) -> Json {
     ])
 }
 
+// Run with `cargo bench --tests`
 #[bench]
 fn json_tree_bench(bencher: &mut Bencher) {
     let little_tree = make_json_tree(0, 2);
@@ -243,12 +244,14 @@ fn json_tree_bench(bencher: &mut Bencher) {
             "            \"id\": 2,",
             "            \"children_lengths\": [\"child_number_one\"],",
             "            \"number_of_children\": 1,",
-            "            \"children\": [{",
-            "                \"id\": 3,",
-            "                \"children_lengths\": [],",
-            "                \"number_of_children\": 0,",
-            "                \"children\": []",
-            "            }]",
+            "            \"children\": [",
+            "                {",
+            "                    \"id\": 3,",
+            "                    \"children_lengths\": [],",
+            "                    \"number_of_children\": 0,",
+            "                    \"children\": []",
+            "                }",
+            "            ]",
             "        }",
             "    ]",
             "}",
