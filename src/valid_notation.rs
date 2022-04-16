@@ -66,18 +66,20 @@ impl Notation {
             Indent(_, note) => note.validate_rec(ctx),
             Concat(note1, note2) => {
                 note1.validate_rec(ctx)?;
-                note2.validate_rec(ctx)?;
-                Ok(())
+                note2.validate_rec(ctx)
             }
+            Group(note) => note.validate_rec(ctx),
             Choice(note1, note2) => {
                 note1.validate_rec(ctx)?;
-                note2.validate_rec(ctx)?;
-                Ok(())
+                note2.validate_rec(ctx)
+            }
+            IfFlat(note1, note2) => {
+                note1.validate_rec(ctx)?;
+                note2.validate_rec(ctx)
             }
             IfEmptyText(note1, note2) => {
                 note1.validate_rec(ctx)?;
-                note2.validate_rec(ctx)?;
-                Ok(())
+                note2.validate_rec(ctx)
             }
             Child(_) => Ok(()),
             Repeat(repeat) if ctx == Notation => repeat.validate_rec(),

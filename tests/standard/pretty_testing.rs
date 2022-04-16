@@ -123,7 +123,10 @@ fn assert_pp_impl<'d, D: PrettyDoc<'d>>(doc: D, width: Width, expected_lines: Op
     let oracle_result = oracular_pretty_print(doc, width);
     if let Some(expected_lines) = expected_lines {
         compare_lines(
-            "ORACLE DISAGREES WITH TEST CASE, SO TEST CASE MUST BE WRONG",
+            &format!(
+                "ORACLE DISAGREES WITH TEST CASE AT WIDTH {}, SO TEST CASE MUST BE WRONG",
+                width
+            ),
             oracle_result.clone(),
             expected_lines.join("\n"),
         );

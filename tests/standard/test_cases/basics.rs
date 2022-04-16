@@ -1,6 +1,6 @@
 use crate::standard::pretty_testing::{all_paths, assert_pp, punct, SimpleDoc};
 use partial_pretty_printer::{
-    notation_constructors::{flat, nl},
+    notation_constructors::{flat, group, if_flat, nl, ws},
     Notation,
 };
 
@@ -45,6 +45,36 @@ fn basics_choice() {
     let notation = punct("Hello world!") | punct("Hello") ^ punct("world!");
     assert_pp(&SimpleDoc::new(notation.clone()), 12, &["Hello world!"]);
     assert_pp(&SimpleDoc::new(notation), 11, &["Hello", "world!"]);
+}
+
+#[test]
+fn basics_if_flat() {
+    let notation = if_flat(punct("aaa"), punct("bbb"));
+    assert_pp(&SimpleDoc::new(notation.clone()), 5, &["bbb"]);
+    assert_pp(&SimpleDoc::new(notation), 2, &["bbb"]);
+
+    let notation = flat(if_flat(punct("aaa"), punct("bbb")));
+    assert_pp(&SimpleDoc::new(notation.clone()), 5, &["aaa"]);
+    assert_pp(&SimpleDoc::new(notation), 2, &["aaa"]);
+}
+
+#[test]
+fn basics_ws() {
+    assert_pp(&SimpleDoc::new(ws("  ")), 5, &["", ""]);
+    assert_pp(&SimpleDoc::new(ws("  ")), 1, &["", ""]);
+    assert_pp(&SimpleDoc::new(flat(ws("  "))), 5, &["  "]);
+    assert_pp(&SimpleDoc::new(flat(ws("  "))), 1, &["  "]);
+}
+
+#[test]
+fn basics_group() {
+    let notation = group(punct("Hello") + ws(" ") + punct("dear") + ws(" ") + punct("world"));
+    assert_pp(&SimpleDoc::new(notation.clone()), 50, &["Hello dear world"]);
+    assert_pp(&SimpleDoc::new(notation), 10, &["Hello", "dear", "world"]);
+
+    let notation = punct("(") + group(ws(" ")) + punct(")");
+    assert_pp(&SimpleDoc::new(notation.clone()), 50, &["( )"]);
+    assert_pp(&SimpleDoc::new(notation), 1, &["(", ")"]);
 }
 
 #[test]

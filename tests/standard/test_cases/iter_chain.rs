@@ -1,6 +1,8 @@
 use crate::standard::pretty_testing::{assert_pp, punct};
 use once_cell::sync::Lazy;
-use partial_pretty_printer::notation_constructors::{child, flat, text};
+use partial_pretty_printer::notation_constructors::{
+    child, flat, group, half_nestled, indent, nestled, text, ws,
+};
 use partial_pretty_printer::{PrettyDoc, Style, ValidNotation};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -34,17 +36,15 @@ static METHOD_CALL_NOTATION: Lazy<ValidNotation> = Lazy::new(|| {
     //     .bar(
     //         arg
     //      )
-    let single = punct(".") + child(1) + punct("(") + flat(child(2)) + punct(")");
-    let two_lines = punct(".") + child(1) + punct("(") + flat(child(2)) + punct(")");
-    let multi = (punct(".") + child(1) + punct("(") + (4 >> child(2))) ^ punct(")");
-    (child(0) + (single | (4 >> (two_lines | multi))))
-        .validate()
-        .unwrap()
+
+    let arg = punct("(") + nestled(4, "", child(2), "") + punct(")");
+    let method = half_nestled(4, "", punct(".") + child(1) + arg);
+    (child(0) + method).validate().unwrap()
 });
 static CLOSURE_NOTATION: Lazy<ValidNotation> = Lazy::new(|| {
-    let single = punct("|") + child(0) + punct("| { ") + child(1) + punct(" }");
-    let multi = (punct("|") + child(0) + punct("| {") + (4 >> child(1))) ^ punct("}");
-    (single | multi).validate().unwrap()
+    (punct("|") + child(0) + punct("| {") + nestled(4, " ", child(1), " ") + punct("}"))
+        .validate()
+        .unwrap()
 });
 static TIMES_NOTATION: Lazy<ValidNotation> =
     Lazy::new(|| (child(0) + punct(" * ") + child(1)).validate().unwrap());

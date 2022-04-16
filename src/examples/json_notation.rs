@@ -1,5 +1,7 @@
 use crate::notation::{Notation, RepeatInner};
-use crate::notation_constructors::{child, flat, left, lit, nl, repeat, right, surrounded, text};
+use crate::notation_constructors::{
+    child, flat, group, left, lit, nestled, nl, repeat, right, surrounded, text, ws,
+};
 use crate::pretty_printing::PrettyDoc;
 use crate::style::{Color, Style};
 use crate::valid_notation::ValidNotation;
@@ -44,42 +46,43 @@ fn constant(s: &'static str) -> Notation {
 }
 
 static JSON_NULL_NOTATION: Lazy<ValidNotation> = Lazy::new(|| constant("null").validate().unwrap());
+
 static JSON_TRUE_NOTATION: Lazy<ValidNotation> = Lazy::new(|| constant("true").validate().unwrap());
+
 static JSON_FALSE_NOTATION: Lazy<ValidNotation> =
     Lazy::new(|| constant("false").validate().unwrap());
+
 static JSON_STRING_NOTATION: Lazy<ValidNotation> = Lazy::new(|| {
     (punct("\"") + text(Style::color(Color::Base0B)) + punct("\""))
         .validate()
         .unwrap()
 });
+
 static JSON_NUMBER_NOTATION: Lazy<ValidNotation> =
     Lazy::new(|| text(Style::color(Color::Base09)).validate().unwrap());
+
 static JSON_LIST_NOTATION: Lazy<ValidNotation> = Lazy::new(|| {
     repeat(RepeatInner {
         empty: punct("[]"),
-        lone: punct("[") + child(0) + punct("]"),
-        join: left() + punct(",") + (punct(" ") | nl()) + right(),
-        surround: {
-            let single = punct("[") + flat(surrounded()) + punct("]");
-            let multi = (punct("[") + (4 >> surrounded())) ^ punct("]");
-            single | multi
-        },
+        lone: punct("[") + nestled(4, "", child(0), "") + punct("]"),
+        join: left() + punct(",") + group(ws(" ")) + right(),
+        surround: punct("[") + nestled(4, "", surrounded(), "") + punct("]"),
     })
     .validate()
     .unwrap()
 });
+
 static JSON_DICT_ENTRY_NOTATION: Lazy<ValidNotation> =
     Lazy::new(|| (child(0) + punct(": ") + child(1)).validate().unwrap());
+
 static JSON_DICT_NOTATION: Lazy<ValidNotation> = Lazy::new(|| {
     repeat(RepeatInner {
         empty: punct("{}"),
-        lone: {
-            let single = punct("{") + child(0) + punct("}");
-            let multi = (punct("{") + (4 >> child(0))) ^ punct("}");
-            single | multi
-        },
+        lone: punct("{") + nestled(4, " ", child(0), " ") + punct("}"),
         join: left() + punct(",") + nl() + right(),
-        surround: (punct("{") + (4 >> surrounded())) ^ punct("}"),
+        surround: punct("{") + (4 >> surrounded()) + nl() + punct("}"),
+        // join: left() + punct(",") + ws(" ") + right(),
+        // surround: punct("{") + nestled(4, " ", surrounded(), " ") + punct("}"),
     })
     .validate()
     .unwrap()

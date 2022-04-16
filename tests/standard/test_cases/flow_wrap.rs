@@ -1,7 +1,7 @@
 use crate::standard::pretty_testing::{assert_pp, assert_pp_seek, punct};
 use once_cell::sync::Lazy;
 use partial_pretty_printer::notation_constructors::{
-    child, left, nl, repeat, right, surrounded, text,
+    child, flat, group, if_flat, left, nl, repeat, right, surrounded, text, ws,
 };
 use partial_pretty_printer::{PrettyDoc, RepeatInner, Style, ValidNotation};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -21,7 +21,7 @@ enum FlowWrapData {
 
 static WORD_NOTATION: Lazy<ValidNotation> = Lazy::new(|| text(Style::plain()).validate().unwrap());
 static WORDS_NOTATION: Lazy<ValidNotation> = Lazy::new(|| {
-    let soft_break = || punct(" ") | nl();
+    let soft_break = || group(ws(" "));
     repeat(RepeatInner {
         empty: punct(""),
         lone: punct("    ") + child(0),

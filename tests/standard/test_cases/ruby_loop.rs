@@ -1,6 +1,6 @@
 use crate::standard::pretty_testing::{assert_pp, punct};
 use once_cell::sync::Lazy;
-use partial_pretty_printer::notation_constructors::{child, flat, text};
+use partial_pretty_printer::notation_constructors::{child, flat, half_nestled, nestled, text};
 use partial_pretty_printer::{PrettyDoc, Style, ValidNotation};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -19,6 +19,22 @@ enum RubyData {
 
 static VAR_NOTATION: Lazy<ValidNotation> = Lazy::new(|| text(Style::plain()).validate().unwrap());
 static METHOD_CALL_NOTATION: Lazy<ValidNotation> = Lazy::new(|| {
+    // (1..5).each do |i| puts 1 end
+    //
+    // (1..5).each do |i|
+    //     puts i
+    // end
+    //
+    // -- Disallowing this layout:
+    // (1..5)
+    //     .each do |i| puts i end
+    //
+    // (1..5)
+    //     .each do |i|
+    //         puts i
+    //     end
+    //
+    // Not expressible with `group`!
     let single = punct(".") + child(1) + punct(" ") + child(2);
     let two_lines = punct(".") + child(1) + punct(" ") + child(2);
     let multi = punct(".") + child(1) + (4 >> child(2));
@@ -27,9 +43,9 @@ static METHOD_CALL_NOTATION: Lazy<ValidNotation> = Lazy::new(|| {
         .unwrap()
 });
 static DO_LOOP_NOTATION: Lazy<ValidNotation> = Lazy::new(|| {
-    let single = punct("do |") + child(0) + punct("| ") + flat(child(1)) + punct(" end");
-    let multi = (punct("do |") + child(0) + punct("|") + (4 >> child(1))) ^ punct("end");
-    (single | multi).validate().unwrap()
+    (punct("do |") + child(0) + punct("|") + nestled(4, " ", child(1), " ") + punct("end"))
+        .validate()
+        .unwrap()
 });
 
 enum Contents<'d> {

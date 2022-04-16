@@ -38,6 +38,11 @@ pub enum Notation {
     /// inside a `Flat`. Otherwise display the right. Make sure your choice obeys the `Notation`
     /// requirements.
     Choice(Box<Notation>, Box<Notation>),
+    /// Either flatten everything in the group, or don't. `Group(n)` is equivalent to
+    /// `Choice(Flat(n), n)`.
+    Group(Box<Notation>),
+    /// Display the first notation if we're inside a Flat, otherwise display the second notation.
+    IfFlat(Box<Notation>, Box<Notation>),
     /// Display the first notation in case this tree has empty text,
     /// otherwise show the second notation.
     IfEmptyText(Box<Notation>, Box<Notation>),
@@ -123,7 +128,9 @@ impl fmt::Display for Notation {
             Flat(note) => write!(f, "Flat({})", note),
             Indent(i, note) => write!(f, "{}⇒({})", i, note),
             Concat(left, right) => write!(f, "{} + {}", left, right),
+            Group(note) => write!(f, "Group({})", note),
             Choice(opt1, opt2) => write!(f, "({} | {})", opt1, opt2),
+            IfFlat(opt1, opt2) => write!(f, "ifFlat({}, {})", opt1, opt2),
             IfEmptyText(opt1, opt2) => write!(f, "IfEmptyText({} | {})", opt1, opt2),
             Child(i) => write!(f, "${}", i),
             Repeat(repeat) => write!(

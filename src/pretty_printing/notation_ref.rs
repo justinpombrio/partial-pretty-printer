@@ -75,6 +75,12 @@ impl<'d, D: PrettyDoc<'d>> NotationRef<'d, D> {
             Notation::Concat(left, right) => {
                 NotationCase::Concat(self.subnotation(left), self.subnotation(right))
             }
+            Notation::Group(note) => {
+                let left =
+                    NotationRef::from_parts(true, self.indent, self.doc, note, self.repeat_pos);
+                let right = self.subnotation(note);
+                NotationCase::Choice(left, right)
+            }
             Notation::Choice(left, right) => {
                 NotationCase::Choice(self.subnotation(left), self.subnotation(right))
             }
@@ -95,6 +101,7 @@ impl<'d, D: PrettyDoc<'d>> NotationRef<'d, D> {
             }
             Notation::Repeat(_)
             | Notation::Surrounded
+            | Notation::IfFlat(_, _)
             | Notation::IfEmptyText(_, _)
             | Notation::Flat(_)
             | Notation::Indent(_, _) => {
@@ -184,6 +191,13 @@ impl<'d, D: PrettyDoc<'d>> NotationRef<'d, D> {
                         unreachable!("`Right` is only allowed in `RepeatInner::join`");
                     }
                 }
+                IfFlat(opt1, opt2) => {
+                    if refn.flat {
+                        refn.notation = opt1;
+                    } else {
+                        refn.notation = opt2;
+                    }
+                }
                 IfEmptyText(opt1, opt2) => {
                     if refn.doc.unwrap_text().is_empty() {
                         refn.notation = opt1;
@@ -199,9 +213,14 @@ impl<'d, D: PrettyDoc<'d>> NotationRef<'d, D> {
                     refn.indent += i;
                     refn.notation = note;
                 }
-                Empty | Literal(_) | Newline | Text(_) | Concat(_, _) | Choice(_, _) | Child(_) => {
-                    break
-                }
+                Empty
+                | Literal(_)
+                | Newline
+                | Text(_)
+                | Concat(_, _)
+                | Group(_)
+                | Choice(_, _)
+                | Child(_) => break,
             }
         }
 
