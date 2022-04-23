@@ -59,8 +59,6 @@ impl Generator for SimpleNotationGenerator {
 fn oracle_tests() {
     // TODO: random notations too
     for notation in generate_all(SimpleNotationGenerator, 5) {
-        // TODO: don't print
-        println!("{}", notation);
         if let Ok(doc) = SimpleDoc::try_new(notation) {
             for width in 1..=8 {
                 assert_pp_without_expectation(&doc, width);

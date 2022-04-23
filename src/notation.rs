@@ -3,40 +3,45 @@ use crate::style::Style;
 use std::fmt;
 use std::ops::{Add, BitOr, BitXor, Shr};
 
-// TODO: Nail down this assumption further, I don't think this is _quite_ right.
-
 /// Describes how to display a syntactic construct. When constructing a Notation, you must obey one
-/// requirement. If you do not, the pretty printer may choose poor layouts.
+/// requirement. If you do not, the pretty printer may behave unpredictably and choose poor layouts.
 ///
 /// > For every choice `(x | y)`, the first line of `x` is shorter than (or equal to) the first
 ///   line of `y`.
-///
-/// Additionally, whenever possible the leftmost option of a choice should be flat (contain no
-/// newlines). This allows containing notations to use the `Flat` constructor to attempt to fit it
-/// in one line.
 #[derive(Clone, Debug)]
 pub enum Notation {
-    /// Display nothing. Identical to `Literal("")`.
+    /// Display nothing. Identical to Literal of an empty string.
     Empty,
     /// Display a newline. If this is inside an `Indent`, the new line will be indented.
     Newline,
-    /// Display a piece of text. Must be used on a texty node.
+    /// Display a piece of text. Must be used on a texty node (a node for which
+    /// [`crate::PrettyDoc::num_children()`] returns `None`).
     Text(Style),
-    /// Literal text. Cannot contain a newline.
+    /// Literal text. Contains a fixed string and a style. The string cannot contain a newline.
     Literal(Box<Literal>),
-    /// Use the leftmost option of every choice in the contained notation. This will typically not
-    /// contain any newlines; hence the name "flat".
+    /// `Flat(n)` means "display `n`, attempting to keep it flat (free of newlines)".
+    /// Specifically:
+    ///
+    /// - For every choice `x | y` in `n`, choose `x`.
+    /// - For every `IfFlat(x, y)` in `n`, choose `x`.
     Flat(Box<Notation>),
-    /// Indent all lines of the contained notation except the first to the right by the given
-    /// number of spaces.
+    /// Indent all lines of the contained notation except the first, by the given number of spaces.
     Indent(Width, Box<Notation>),
-    /// Display both notations. The first character of the right notation immediately follows the
-    /// last character of the left notation. The right notation's indentation level is not
-    /// affected.
+    /// Display the two notations in order. The first character of the right notation immediately
+    /// follows the last character of the left notation (that is, there's no space between). The
+    /// right notation's indentation level is not affected.
     Concat(Box<Notation>, Box<Notation>),
-    /// Display the left notation if its first line fits within the required width or if we're
-    /// inside a `Flat`. Otherwise display the right. Make sure your choice obeys the `Notation`
-    /// requirements.
+    /// Typically, you want to use `Group` instead. This is a more powerful alternative, but you
+    /// must ensure that you obey the Invariant:
+    ///
+    /// > For every choice `(x | y)`, the first line of `x` is shorter than (or equal to) the first
+    ///
+    /// Pick between two options. Generally, pick the first option if its first line fits within
+    /// the width limit, otherwise pick the second. However, there are exceptions:
+    ///
+    /// - If we're inside a `Flat`, always pick the first option.
+    /// - In the unlikely event that the first option contains an unconditional newline inside of
+    ///   a `Flat`, pick the second option instead.
     Choice(Box<Notation>, Box<Notation>),
     /// Either flatten everything in the group, or don't. `Group(n)` is equivalent to
     /// `Choice(Flat(n), n)`.
@@ -44,11 +49,11 @@ pub enum Notation {
     /// Display the first notation if we're inside a Flat, otherwise display the second notation.
     IfFlat(Box<Notation>, Box<Notation>),
     /// Display the first notation in case this tree has empty text,
-    /// otherwise show the second notation.
+    /// otherwise show the second notation. Must be used on a texty node.
     IfEmptyText(Box<Notation>, Box<Notation>),
-    /// Display the `i`th child of this node.
-    /// Must be used on a foresty node.
-    /// `i` must be less than the node's arity number.
+    /// Display the `i`th child of this node.  Must be used on a foresty node (a node for which
+    /// [`crate::PrettyDoc::num_children()`] returns `Some`).  `i` must be less than the node's
+    /// arity number.
     Child(usize),
     /// Determines what to display based on the arity of this node.
     /// Used for syntactic constructs that have extendable arity.
@@ -78,12 +83,17 @@ pub struct Literal {
 }
 
 /// Describes how to display the extra children of a syntactic
-/// construct with extendable arity.
+/// construct with extendable arity. Similar to a `fold` operation:
+///
+/// - If the children are `[]`, return `empty`.
+/// - If the children are `[x]`, return `lone`.
+/// - If the chidlren are `[x, y, z]`, return `surrouned(join(join(x, y), z))`.
 #[derive(Clone, Debug)]
 pub struct RepeatInner {
     /// If the sequence is empty, use this notation.
     pub empty: Notation,
-    /// If the sequence has length one, use this notation.
+    /// If the sequence has length one, use this notation. You can refer to the single child with
+    /// `Child(0)`.
     pub lone: Notation,
     /// If the sequence has length 2 or more, (left-)fold elements together with
     /// this notation. [`Left`](Notation::Left) holds the notation so far, while

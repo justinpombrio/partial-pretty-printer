@@ -24,7 +24,7 @@
 //! You can:
 //!
 //! - Print a [`PrettyDoc`] to a `String` using [`pretty_print_to_string`].
-//! - Print a node in a [`PrettyDoc`] to get lazy iterators over [`LineContents`] using
+//! - Print a node in a [`PrettyDoc`] to get lazy iterators of [`LineContents`] using
 //! [`pretty_print`].  This lets you (i) use colors and (ii) print just part of a document for
 //! efficiency.
 //! - Make a character-grid based UI with nested panes, using the [`pane`] module.
@@ -89,7 +89,7 @@
 //!
 //! First, instead of printing the entire document, it lets you print just part of the document.
 //! `path` is a sequence of indices, that leads from the root of the document to a node buried
-//! inside of it. The return value is a pair of iterators over line contents: the first prints lines
+//! inside of it. The return value is a pair of iterators of line contents: the first prints lines
 //! _above_ the buried node going up; the second prints lines _from its first line_ going down. If
 //! you exhaust both iterators, you will print the entire document, but if you take fewer you can
 //! save the pretty printer some work.
@@ -141,7 +141,7 @@ pub mod examples;
 pub mod notation_constructors;
 
 pub use geometry::{Col, Height, Line, Pos, Size, Width};
-pub use notation::{Notation, RepeatInner};
+pub use notation::{Literal, Notation, RepeatInner};
 pub use pretty_printing::{pretty_print, pretty_print_to_string, LineContents, PrettyDoc};
 pub use style::{Color, Shade, ShadedStyle, Style};
 pub use valid_notation::{NotationError, ValidNotation};
