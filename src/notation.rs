@@ -1,7 +1,7 @@
 use crate::geometry::Width;
 use crate::style::Style;
 use std::fmt;
-use std::ops::{Add, BitOr, BitXor, Shr};
+use std::ops::{Add, BitXor, Shr};
 
 /// Describes how to display a syntactic construct. When constructing a Notation, you must obey one
 /// requirement. If you do not, the pretty printer may behave unpredictably and choose poor layouts.
@@ -161,15 +161,6 @@ impl Add<Notation> for Notation {
     /// Shorthand for `Concat`.
     fn add(self, other: Notation) -> Notation {
         Notation::Concat(Box::new(self), Box::new(other))
-    }
-}
-
-impl BitOr<Notation> for Notation {
-    type Output = Notation;
-
-    /// Shorthand for `Choice`.
-    fn bitor(self, other: Notation) -> Notation {
-        Notation::Choice(Box::new(self), Box::new(other))
     }
 }
 

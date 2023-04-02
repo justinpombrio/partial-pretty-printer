@@ -1,6 +1,6 @@
 use crate::standard::pretty_testing::{all_paths, assert_pp, punct, SimpleDoc};
 use partial_pretty_printer::{
-    notation_constructors::{flat, group, if_flat, indent, nestled, nl, ws},
+    notation_constructors::{flat, group, if_flat, nestled, nl, ws},
     Notation,
 };
 
@@ -34,6 +34,8 @@ fn basics_indent() {
     assert_pp(&SimpleDoc::new(notation), 80, &["Hello", "  world!"]);
 }
 
+// TODO: replace
+/*
 #[test]
 fn basics_flat() {
     let notation = flat(punct("long") | (punct("a") ^ punct("b")));
@@ -49,6 +51,7 @@ fn basics_choice() {
     assert_pp(&SimpleDoc::new(notation.clone()), 12, &["Hello world!"]);
     assert_pp(&SimpleDoc::new(notation), 11, &["Hello", "world!"]);
 }
+*/
 
 #[test]
 fn basics_if_flat() {
@@ -83,7 +86,7 @@ fn basics_group() {
 #[test]
 fn basics_nestled() {
     let inner = punct("**") + nl() + punct("**");
-    let notation = punct("[") + (flat(inner.clone()) | indent(2, nl() + inner) + nl()) + punct("]");
+    let notation = punct("[") + nestled(2, "", inner, "") + punct("]");
     assert_pp(
         &SimpleDoc::new(notation.clone()),
         10,
@@ -119,17 +122,23 @@ fn test_all_paths_fn() {
 }
 
 // Implementation purposefully disagrees with Oracle
+// TODO: replace
+/*
 #[test]
 #[ignore]
 fn hidden_error() {
     let notation = punct("x") ^ flat(nl()) | punct("ok");
     assert_pp(&SimpleDoc::new(notation), 3, &["x", "", ""]);
 }
+*/
 
 // Implementation purposefully disagrees with Oracle
+// TODO: replace
+/*
 #[test]
 #[ignore]
 fn tricky_suffix() {
     let notation = (punct("a") | punct("bb")) + ((punct("x") + nl() + flat(nl())) | punct("yy"));
     assert_pp(&SimpleDoc::new(notation), 3, &["ax", "", ""]);
 }
+*/

@@ -1,6 +1,6 @@
 use crate::notation::{Notation, RepeatInner};
 use crate::notation_constructors::{
-    child, flat, group, left, lit, nestled, nl, repeat, right, surrounded, text, ws,
+    child, group, left, lit, nestled, nl, repeat, right, surrounded, text, ws,
 };
 use crate::pretty_printing::PrettyDoc;
 use crate::style::{Color, Style};

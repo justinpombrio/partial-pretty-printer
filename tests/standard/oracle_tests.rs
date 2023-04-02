@@ -1,7 +1,7 @@
 use crate::standard::generative_testing::{generate_all, Generator, Picker};
 use crate::standard::pretty_testing::{assert_pp_without_expectation, SimpleDoc};
 use partial_pretty_printer::{
-    notation_constructors::{empty, flat, lit, nl},
+    notation_constructors::{empty, flat, group, if_flat, lit, nl},
     Notation, Style,
 };
 
@@ -22,9 +22,10 @@ impl Generator for SimpleNotationGenerator {
                 _ => unreachable!(),
             }
         } else if size == 2 {
-            match picker.pick_int(2) {
+            match picker.pick_int(3) {
                 0 => flat(self.generate(1, picker)),
                 1 => 2 >> self.generate(1, picker),
+                2 => group(self.generate(1, picker)),
                 _ => unreachable!(),
             }
         } else {
@@ -42,7 +43,7 @@ impl Generator for SimpleNotationGenerator {
                     let right_size = size - left_size;
                     let left = self.generate(left_size, picker);
                     let right = self.generate(right_size, picker);
-                    left | right
+                    if_flat(left, right)
                 }
                 2 => flat(self.generate(size, picker)),
                 3 => 2 >> self.generate(size, picker),

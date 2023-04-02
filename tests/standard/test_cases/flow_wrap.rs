@@ -1,7 +1,7 @@
 use crate::standard::pretty_testing::{assert_pp, assert_pp_seek, punct};
 use once_cell::sync::Lazy;
 use partial_pretty_printer::notation_constructors::{
-    child, flat, group, if_flat, left, nl, repeat, right, surrounded, text, ws,
+    child, group, left, repeat, right, surrounded, text, ws,
 };
 use partial_pretty_printer::{PrettyDoc, RepeatInner, Style, ValidNotation};
 use std::sync::atomic::{AtomicUsize, Ordering};

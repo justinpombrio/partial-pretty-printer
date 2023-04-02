@@ -22,6 +22,7 @@ pub trait Picker {
  *********************/
 
 /// Construct an infinite stream of random values of the given size.
+#[allow(unused)]
 pub fn generate_random<G: Generator>(
     generator: G,
     size: u32,
@@ -37,6 +38,7 @@ struct GenRandom<G: Generator> {
 }
 
 impl<G: Generator> GenRandom<G> {
+    #[allow(unused)]
     fn new(generator: G, size: u32, seed: [u8; 32]) -> GenRandom<G> {
         GenRandom {
             size,

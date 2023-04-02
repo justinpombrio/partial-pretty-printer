@@ -1,6 +1,6 @@
 use crate::standard::pretty_testing::{assert_pp, punct};
 use once_cell::sync::Lazy;
-use partial_pretty_printer::notation_constructors::{child, flat, half_nestled, nestled, text};
+use partial_pretty_printer::notation_constructors::{child, half_nestled, nestled, text};
 use partial_pretty_printer::{PrettyDoc, Style, ValidNotation};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -21,11 +21,11 @@ static VAR_NOTATION: Lazy<ValidNotation> = Lazy::new(|| text(Style::plain()).val
 static METHOD_CALL_NOTATION: Lazy<ValidNotation> = Lazy::new(|| {
     // (1..5).each do |i| puts 1 end
     //
+    // -- Disallowing this layout:
     // (1..5).each do |i|
     //     puts i
     // end
     //
-    // -- Disallowing this layout:
     // (1..5)
     //     .each do |i| puts i end
     //
@@ -33,12 +33,7 @@ static METHOD_CALL_NOTATION: Lazy<ValidNotation> = Lazy::new(|| {
     //     .each do |i|
     //         puts i
     //     end
-    //
-    // Not expressible with `group`!
-    let single = punct(".") + child(1) + punct(" ") + child(2);
-    let two_lines = punct(".") + child(1) + punct(" ") + child(2);
-    let multi = punct(".") + child(1) + (4 >> child(2));
-    (child(0) + (single | (4 >> (two_lines | multi))))
+    (child(0) + half_nestled(4, "", punct(".") + child(1) + punct(" ") + child(2)))
         .validate()
         .unwrap()
 });
@@ -140,26 +135,24 @@ fn ruby_loop() {
     );
     assert_pp(
         &doc,
-        20,
-        //  0    5   10   15   20   25   30   35   40
-        &[
-            // force rustfmt
-            "(1..5).each do |i|",
-            "    puts i",
-            "end",
-        ],
-    );
-    assert_pp(
-        &doc,
-        15,
+        28,
         //  0    5   10   15   20   25   30   35   40
         &[
             // force rustfmt
             "(1..5)",
-            "    .each",
-            "        do |i|",
-            "            puts i",
-            "        end",
+            "    .each do |i| puts i end",
+        ],
+    );
+    assert_pp(
+        &doc,
+        20,
+        //  0    5   10   15   20   25   30   35   40
+        &[
+            // force rustfmt
+            "(1..5)",
+            "    .each do |i|",
+            "        puts i",
+            "    end",
         ],
     );
 }

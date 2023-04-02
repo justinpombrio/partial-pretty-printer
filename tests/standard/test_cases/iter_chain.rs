@@ -1,8 +1,6 @@
 use crate::standard::pretty_testing::{assert_pp, punct};
 use once_cell::sync::Lazy;
-use partial_pretty_printer::notation_constructors::{
-    child, flat, group, half_nestled, indent, nestled, text, ws,
-};
+use partial_pretty_printer::notation_constructors::{child, half_nestled, nestled, text};
 use partial_pretty_printer::{PrettyDoc, Style, ValidNotation};
 use std::sync::atomic::{AtomicUsize, Ordering};
 

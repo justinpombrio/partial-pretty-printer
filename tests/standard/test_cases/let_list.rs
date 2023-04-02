@@ -1,7 +1,7 @@
 use crate::standard::pretty_testing::{assert_pp, punct};
 use once_cell::sync::Lazy;
 use partial_pretty_printer::notation_constructors::{
-    child, left, nestled, nl, repeat, right, surrounded, text,
+    child, left, nestled, repeat, right, surrounded, text, ws,
 };
 use partial_pretty_printer::{PrettyDoc, RepeatInner, Style, ValidNotation};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -29,7 +29,7 @@ static PHI_NOTATION: Lazy<ValidNotation> = Lazy::new(|| {
         .unwrap()
 });
 static LET_NOTATION: Lazy<ValidNotation> = Lazy::new(|| {
-    (punct("let ") + child(0) + punct(" =") + (punct(" ") | nl()) + child(1) + punct(";"))
+    (punct("let ") + child(0) + punct(" =") + ws(" ") + child(1) + punct(";"))
         .validate()
         .unwrap()
 });
@@ -37,7 +37,7 @@ static LIST_NOTATION: Lazy<ValidNotation> = Lazy::new(|| {
     repeat(RepeatInner {
         empty: punct("[]"),
         lone: punct("[") + child(0) + punct("]"),
-        join: left() + punct(",") + (punct(" ") | nl()) + right(),
+        join: left() + punct(",") + ws(" ") + right(),
         surround: { punct("[") + nestled(4, "", surrounded(), "") + punct("]") },
     })
     .validate()
