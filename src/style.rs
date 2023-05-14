@@ -116,6 +116,12 @@ impl ShadedStyle {
     }
 }
 
+impl Default for ShadedStyle {
+    fn default() -> Self {
+        ShadedStyle::new(Style::default(), Shade::default())
+    }
+}
+
 impl Shade {
     /// Typically pure black, the most ordinary shade.
     pub fn background() -> Shade {
