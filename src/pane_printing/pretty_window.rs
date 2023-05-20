@@ -11,11 +11,14 @@ pub trait PrettyWindow: Sized {
     fn size(&self) -> Result<Size, Self::Error>;
 
     /// Render the string at the given position. The position is relative to the window, not
-    /// relative to the document.
+    /// relative to the document. The string is guaranteed to fit in the window, assuming one
+    /// column per unicode code point.
     fn print(&mut self, pos: Pos, string: &str, style: ShadedStyle) -> Result<(), Self::Error>;
 
     /// Fill a section of a line with a character. `len` is the number of times to repeat the
-    /// character. The position is relative to the window, not relative to the document.
+    /// character. The position is relative to the window, not relative to the document. The
+    /// filled region is guaranteed to fit in the window, assuming one column per unicode code
+    /// point.
     fn fill(
         &mut self,
         pos: Pos,
