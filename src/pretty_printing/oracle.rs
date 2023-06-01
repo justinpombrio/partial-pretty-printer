@@ -126,7 +126,7 @@ fn pp<'d, D: PrettyDoc<'d>>(
         Empty => cont(Layout::empty()),
         Literal(s) => cont(Layout::text(s.str())),
         Newline => cont(Layout::newline()),
-        Text(s, _) => cont(Layout::text(s)),
+        Text(s, _, _) => cont(Layout::text(s)),
         Indent(i, x) => pp(width, line, x, &|lay| cont(lay.indent(i))),
         Flat(x) => pp(width, line, x, &|lay| cont(lay.flatten())),
         Child(_, x) => pp(width, line, x, cont),

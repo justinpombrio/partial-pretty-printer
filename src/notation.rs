@@ -1,4 +1,4 @@
-use crate::geometry::Width;
+use crate::geometry::{str_width, Width};
 use crate::style::Style;
 use std::fmt;
 use std::ops::{Add, BitOr, BitXor, Shr};
@@ -61,8 +61,8 @@ pub enum Notation {
 #[derive(Clone, Debug)]
 pub struct Literal {
     string: String,
-    /// Number of characters (*not* num bytes!)
-    len: Width,
+    /// Overestimate of width when printed
+    width: Width,
     style: Style,
 }
 
@@ -86,14 +86,14 @@ pub struct RepeatInner {
 impl Literal {
     pub fn new(s: &str, style: Style) -> Literal {
         Literal {
+            width: str_width(s),
             string: s.to_owned(),
-            len: s.chars().count() as Width,
             style,
         }
     }
 
-    pub fn len(&self) -> Width {
-        self.len
+    pub fn width(&self) -> Width {
+        self.width
     }
 
     pub fn str(&self) -> &str {

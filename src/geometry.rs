@@ -46,16 +46,6 @@ impl Pos {
 }
 
 impl Rectangle {
-    #[cfg(test)]
-    pub const fn new(min_col: Col, max_col: Col, min_line: Line, max_line: Line) -> Rectangle {
-        Rectangle {
-            min_col,
-            max_col,
-            min_line,
-            max_line,
-        }
-    }
-
     pub fn width(self) -> Width {
         self.max_col - self.min_col
     }
@@ -94,4 +84,8 @@ impl fmt::Display for Size {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}:{}", self.height, self.width)
     }
+}
+
+pub fn str_width(s: &str) -> Width {
+    unicode_width::UnicodeWidthStr::width_cjk(s) as Width
 }

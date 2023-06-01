@@ -108,7 +108,7 @@ impl<'d, D: PrettyDoc<'d>> Seeker<'d, D> {
                     unreachable!()
                 }
                 Literal(_) => self.next.push((flat, indent, shade, notation)),
-                Text(_, _) => self.next.push((flat, indent, shade, notation)),
+                Text(_, _, _) => self.next.push((flat, indent, shade, notation)),
                 Newline => {
                     self.next.push((flat, indent, shade, notation));
                     break;
@@ -144,7 +144,7 @@ impl<'d, D: PrettyDoc<'d>> Seeker<'d, D> {
                     Empty => (),
                     Literal(_) => self.prev.push((flat, indent, shade, notation)),
                     Newline => self.prev.push((flat, indent, shade, notation)),
-                    Text(_, _) => self.prev.push((flat, indent, shade, notation)),
+                    Text(_, _, _) => self.prev.push((flat, indent, shade, notation)),
                     Indent(j, note) => self.next.push((flat, indent + j, shade, note)),
                     Flat(note) => self.next.push((true, indent, shade, note)),
                     Concat(left, right) => {
@@ -169,7 +169,7 @@ impl<'d, D: PrettyDoc<'d>> Seeker<'d, D> {
             while let Some((flat, indent, shade, notation)) = self.prev.pop() {
                 match notation.case() {
                     Empty | Indent(_, _) | Flat(_) | Concat(_, _) => unreachable!(),
-                    Literal(_) | Text(_, _) | Choice(_, _) | Child(_, _) => {
+                    Literal(_) | Text(_, _, _) | Choice(_, _) | Child(_, _) => {
                         self.next.push((flat, indent, shade, notation))
                     }
                     Newline => {
@@ -187,11 +187,11 @@ impl<'d, D: PrettyDoc<'d>> Seeker<'d, D> {
                 match notation.case() {
                     Empty | Indent(_, _) | Flat(_) | Concat(_, _) | Newline => unreachable!(),
                     Literal(lit) => {
-                        prefix_len += lit.len();
+                        prefix_len += lit.width();
                         self.prev.push((flat, indent, shade, notation))
                     }
-                    Text(text, _style) => {
-                        prefix_len += text.chars().count() as Width;
+                    Text(_text, width, _style) => {
+                        prefix_len += width;
                         self.prev.push((flat, indent, shade, notation));
                     }
                     Child(i, child) if notation.doc_id() == parent_doc_id && i == child_index => {
@@ -278,11 +278,11 @@ impl<'d, D: PrettyDoc<'d>> DownwardPrinter<'d, D> {
                 Empty => (),
                 Literal(lit) => {
                     contents.push((lit.str(), lit.style(), shade));
-                    prefix_len += lit.len();
+                    prefix_len += lit.width();
                 }
-                Text(text, style) => {
+                Text(text, width, style) => {
                     contents.push((text, style, shade));
-                    prefix_len += text_len(text);
+                    prefix_len += width;
                 }
                 Newline => {
                     self.next.push((flat, indent, shade, notation));
@@ -351,11 +351,11 @@ impl<'d, D: PrettyDoc<'d>> UpwardPrinter<'d, D> {
         while let Some((flat, indent, shade, notation)) = self.next.pop() {
             match notation.case() {
                 Literal(lit) => {
-                    prefix_len += lit.len();
+                    prefix_len += lit.width();
                     self.prev.push((flat, indent, shade, notation));
                 }
-                Text(text, _style) => {
-                    prefix_len += text_len(text);
+                Text(_text, width, _style) => {
+                    prefix_len += width;
                     self.prev.push((flat, indent, shade, notation));
                 }
                 Choice(opt1, opt2) => {
@@ -386,7 +386,7 @@ impl<'d, D: PrettyDoc<'d>> UpwardPrinter<'d, D> {
         while let Some((_flat, _indent, shade, notation)) = self.next.pop() {
             match notation.case() {
                 NotationCase::Literal(lit) => contents.push((lit.str(), lit.style(), shade)),
-                NotationCase::Text(text, style) => contents.push((text, style, shade)),
+                NotationCase::Text(text, _, style) => contents.push((text, style, shade)),
                 _ => panic!("display_line: expected only literals and text"),
             }
         }
@@ -415,7 +415,7 @@ impl<'d, D: PrettyDoc<'d>> UpwardPrinter<'d, D> {
         while let Some((flat, indent, shade, notation)) = self.prev.pop() {
             match notation.case() {
                 Empty => (),
-                Text(_, _) => self.next.push((flat, indent, shade, notation)),
+                Text(_, _, _) => self.next.push((flat, indent, shade, notation)),
                 Literal(_) => self.next.push((flat, indent, shade, notation)),
                 Newline => {
                     self.next.push((flat, indent, shade, notation));
@@ -488,17 +488,16 @@ fn fits<'d, D: PrettyDoc<'d>>(width: Width, chunks: Vec<(bool, NotationRef<'d, D
         match notation.case() {
             Empty => (),
             Literal(lit) => {
-                let lit_len = lit.len();
+                let lit_len = lit.width();
                 if lit_len <= remaining {
                     remaining -= lit_len;
                 } else {
                     return false;
                 }
             }
-            Text(text, _) => {
-                let text_len = text.chars().count() as Width;
-                if text_len <= remaining {
-                    remaining -= text_len;
+            Text(_text, width, _) => {
+                if width <= remaining {
+                    remaining -= width;
                 } else {
                     return false;
                 }
@@ -521,10 +520,6 @@ fn fits<'d, D: PrettyDoc<'d>>(width: Width, chunks: Vec<(bool, NotationRef<'d, D
         }
     }
     true
-}
-
-fn text_len(text: &str) -> Width {
-    text.chars().count() as Width
 }
 
 impl<'d, D: PrettyDoc<'d>> Iterator for DownwardPrinter<'d, D> {
