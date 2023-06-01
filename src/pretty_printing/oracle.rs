@@ -1,6 +1,6 @@
 use super::notation_ref::{NotationCase, NotationRef};
 use super::pretty_doc::PrettyDoc;
-use crate::geometry::{Line, Width};
+use crate::geometry::{str_width, Line, Width};
 use std::fmt;
 
 #[derive(Debug, Clone)]
@@ -66,7 +66,7 @@ impl Layout {
             (Layout::Lines(x_lines), Layout::Lines(y_lines)) => {
                 let x_line_len = {
                     let (spaces, string) = &x_lines[line as usize];
-                    spaces + string.chars().count() as Width
+                    spaces + str_width(string)
                 };
                 if x_line_len <= width {
                     Layout::Lines(x_lines)

@@ -125,22 +125,23 @@ fn flow_wrap() {
         "undefeated",
     ]);
 
+    // Both '¶' and '□' are rounded up to width 2.
     assert_pp(
         &doc,
         80,
-        //0    5   10   15   20   25   30   35   40   45   50   55   60
+        //    5   10   15   20   25   30   35   40   45   50   55   60
+        &["¶    Oh, woe, is, me, the, turbofish, remains, undefeated□"],
+    );
+    assert_pp(
+        &doc,
+        60,
+        //    5   10   15   20   25   30   35   40   45   50   55   60
         &["¶    Oh, woe, is, me, the, turbofish, remains, undefeated□"],
     );
     assert_pp(
         &doc,
         59,
-        //0    5   10   15   20   25   30   35   40   45   50   55   60
-        &["¶    Oh, woe, is, me, the, turbofish, remains, undefeated□"],
-    );
-    assert_pp(
-        &doc,
-        46,
-        //  0    5   10   15   20   25   30   35   40   45   50   55   60
+        // 0    5   10   15   20   25   30   35   40   45   50   55   60
         &[
             "¶    Oh, woe, is, me, the, turbofish, remains,",
             "undefeated□",
@@ -148,8 +149,17 @@ fn flow_wrap() {
     );
     assert_pp(
         &doc,
-        45,
-        //  0    5   10   15   20   25   30   35   40   45   50   55   60
+        47,
+        // 0    5   10   15   20   25   30   35   40   45   50   55   60
+        &[
+            "¶    Oh, woe, is, me, the, turbofish, remains,",
+            "undefeated□",
+        ],
+    );
+    assert_pp(
+        &doc,
+        46,
+        // 0    5   10   15   20   25   30   35   40   45   50   55   60
         &[
             "¶    Oh, woe, is, me, the, turbofish,",
             "remains, undefeated□",
@@ -157,7 +167,7 @@ fn flow_wrap() {
     );
     assert_pp(
         &doc,
-        20,
+        21,
         //  0    5   10   15   20   25   30   35   40   45   50   55   60
         &[
             "¶    Oh, woe, is,",
