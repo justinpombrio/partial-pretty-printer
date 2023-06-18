@@ -168,6 +168,36 @@ fn test_doc_pane() {
 }
 
 #[test]
+fn test_doc_pane_offset() {
+    use PaneSize::{Fixed, Proportional};
+
+    let render_options = RenderOptions {
+        highlight_cursor: false,
+        cursor_height: 1.0,
+        width_strategy: WidthStrategy::Full,
+    };
+    let doc = json_list(vec![json_string("Hello"), json_string("world")]);
+    let contents = SimpleLabel(Some((&doc, vec![])), PhantomData);
+    pane_test(
+        PaneNotation::Horz(vec![
+            (Fixed(1), fill('|')),
+            (
+                Proportional(1),
+                PaneNotation::Doc {
+                    label: contents,
+                    render_options,
+                },
+            ),
+        ]),
+        r#"[
+        "He
+        "wo
+        ]
+        "#,
+    );
+}
+
+#[test]
 fn test_pane_cursor_heights() {
     #[track_caller]
     fn test_at_height(cursor_height: f32, expected: &str) {
