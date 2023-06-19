@@ -78,7 +78,7 @@ static JSON_DICT_NOTATION: Lazy<ValidNotation> = Lazy::new(|| {
             let multi = (punct("{") + (4 >> child(0))) ^ punct("}");
             single | multi
         },
-        join: left() + punct(",") + nl() + right(),
+        join: left() + punct(",") ^ right(),
         surround: (punct("{") + (4 >> surrounded())) ^ punct("}"),
     })
     .validate()

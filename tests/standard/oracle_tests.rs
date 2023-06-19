@@ -1,13 +1,13 @@
-use crate::standard::generative_testing::{generate_all, Generator, Picker};
+use crate::standard::generative_testing::{generate_all, generate_random, Generator, Picker};
 use crate::standard::pretty_testing::{assert_pp_without_expectation, SimpleDoc};
 use partial_pretty_printer::{
     notation_constructors::{empty, flat, lit, nl},
     Notation, Style,
 };
 
-struct SimpleNotationGenerator;
+struct NotationGen;
 
-impl Generator for SimpleNotationGenerator {
+impl Generator for NotationGen {
     type Value = Notation;
 
     fn generate<P: Picker>(&self, mut size: u32, picker: &mut P) -> Notation {
@@ -52,14 +52,15 @@ impl Generator for SimpleNotationGenerator {
     }
 }
 
-// Note that the random Notations do not neccesarily obey the notation requirement, and the Oracle
-// does not know how to check for it. So failures here are not necessarily indicative of a problem.
 #[test]
-#[ignore]
 fn oracle_tests() {
-    // TODO: random notations too
-    for notation in generate_all(SimpleNotationGenerator, 5) {
-        // TODO: don't print
+    let notations = generate_all(NotationGen, 6)
+        .chain(generate_random(NotationGen, 10, [0; 32]).take(1000))
+        .chain(generate_random(NotationGen, 20, [0; 32]).take(1000))
+        .chain(generate_random(NotationGen, 30, [0; 32]).take(1000))
+        .chain(generate_random(NotationGen, 50, [0; 32]).take(100));
+
+    for notation in notations {
         println!("{}", notation);
         if let Ok(doc) = SimpleDoc::try_new(notation) {
             for width in 1..=8 {

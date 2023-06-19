@@ -24,8 +24,8 @@ pub enum Notation {
     Text(Style),
     /// Literal text. Cannot contain a newline.
     Literal(Box<Literal>),
-    /// Use the leftmost option of every choice in the contained notation. This will typically not
-    /// contain any newlines; hence the name "flat".
+    /// Use the leftmost option of every choice in the contained notation,
+    /// and avoid displaying Newlines if at all possible.
     Flat(Box<Notation>),
     /// Indent all lines of the contained notation except the first to the right by the given
     /// number of spaces.
@@ -34,9 +34,12 @@ pub enum Notation {
     /// last character of the left notation. The right notation's indentation level is not
     /// affected.
     Concat(Box<Notation>, Box<Notation>),
-    /// Display the left notation if its first line fits within the required width or if we're
-    /// inside a `Flat`. Otherwise display the right. Make sure your choice obeys the `Notation`
-    /// requirements.
+    /// Display either the left or right notation, according to the following rules:
+    ///
+    /// - If we're inside a `Flat`, display the left notation.
+    /// - If the first line of the left notation fits within the required width, and does
+    ///   not contain `Newline` inside a `Flat`, then display the left notation.
+    /// - Otherwise display the right notation.
     Choice(Box<Notation>, Box<Notation>),
     /// Display the first notation in case this tree has empty text,
     /// otherwise show the second notation.
