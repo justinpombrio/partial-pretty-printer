@@ -504,6 +504,7 @@ fn fits<'d, D: PrettyDoc<'d>>(width: Width, chunks: Vec<(bool, NotationRef<'d, D
                 }
             }
             Newline => return !flat,
+            // TODO: eliminate the `Flat` and `Indent` cases
             Flat(note) => chunks.push((true, note)),
             Indent(_, note) => chunks.push((flat, note)),
             Child(_, note) => chunks.push((flat, note)),
@@ -515,6 +516,9 @@ fn fits<'d, D: PrettyDoc<'d>>(width: Width, chunks: Vec<(bool, NotationRef<'d, D
                 if flat {
                     chunks.push((flat, opt1));
                 } else {
+                    // This assumes that:
+                    //     For every layout a in opt1 and b in opt2,
+                    //     first_line_len(a) >= first_line_len(b)
                     chunks.push((flat, opt2));
                 }
             }

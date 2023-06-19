@@ -74,17 +74,13 @@ fn test_all_paths_fn() {
     );
 }
 
-// Implementation purposefully disagrees with Oracle
 #[test]
-#[ignore]
 fn hidden_error() {
     let notation = punct("x") ^ flat(nl()) | punct("ok");
     assert_pp(&SimpleDoc::new(notation), 3, &["x", "", ""]);
 }
 
-// Implementation purposefully disagrees with Oracle
 #[test]
-#[ignore]
 fn tricky_suffix() {
     let notation = (punct("a") | punct("bb")) + ((punct("x") + nl() + flat(nl())) | punct("yy"));
     assert_pp(&SimpleDoc::new(notation), 3, &["ax", "", ""]);

@@ -164,6 +164,33 @@ fn json_flow_wrapped_list() {
 }
 
 #[test]
+fn json_list_of_dicts() {
+    assert_pp(
+        &json_list(vec![dictionary(), dictionary()]),
+        40,
+        &[
+            "[",
+            "    {",
+            "        \"Name\": \"Alice\",",
+            "        \"Age\": 42,",
+            "        \"Favorites\": [",
+            "            \"chocolate\", \"lemon\",",
+            "            \"almond\"",
+            "        ]",
+            "    }, {",
+            "        \"Name\": \"Alice\",",
+            "        \"Age\": 42,",
+            "        \"Favorites\": [",
+            "            \"chocolate\", \"lemon\",",
+            "            \"almond\"",
+            "        ]",
+            "    }",
+            "]",
+        ],
+    );
+}
+
+#[test]
 fn json_big_dict() {
     assert_pp(
         &dictionary(),

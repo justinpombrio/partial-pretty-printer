@@ -46,16 +46,6 @@ impl Pos {
 }
 
 impl Rectangle {
-    #[cfg(test)]
-    pub const fn new(min_col: Col, max_col: Col, min_line: Line, max_line: Line) -> Rectangle {
-        Rectangle {
-            min_col,
-            max_col,
-            min_line,
-            max_line,
-        }
-    }
-
     pub fn width(self) -> Width {
         self.max_col - self.min_col
     }
