@@ -1,5 +1,5 @@
 use super::pretty_window::PrettyWindow;
-use crate::geometry::{Line, Pos, Rectangle, Size, Width};
+use crate::geometry::{Pos, Rectangle, Row, Size, Width};
 use crate::pretty_printing::LineContents;
 use crate::style::{Shade, ShadedStyle, Style};
 
@@ -38,9 +38,9 @@ where
     pub fn new(window: &mut W) -> Result<Pane<W>, PaneError<W>> {
         let Size { width, height } = window.size().map_err(PaneError::PrettyWindowErr)?;
         let rect = Rectangle {
-            min_line: 0,
+            min_row: 0,
             min_col: 0,
-            max_line: height,
+            max_row: height,
             max_col: width,
         };
         Ok(Pane { window, rect })
@@ -62,11 +62,11 @@ where
 
     pub fn print_line(
         &mut self,
-        line: Line,
+        row: Row,
         contents: LineContents,
         highlight_cursor: bool,
     ) -> Result<(), PaneError<W>> {
-        let mut pos = Pos { line, col: 0 };
+        let mut pos = Pos { row, col: 0 };
         let spaces = contents.spaces.0 as Width;
         let spaces_style = ShadedStyle::new(Style::plain(), contents.spaces.1);
         self.fill(pos, ' ', spaces, spaces_style)?;
@@ -119,8 +119,8 @@ where
     }
 
     fn may_be_in_pane(&self, start_pos: Pos) -> bool {
-        start_pos.line >= self.rect.min_line
-            && start_pos.line < self.rect.max_line
+        start_pos.row >= self.rect.min_row
+            && start_pos.row < self.rect.max_row
             && start_pos.col < self.rect.max_col
     }
 }

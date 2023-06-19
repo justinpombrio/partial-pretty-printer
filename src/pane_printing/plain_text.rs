@@ -50,10 +50,10 @@ impl PrettyWindow for PlainText {
     }
 
     fn print(&mut self, pos: Pos, string: &str, _style: ShadedStyle) -> Result<(), Self::Error> {
-        if pos.line >= self.size.height {
+        if pos.row >= self.size.height {
             return Ok(());
         }
-        let line_mut = self.get_mut_line(pos.line as usize);
+        let line_mut = self.get_mut_line(pos.row as usize);
         let mut old_chars = line_mut.chars();
         let mut new_line = String::new();
 

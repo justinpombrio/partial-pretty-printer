@@ -114,7 +114,7 @@
 //!
 //! ## Other Types
 //!
-//! A character position [`Pos`] has a [`Line`] and [`Col`]. `Line` and `Col` are type aliases for
+//! A character position [`Pos`] has a [`Row`] and [`Col`]. `Row` and `Col` are type aliases for
 //! integer types.
 //!
 //! A size [`Size`] has a [`Width`] and [`Height`]. `Width` and `Height` are type aliases for
@@ -140,7 +140,7 @@ mod valid_notation;
 pub mod examples;
 pub mod notation_constructors;
 
-pub use geometry::{Col, Height, Line, Pos, Size, Width};
+pub use geometry::{Col, Height, Pos, Row, Size, Width};
 pub use notation::{Notation, RepeatInner};
 pub use pretty_printing::{pretty_print, pretty_print_to_string, LineContents, PrettyDoc};
 pub use style::{Color, Shade, ShadedStyle, Style};

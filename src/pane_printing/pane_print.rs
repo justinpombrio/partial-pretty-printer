@@ -35,11 +35,11 @@ fn pane_print_rec<'d, L: Label, D: PrettyDoc<'d>, W: PrettyWindow>(
     match note {
         PaneNotation::Empty => (),
         PaneNotation::Fill { ch, style } => {
-            for line in pane.rect.min_line..pane.rect.max_line {
+            for row in pane.rect.min_row..pane.rect.max_row {
                 let col = pane.rect.min_col;
                 let shaded_style = ShadedStyle::new(*style, Shade::background());
                 let len = pane.rect.max_col - col;
-                pane.fill(Pos { line, col }, *ch, len, shaded_style)?;
+                pane.fill(Pos { row, col }, *ch, len, shaded_style)?;
             }
         }
         PaneNotation::Doc {
@@ -52,16 +52,16 @@ fn pane_print_rec<'d, L: Label, D: PrettyDoc<'d>, W: PrettyWindow>(
             let focal_line = render_options.focal_line(pane.rect.height());
             let (mut upward_printer, mut downward_printer) = pretty_print(doc, doc_width, &path);
             let highlight_cursor = render_options.highlight_cursor;
-            for line in (0..focal_line).into_iter().rev() {
+            for row in (0..focal_line).into_iter().rev() {
                 if let Some(contents) = upward_printer.next() {
-                    pane.print_line(line, contents, highlight_cursor)?;
+                    pane.print_line(row, contents, highlight_cursor)?;
                 } else {
                     break;
                 }
             }
-            for line in focal_line..pane.rect.height() {
+            for row in focal_line..pane.rect.height() {
                 if let Some(contents) = downward_printer.next() {
-                    pane.print_line(line, contents, highlight_cursor)?;
+                    pane.print_line(row, contents, highlight_cursor)?;
                 } else {
                     break;
                 }
@@ -101,8 +101,8 @@ fn pane_print_rec<'d, L: Label, D: PrettyDoc<'d>, W: PrettyWindow>(
                 Rectangle {
                     min_col: old_col,
                     max_col: col,
-                    min_line: pane_rect.min_line,
-                    max_line: pane_rect.max_line,
+                    min_row: pane_rect.min_row,
+                    max_row: pane_rect.max_row,
                 }
             });
 
@@ -138,16 +138,16 @@ fn pane_print_rec<'d, L: Label, D: PrettyDoc<'d>, W: PrettyWindow>(
                 .collect();
 
             // Split this pane's rectangle vertically (a.k.a. horizontal slices) into multiple subpanes.
-            let mut line = pane.rect.min_line;
+            let mut row = pane.rect.min_row;
             let pane_rect = pane.rect;
             let rects = heights.into_iter().map(|height| {
-                let old_line = line;
-                line += height;
+                let old_row = row;
+                row += height;
                 Rectangle {
                     min_col: pane_rect.min_col,
                     max_col: pane_rect.max_col,
-                    min_line: old_line,
-                    max_line: line,
+                    min_row: old_row,
+                    max_row: row,
                 }
             });
 

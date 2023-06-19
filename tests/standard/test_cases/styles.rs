@@ -3,7 +3,7 @@ use partial_pretty_printer::{
     examples::json::{json_list, json_number, Json},
     notation_constructors::lit,
     pane::{pane_print, Label, PaneNotation, PrettyWindow, RenderOptions, WidthStrategy},
-    Color, Line, Pos, PrettyDoc, ShadedStyle, Size, Style, Width,
+    Color, Pos, PrettyDoc, Row, ShadedStyle, Size, Style, Width,
 };
 use std::fmt;
 use std::fmt::Debug;
@@ -119,7 +119,7 @@ impl RichText {
         }
     }
 
-    fn get_mut_line(&mut self, line_num: Line) -> &mut Vec<(char, ShadedStyle)> {
+    fn get_mut_line(&mut self, line_num: Row) -> &mut Vec<(char, ShadedStyle)> {
         if self.lines.len() < line_num as usize + 1 {
             self.lines.resize_with(line_num as usize + 1, Vec::new);
         }
@@ -127,7 +127,7 @@ impl RichText {
     }
 
     fn get_mut_char(&mut self, pos: Pos) -> &mut (char, ShadedStyle) {
-        let line = self.get_mut_line(pos.line);
+        let line = self.get_mut_line(pos.row);
         if line.len() < pos.col as usize + 1 {
             line.resize_with(pos.col as usize + 1, || (' ', ShadedStyle::plain()));
         }

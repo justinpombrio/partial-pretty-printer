@@ -1,4 +1,4 @@
-use crate::geometry::{Height, Line, Width};
+use crate::geometry::{Height, Row, Width};
 
 /// Options for how to display a document within a `Pane`.
 #[derive(Debug, Clone, Copy)]
@@ -25,10 +25,10 @@ pub enum WidthStrategy {
 }
 
 impl RenderOptions {
-    pub(crate) fn focal_line(self, available_height: Height) -> Line {
+    pub(crate) fn focal_line(self, available_height: Height) -> Row {
         assert!(self.cursor_height >= 0.0);
         assert!(self.cursor_height <= 1.0);
-        f32::round((available_height - 1) as f32 * (1.0 - self.cursor_height)) as Line
+        f32::round((available_height - 1) as f32 * (1.0 - self.cursor_height)) as Row
     }
 
     pub(crate) fn choose_width(self, available_width: Width) -> Width {

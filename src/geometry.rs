@@ -2,7 +2,7 @@ use std::fmt;
 use std::ops::Add;
 
 /// Line number
-pub type Line = u32;
+pub type Row = u32;
 
 /// Column, measured in characters
 pub type Col = u16;
@@ -18,7 +18,7 @@ pub type Width = u16;
 /// The origin is in the upper left, and is `(0, 0)`. I.e., this is 0-indexed.
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Ord, PartialOrd)]
 pub struct Pos {
-    pub line: Line,
+    pub row: Row,
     pub col: Col,
 }
 
@@ -33,15 +33,15 @@ pub struct Size {
 /// Includes its upper-left, but excludes its lower-right.
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub(crate) struct Rectangle {
-    pub min_line: Line,
-    pub max_line: Line,
+    pub min_row: Row,
+    pub max_row: Row,
     pub min_col: Col,
     pub max_col: Col,
 }
 
 impl Pos {
     pub fn zero() -> Pos {
-        Pos { line: 0, col: 0 }
+        Pos { row: 0, col: 0 }
     }
 }
 
@@ -51,13 +51,13 @@ impl Rectangle {
     }
 
     pub fn height(self) -> Height {
-        self.max_line - self.min_line
+        self.max_row - self.min_row
     }
 
     /// Does this rectangle completely cover the other rectangle?
     pub fn covers(self, other: Rectangle) -> bool {
-        self.min_line <= other.min_line
-            && other.max_line <= self.max_line
+        self.min_row <= other.min_row
+            && other.max_row <= self.max_row
             && self.min_col <= other.min_col
             && other.max_col <= self.max_col
     }
@@ -68,7 +68,7 @@ impl Add<Size> for Pos {
 
     fn add(self, size: Size) -> Pos {
         Pos {
-            line: self.line + size.height,
+            row: self.row + size.height,
             col: self.col + size.width,
         }
     }
@@ -76,7 +76,7 @@ impl Add<Size> for Pos {
 
 impl fmt::Display for Pos {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}:{}", self.line, self.col)
+        write!(f, "{}:{}", self.row, self.col)
     }
 }
 
