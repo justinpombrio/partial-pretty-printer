@@ -1,16 +1,16 @@
 use std::fmt;
 use std::ops::Add;
 
-/// Line number
+/// Line number. 0-indexed.
 pub type Row = u32;
 
-/// Column, measured in characters
+/// Column, measured in characters. 0-indexed.
 pub type Col = u16;
 
-/// Height, measured in lines
+/// Height, measured in lines.
 pub type Height = u32;
 
-/// Width, measured in characters
+/// Width, measured in characters.
 pub type Width = u16;
 
 /// A character position, relative to the screen or the document.
@@ -22,7 +22,7 @@ pub struct Pos {
     pub col: Col,
 }
 
-/// A size, in characters.
+/// A two-dimensional size, in characters.
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Ord, PartialOrd)]
 pub struct Size {
     pub height: Height,
@@ -72,6 +72,11 @@ impl Add<Size> for Pos {
             col: self.col + size.width,
         }
     }
+}
+
+/// The width of a string in terminal characters. May be an overestimate.
+pub fn str_width(s: &str) -> Width {
+    unicode_width::UnicodeWidthStr::width_cjk(s) as Width
 }
 
 impl fmt::Display for Pos {

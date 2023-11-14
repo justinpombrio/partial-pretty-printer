@@ -9,6 +9,7 @@ edition = "2018"
 [dependencies]
 once_cell = "1.*"
 thiserror = "1.*"
+unicode-width = "*"
 [dependencies.no-nonsense-flamegraphs]
     version = "0.2.*"
     git = "https://github.com/justinpombrio/no-nonsense-flamegraphs"
