@@ -1,10 +1,7 @@
-extern crate test;
-
-use crate::standard::pretty_testing::{assert_pp, assert_pp_region, assert_pp_seek, print_region};
+use crate::standard::pretty_testing::{assert_pp, assert_pp_region, assert_pp_seek};
 use partial_pretty_printer::examples::json::{
     json_bool, json_dict, json_dict_entry, json_list, json_null, json_number, json_string, Json,
 };
-use test::Bencher;
 
 static NUMERALS: &[&str] = &[
     "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven",
@@ -249,8 +246,8 @@ fn make_json_tree(id: u32, size: usize) -> Json {
     ])
 }
 
-#[bench]
-fn json_tree_bench(bencher: &mut Bencher) {
+#[test]
+fn big_json_tree() {
     let little_tree = make_json_tree(0, 2);
     assert_pp(
         &little_tree,
@@ -303,14 +300,13 @@ fn json_tree_bench(bencher: &mut Bencher) {
 "                    \"children_lengths\": [",
 "                        \"child_number_one\", \"child_number_two\", \"child_number_three\", \"child_number_four\",",
 "                        \"child_number_five\", \"child_number_six\", \"child_number_seven\", \"child_number_eight\",",
-        ]);
-    bencher.iter(|| {
-        print_region(&big_tree, 120, &[3, 1, 15, 3, 1, 10], 80);
-    });
+        ]
+    );
 
     #[cfg(feature = "profile")]
     {
         use no_nonsense_flamegraphs::span;
+        use crate::standard::pretty_testing::print_region;
 
         span!("Json bench test");
         print_region(&big_tree, 120, &[3, 1, 15, 3, 1, 10], 80);
