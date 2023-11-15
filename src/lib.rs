@@ -135,9 +135,14 @@
 
 mod geometry;
 mod infra;
-mod style;
-/*
 mod notation;
+mod style;
+
+pub use geometry::{Col, Height, Pos, Row, Size, Width};
+pub use notation::{Literal, Notation};
+pub use style::{Color, Style};
+
+/*
 mod pane_printing;
 mod pretty_printing;
 mod valid_notation;
@@ -145,10 +150,7 @@ mod valid_notation;
 pub mod examples;
 pub mod notation_constructors;
 
-pub use geometry::{Col, Height, Pos, Row, Size, Width};
-pub use notation::{Notation, RepeatInner};
 pub use pretty_printing::{pretty_print, pretty_print_to_string, LineContents, PrettyDoc};
-pub use style::{Color, Shade, ShadedStyle, Style};
 pub use valid_notation::{NotationError, ValidNotation};
 
 pub mod testing {

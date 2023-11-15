@@ -10,7 +10,9 @@ pub type Col = u16;
 /// Height, measured in lines.
 pub type Height = u32;
 
-/// Width, measured in characters.
+/// Width, measured in terminal columns. Not to be confused with number of bytes,
+/// Unicode code points, or Unicode grapheme clusters. Compute the `Width` of a
+/// string with [`str_width`].
 pub type Width = u16;
 
 /// A character position, relative to the screen or the document.
@@ -74,7 +76,7 @@ impl Add<Size> for Pos {
     }
 }
 
-/// The width of a string in terminal characters. May be an overestimate.
+/// The width of a string in terminal columns. May be an overestimate.
 pub fn str_width(s: &str) -> Width {
     unicode_width::UnicodeWidthStr::width_cjk(s) as Width
 }
