@@ -57,8 +57,8 @@ impl Notation {
     }
 
     fn validate_rec(&mut self, flat: bool, ctx: Context) -> Result<(), NotationError> {
-        use crate::Notation::*;
         use Context::*;
+        use Notation::*;
         use NotationError::*;
 
         match self {

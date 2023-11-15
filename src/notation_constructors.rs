@@ -1,4 +1,6 @@
-use super::notation::{Literal, Notation, RepeatInner};
+// TODO: docs
+
+use super::notation::{Literal, Notation};
 use super::style::Style;
 
 pub fn empty() -> Notation {
@@ -19,11 +21,41 @@ pub fn text(style: Style) -> Notation {
 
 pub fn lit(s: &str, style: Style) -> Notation {
     let literal = Literal::new(s, style);
-    Notation::Literal(Box::new(literal))
+    Notation::Literal(literal)
 }
 
 pub fn flat(n: Notation) -> Notation {
     Notation::Flat(Box::new(n))
+}
+
+/* Count */
+
+pub fn count(count: Count) -> Notation {
+    Notation::Count {
+        zero: Box::new(count.zero),
+        one: Box::new(count.one),
+        many: Box::new(count.many),
+    }
+}
+
+pub struct Count {
+    zero: Notation,
+    one: Notation,
+    many: Notation,
+}
+
+/* Fold */
+
+pub fn fold(fold: Fold) -> Notation {
+    Notation::Fold {
+        base: Box::new(fold.base),
+        join: Box::new(fold.join),
+    }
+}
+
+pub struct Fold {
+    base: Notation,
+    join: Notation,
 }
 
 pub fn left() -> Notation {
@@ -32,12 +64,4 @@ pub fn left() -> Notation {
 
 pub fn right() -> Notation {
     Notation::Right
-}
-
-pub fn surrounded() -> Notation {
-    Notation::Surrounded
-}
-
-pub fn repeat(repeat: RepeatInner) -> Notation {
-    Notation::Repeat(Box::new(repeat))
 }

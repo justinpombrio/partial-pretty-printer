@@ -140,16 +140,16 @@ mod style;
 mod valid_notation;
 
 pub use geometry::{Col, Height, Pos, Row, Size, Width};
-pub use notation::{Literal, Notation};
 pub use style::{Color, Style};
 pub use valid_notation::{NotationError, ValidNotation};
+
+pub mod notation_constructors;
 
 /*
 mod pane_printing;
 mod pretty_printing;
 
 pub mod examples;
-pub mod notation_constructors;
 
 pub use pretty_printing::{pretty_print, pretty_print_to_string, LineContents, PrettyDoc};
 
