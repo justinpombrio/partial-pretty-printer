@@ -135,11 +135,11 @@
 
 mod geometry;
 mod infra;
+mod style;
 /*
 mod notation;
 mod pane_printing;
 mod pretty_printing;
-mod style;
 mod valid_notation;
 
 pub mod examples;
