@@ -1,3 +1,7 @@
+// TODO: temporary
+#![allow(unused)]
+// TODO: After rewrite, ensure that these docs are up to date.
+//       Especially, e.g., referenced code like `PrettyDoc`.
 //! This is a pretty printing library for tree-shaped documents, such as ASTs. Given declarative
 //! rules for how to display each sort of node in a document, it prints the document with a
 //! desired line width.
@@ -29,7 +33,7 @@
 //! efficiency.
 //! - Make a character-grid based UI with nested panes, using the [`pane`] module.
 //!
-//! Continue reading for details.
+//! Keep reading for details.
 //!
 //! # Usage
 //!
@@ -51,8 +55,8 @@
 //!
 //! - a unique id for that node,
 //! - a notation for displaying that sort of node, and
-//! - accessors for the contents of that node, which is either a sequence of ccontained nodes, or a
-//! string.
+//! - accessors for the contents of that node, which is either a sequence of contained nodes
+//!   (children), or a string (text).
 //!
 //! [Read more](trait.PrettyDoc.html)
 //!
@@ -131,6 +135,7 @@
 
 mod geometry;
 mod infra;
+/*
 mod notation;
 mod pane_printing;
 mod pretty_printing;
@@ -190,3 +195,4 @@ pub mod pane {
         RenderOptions, WidthStrategy,
     };
 }
+*/
