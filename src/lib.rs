@@ -137,21 +137,21 @@ mod geometry;
 mod infra;
 mod notation;
 mod style;
+mod valid_notation;
 
 pub use geometry::{Col, Height, Pos, Row, Size, Width};
 pub use notation::{Literal, Notation};
 pub use style::{Color, Style};
+pub use valid_notation::{NotationError, ValidNotation};
 
 /*
 mod pane_printing;
 mod pretty_printing;
-mod valid_notation;
 
 pub mod examples;
 pub mod notation_constructors;
 
 pub use pretty_printing::{pretty_print, pretty_print_to_string, LineContents, PrettyDoc};
-pub use valid_notation::{NotationError, ValidNotation};
 
 pub mod testing {
     pub use super::pretty_printing::oracular_pretty_print;
