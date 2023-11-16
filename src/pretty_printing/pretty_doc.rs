@@ -26,6 +26,9 @@ pub trait PrettyDoc<'d>: Copy {
     /// `num_children()` returns `Some(_)`. It is safe to panic otherwise.
     fn unwrap_last_child(self) -> Self;
 
+    // This method exists for efficiency. If the tree is implemented with linked lists,
+    // unwrap_child() could be very slow when there are lots of children. Thus `fold` uses this
+    // method instead.
     /// Access this node's previous sibling, or panic. `parent` is this node's parent, and `i` is
     /// the index of its previous sibling. The pretty printer will only call this method if:
     ///

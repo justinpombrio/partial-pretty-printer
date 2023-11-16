@@ -47,6 +47,12 @@ struct JoinPos<'d, D: PrettyDoc<'d>> {
 
 impl<'d, D: PrettyDoc<'d>> NotationWalker<'d, D> {
     pub fn new(doc: D) -> NotationWalker<'d, D> {
+        DelayedNotationWalker::new(doc).force()
+    }
+}
+
+impl<'d, D: PrettyDoc<'d>> DelayedNotationWalker<'d, D> {
+    pub fn new(doc: D) -> Self {
         DelayedNotationWalker {
             doc,
             notation: &doc.notation().0,
@@ -54,11 +60,8 @@ impl<'d, D: PrettyDoc<'d>> NotationWalker<'d, D> {
             indent: 0,
             join_pos: None,
         }
-        .force()
     }
-}
 
-impl<'d, D: PrettyDoc<'d>> DelayedNotationWalker<'d, D> {
     pub fn force(mut self) -> NotationWalker<'d, D> {
         use Notation::*;
 
@@ -167,5 +170,11 @@ impl<'d, D: PrettyDoc<'d>> DelayedNotationWalker<'d, D> {
                 },
             }
         }
+    }
+}
+
+impl<'d, D: PrettyDoc<'d>> fmt::Display for DelayedNotationWalker<'d, D> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.notation)
     }
 }
