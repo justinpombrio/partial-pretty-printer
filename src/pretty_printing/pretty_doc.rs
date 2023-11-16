@@ -21,4 +21,19 @@ pub trait PrettyDoc<'d>: Copy {
     /// Get this node's i'th child, or panic. The pretty printer will only call this method if
     /// `num_children()` returns `Some(n)` for `n > i`. It is safe to panic otherwise.
     fn unwrap_child(self, i: usize) -> Self;
+
+    /// Get this node's last child, or panic. The pretty printer will only call this method if
+    /// `num_children()` returns `Some(_)`. It is safe to panic otherwise.
+    fn unwrap_last_child(self) -> Self;
+
+    /// Access this node's previous sibling, or panic. `parent` is this node's parent, and `i` is
+    /// the index of its previous sibling. The pretty printer will only call this method if:
+    ///
+    /// - `parent.num_children()` returned `Some(n)` for `n > i + 1`, and
+    /// - the index of `self` is `i + 1`.
+    ///
+    /// It is safe to panic otherwise.
+    fn unwrap_prev_sibling(self, parent: Self, i: usize) -> Self {
+        parent.unwrap_child(i)
+    }
 }

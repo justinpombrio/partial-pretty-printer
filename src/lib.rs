@@ -136,6 +136,7 @@
 mod geometry;
 mod infra;
 mod notation;
+mod pretty_printing;
 mod style;
 mod valid_notation;
 
@@ -147,7 +148,6 @@ pub mod notation_constructors;
 
 /*
 mod pane_printing;
-mod pretty_printing;
 
 pub mod examples;
 

@@ -1,194 +1,169 @@
 use super::pretty_doc::PrettyDoc;
 use crate::geometry::Width;
-use crate::notation::{Literal, Notation, RepeatInner};
+use crate::notation::{Literal, Notation};
 use crate::style::Style;
 use std::fmt;
 
-const START_OF_DOC: &'static Notation = &Notation::Newline;
+// TODO: Don't panic on bad PrettyDoc/Notation combos
 
-#[derive(Debug)]
-pub struct NotationRef<'d, D: PrettyDoc<'d>> {
-    doc: D,
-    notation: &'d Notation,
-    repeat_pos: RepeatPos<'d>,
+/// Walk along the notation tree, skipping the boring parts.
+///
+/// A `Notation` says how to print a _single_ node in a document. The _notation tree_ is what you
+/// get from gluing together the `Notation`s for every node in the document. A `NotationWalker`
+/// allows you to navigate a _simplified_ version of the notation tree, in which ~half of the
+/// kinds of `Notation`s have been automatically resolved away. The remaining kinds are listed in
+/// `NotationCase`.
+///
+/// (Note that this is not a "visitor". It does not invoke a callback on every node. Instead, it
+///  provides a `.case()` method that allows you to walk the (simplified) tree yourself.)
+#[derive(Debug, Clone, Copy)]
+pub enum NotationWalker<'d, D: PrettyDoc<'d>> {
+    Empty,
+    Newline(Width),
+    Literal(&'d Literal),
+    Text(&'d str, Style),
+    Concat(DelayedNotationWalker<'d, D>, DelayedNotationWalker<'d, D>),
+    Choice(DelayedNotationWalker<'d, D>, DelayedNotationWalker<'d, D>),
+    Child(usize, DelayedNotationWalker<'d, D>),
 }
 
 #[derive(Debug, Clone, Copy)]
-enum RepeatPos<'d> {
-    None,
-    Surround(&'d RepeatInner),
-    Join(&'d RepeatInner, usize),
+pub struct DelayedNotationWalker<'d, D: PrettyDoc<'d>> {
+    doc: D,
+    notation: &'d Notation,
+    flat: bool,
+    indent: Width,
+    join_pos: Option<JoinPos<'d, D>>,
 }
 
-#[derive(Debug)]
-pub enum NotationCase<'d, D: PrettyDoc<'d>> {
-    Empty,
-    Literal(&'d Literal),
-    Newline,
-    Text(&'d str, Style),
-    Flat(NotationRef<'d, D>),
-    Indent(Width, NotationRef<'d, D>),
-    Concat(NotationRef<'d, D>, NotationRef<'d, D>),
-    Choice(NotationRef<'d, D>, NotationRef<'d, D>),
-    Child(usize, NotationRef<'d, D>),
+#[derive(Debug, Clone, Copy)]
+struct JoinPos<'d, D: PrettyDoc<'d>> {
+    parent: D,
+    child: D,
+    index: usize,
+    first: &'d Notation,
+    join: &'d Notation,
 }
 
-impl<'d, D: PrettyDoc<'d>> Clone for NotationRef<'d, D> {
-    fn clone(&self) -> NotationRef<'d, D> {
-        NotationRef {
-            doc: self.doc,
-            notation: self.notation,
-            repeat_pos: self.repeat_pos,
+impl<'d, D: PrettyDoc<'d>> NotationWalker<'d, D> {
+    pub fn new(doc: D) -> NotationWalker<'d, D> {
+        DelayedNotationWalker {
+            doc,
+            notation: &doc.notation().0,
+            flat: false,
+            indent: 0,
+            join_pos: None,
         }
+        .force()
     }
 }
-impl<'d, D: PrettyDoc<'d>> Copy for NotationRef<'d, D> {}
 
-impl<'d, D: PrettyDoc<'d>> NotationRef<'d, D> {
-    pub fn case(self) -> NotationCase<'d, D> {
-        match self.notation {
-            Notation::Empty => NotationCase::Empty,
-            Notation::Literal(lit) => NotationCase::Literal(lit),
-            Notation::Newline => NotationCase::Newline,
-            Notation::Text(style) => NotationCase::Text(self.doc.unwrap_text(), *style),
-            Notation::Flat(note) => NotationCase::Flat(self.subnotation(note)),
-            Notation::Indent(i, note) => NotationCase::Indent(*i, self.subnotation(note)),
-            Notation::Concat(left, right) => {
-                NotationCase::Concat(self.subnotation(left), self.subnotation(right))
-            }
-            Notation::Choice(left, right) => {
-                NotationCase::Choice(self.subnotation(left), self.subnotation(right))
-            }
-            Notation::Child(i) => NotationCase::Child(*i, self.child(*i)),
-            Notation::Left => {
-                if let RepeatPos::Join(_, i) = self.repeat_pos {
-                    NotationCase::Child(i, self.child(i))
-                } else {
-                    unreachable!()
-                }
-            }
-            Notation::Right => {
-                if let RepeatPos::Join(_, i) = self.repeat_pos {
-                    NotationCase::Child(i + 1, self.child(i + 1))
-                } else {
-                    unreachable!()
-                }
-            }
-            Notation::Repeat(_) | Notation::Surrounded | Notation::IfEmptyText(_, _) => {
-                unreachable!()
-            }
-        }
-    }
-
-    pub fn new(doc: D) -> NotationRef<'d, D> {
-        NotationRef::from_parts(doc, &doc.notation().0, RepeatPos::None)
-    }
-
-    // Turns out it's _really_ convenient to put a fake newline at the start of the document.
-    pub fn make_fake_start_of_doc_newline(&self) -> NotationRef<'d, D> {
-        NotationRef {
-            doc: self.doc,
-            notation: START_OF_DOC,
-            repeat_pos: RepeatPos::None,
-        }
-    }
-
-    pub fn doc_id(&self) -> D::Id {
-        self.doc.id()
-    }
-
-    fn from_parts(
-        doc: D,
-        notation: &'d Notation,
-        parent_repeat_pos: RepeatPos<'d>,
-    ) -> NotationRef<'d, D> {
+impl<'d, D: PrettyDoc<'d>> DelayedNotationWalker<'d, D> {
+    pub fn force(mut self) -> NotationWalker<'d, D> {
         use Notation::*;
 
-        let mut refn = NotationRef {
-            doc,
-            notation,
-            repeat_pos: parent_repeat_pos,
-        };
-
-        loop {
-            match refn.notation {
-                Repeat(repeat) => {
-                    assert!(
-                        matches!(parent_repeat_pos, RepeatPos::None),
-                        "Can't handle nested repeats"
-                    );
-                    refn.notation = match doc.num_children().unwrap() {
-                        0 => &repeat.empty,
-                        1 => &repeat.lone,
-                        _ => &repeat.surround,
-                    };
-                    refn.repeat_pos = RepeatPos::Surround(repeat);
-                }
-                Surrounded => {
-                    if let RepeatPos::Surround(repeat) = refn.repeat_pos {
-                        refn.notation = &repeat.join;
-                        refn.repeat_pos = RepeatPos::Join(repeat, 0);
-                    } else {
-                        panic!("`Surrounded` is only allowed in `RepeatInner::surround`");
-                    }
-                }
-                Left => {
-                    if let RepeatPos::Join(_, _) = refn.repeat_pos {
-                        // Semantically, this notation is equivalent to `Child(i)`.
-                        // But there's no allocated `Child(i)` Notation to reference,
-                        // so w'll break and let the `case` method deal with it.
-                        break;
-                    } else {
-                        panic!("`Left` is only allowed in `RepeatInner::join`");
-                    }
-                }
-                Right => {
-                    if let RepeatPos::Join(repeat, i) = refn.repeat_pos {
-                        if i + 2 == refn.doc.num_children().unwrap() {
-                            // Similar to the Left case: equivalent to Child(i)
-                            break;
-                        } else {
-                            refn.notation = &repeat.join;
-                            refn.repeat_pos = RepeatPos::Join(repeat, i + 1);
-                        }
-                    } else {
-                        panic!("`Right` is only allowed in `RepeatInner::join`");
-                    }
-                }
-                IfEmptyText(opt1, opt2) => {
-                    if refn.doc.unwrap_text().is_empty() {
-                        refn.notation = opt1;
-                    } else {
-                        refn.notation = opt2;
-                    }
-                }
-                Empty
-                | Literal(_)
-                | Newline
-                | Text(_)
-                | Indent(_, _)
-                | Flat(_)
-                | Concat(_, _)
-                | Choice(_, _)
-                | Child(_) => break,
+        match self.notation {
+            Empty => NotationWalker::Empty,
+            Newline => NotationWalker::Newline(self.indent),
+            Literal(lit) => NotationWalker::Literal(lit),
+            Text(style) => NotationWalker::Text(self.doc.unwrap_text(), *style),
+            Flat(note) => {
+                self.flat = true;
+                self.notation = note;
+                self.force()
             }
+            Indent(indent, note) => {
+                self.indent += indent;
+                self.notation = note;
+                self.force()
+            }
+            Concat(left, right) => {
+                NotationWalker::Concat(self.with_notation(left), self.with_notation(right))
+            }
+            Choice(left, right) if self.flat => self.with_notation(left).force(),
+            Choice(left, right) => {
+                NotationWalker::Choice(self.with_notation(left), self.with_notation(right))
+            }
+            IfEmptyText(note1, note2) => {
+                if self.doc.num_children().is_some() {
+                    panic!("IfEmptyText used on PrettyDoc with children")
+                }
+                if self.doc.unwrap_text().is_empty() {
+                    self.with_notation(note1).force()
+                } else {
+                    self.with_notation(note2).force()
+                }
+            }
+            Child(i) => {
+                let n = match self.doc.num_children() {
+                    None => panic!("Attempt to access child {} in texty PrettyDoc node", *i),
+                    Some(n) if *i >= n => panic!("Child {} out of range {}", *i, n),
+                    Some(n) => n,
+                };
+                self.doc = self.doc.unwrap_child(n);
+                self.notation = &self.doc.notation().0;
+                NotationWalker::Child(*i, self)
+            }
+            Count { zero, one, many } => match self.doc.num_children() {
+                None => panic!("Count used on texty doc node"),
+                Some(0) => self.with_notation(zero).force(),
+                Some(1) => self.with_notation(one).force(),
+                Some(_) => self.with_notation(many).force(),
+            },
+            Fold { first, join } => match self.doc.num_children() {
+                None => panic!("Fold used on texty doc node"),
+                Some(0) => self.with_notation(first).force(),
+                Some(n) => {
+                    self.join_pos = Some(JoinPos {
+                        parent: self.doc,
+                        child: self.doc.unwrap_last_child(),
+                        index: n - 1,
+                        first,
+                        join,
+                    });
+                    self.notation = join;
+                    self.force()
+                }
+            },
+            Left => match &mut self.join_pos {
+                None => {
+                    panic!("Bug: Left used outside of fold; should have been caught by validation")
+                }
+                Some(JoinPos {
+                    parent,
+                    child,
+                    index,
+                    first,
+                    join,
+                }) => {
+                    if *index - 1 == 0 {
+                        self.notation = *first;
+                        self.join_pos = None;
+                        self.force()
+                    } else {
+                        *child = child.unwrap_prev_sibling(*parent, *index - 1);
+                        *index -= 1;
+                        self.notation = *join;
+                        self.force()
+                    }
+                }
+            },
+            Right => match &mut self.join_pos {
+                None => {
+                    panic!("Bug: Right used outside of fold; should have been caught by validation")
+                }
+                Some(JoinPos { child, .. }) => {
+                    self.doc = *child;
+                    self.join_pos = None;
+                    self.force()
+                }
+            },
         }
-
-        refn
     }
 
-    fn subnotation(&self, notation: &'d Notation) -> NotationRef<'d, D> {
-        NotationRef::from_parts(self.doc, notation, self.repeat_pos)
-    }
-
-    fn child(&self, index: usize) -> NotationRef<'d, D> {
-        let child = self.doc.unwrap_child(index);
-        NotationRef::from_parts(child, &child.notation().0, RepeatPos::None)
-    }
-}
-
-impl<'d, D: PrettyDoc<'d>> fmt::Display for NotationRef<'d, D> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.notation)
+    fn with_notation(self, notation: &'d Notation) -> Self {
+        let mut result = self;
+        result.notation = notation;
+        result
     }
 }
