@@ -48,13 +48,13 @@ pub struct Count {
 
 pub fn fold(fold: Fold) -> Notation {
     Notation::Fold {
-        base: Box::new(fold.base),
+        first: Box::new(fold.first),
         join: Box::new(fold.join),
     }
 }
 
 pub struct Fold {
-    base: Notation,
+    first: Notation,
     join: Notation,
 }
 
