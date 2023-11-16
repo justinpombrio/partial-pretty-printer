@@ -62,108 +62,110 @@ impl<'d, D: PrettyDoc<'d>> DelayedNotationWalker<'d, D> {
     pub fn force(mut self) -> NotationWalker<'d, D> {
         use Notation::*;
 
-        match self.notation {
-            Empty => NotationWalker::Empty,
-            Newline => NotationWalker::Newline(self.indent),
-            Literal(lit) => NotationWalker::Literal(lit),
-            Text(style) => NotationWalker::Text(self.doc.unwrap_text(), *style),
-            Flat(note) => {
-                self.flat = true;
-                self.notation = note;
-                self.force()
-            }
-            Indent(indent, note) => {
-                self.indent += indent;
-                self.notation = note;
-                self.force()
-            }
-            Concat(left, right) => {
-                NotationWalker::Concat(self.with_notation(left), self.with_notation(right))
-            }
-            Choice(left, right) if self.flat => self.with_notation(left).force(),
-            Choice(left, right) => {
-                NotationWalker::Choice(self.with_notation(left), self.with_notation(right))
-            }
-            IfEmptyText(note1, note2) => {
-                if self.doc.num_children().is_some() {
-                    panic!("IfEmptyText used on PrettyDoc with children")
+        loop {
+            match self.notation {
+                Empty => return NotationWalker::Empty,
+                Newline => return NotationWalker::Newline(self.indent),
+                Literal(lit) => return NotationWalker::Literal(lit),
+                Text(style) => return NotationWalker::Text(self.doc.unwrap_text(), *style),
+                Flat(note) => {
+                    self.flat = true;
+                    self.notation = note;
                 }
-                if self.doc.unwrap_text().is_empty() {
-                    self.with_notation(note1).force()
-                } else {
-                    self.with_notation(note2).force()
+                Indent(indent, note) => {
+                    self.indent += indent;
+                    self.notation = note;
                 }
-            }
-            Child(i) => {
-                let n = match self.doc.num_children() {
-                    None => panic!("Attempt to access child {} in texty PrettyDoc node", *i),
-                    Some(n) if *i >= n => panic!("Child {} out of range {}", *i, n),
-                    Some(n) => n,
-                };
-                self.doc = self.doc.unwrap_child(n);
-                self.notation = &self.doc.notation().0;
-                NotationWalker::Child(*i, self)
-            }
-            Count { zero, one, many } => match self.doc.num_children() {
-                None => panic!("Count used on texty doc node"),
-                Some(0) => self.with_notation(zero).force(),
-                Some(1) => self.with_notation(one).force(),
-                Some(_) => self.with_notation(many).force(),
-            },
-            Fold { first, join } => match self.doc.num_children() {
-                None => panic!("Fold used on texty doc node"),
-                Some(0) => self.with_notation(first).force(),
-                Some(n) => {
-                    self.join_pos = Some(JoinPos {
-                        parent: self.doc,
-                        child: self.doc.unwrap_last_child(),
-                        index: n - 1,
-                        first,
-                        join,
-                    });
-                    self.notation = join;
-                    self.force()
+                Concat(note1, note2) => {
+                    let mut walker1 = self;
+                    walker1.notation = note1;
+                    let mut walker2 = self;
+                    walker2.notation = note2;
+                    return NotationWalker::Concat(walker1, walker2);
                 }
-            },
-            Left => match &mut self.join_pos {
-                None => {
-                    panic!("Bug: Left used outside of fold; should have been caught by validation")
+                Choice(note1, note2) if self.flat => {
+                    self.notation = note1;
                 }
-                Some(JoinPos {
-                    parent,
-                    child,
-                    index,
-                    first,
-                    join,
-                }) => {
-                    if *index - 1 == 0 {
-                        self.notation = *first;
-                        self.join_pos = None;
-                        self.force()
+                Choice(note1, note2) => {
+                    let mut walker1 = self;
+                    walker1.notation = note1;
+                    let mut walker2 = self;
+                    walker2.notation = note2;
+                    return NotationWalker::Choice(walker1, walker2);
+                }
+                IfEmptyText(note1, note2) => {
+                    if self.doc.num_children().is_some() {
+                        panic!("IfEmptyText used on PrettyDoc with children")
+                    }
+                    if self.doc.unwrap_text().is_empty() {
+                        self.notation = note1;
                     } else {
-                        *child = child.unwrap_prev_sibling(*parent, *index - 1);
-                        *index -= 1;
-                        self.notation = *join;
-                        self.force()
+                        self.notation = note2;
                     }
                 }
-            },
-            Right => match &mut self.join_pos {
-                None => {
-                    panic!("Bug: Right used outside of fold; should have been caught by validation")
+                Child(i) => {
+                    let n = match self.doc.num_children() {
+                        None => panic!("Attempt to access child {} in texty PrettyDoc node", *i),
+                        Some(n) if *i >= n => panic!("Child {} out of range {}", *i, n),
+                        Some(n) => n,
+                    };
+                    self.doc = self.doc.unwrap_child(n);
+                    self.notation = &self.doc.notation().0;
+                    return NotationWalker::Child(*i, self);
                 }
-                Some(JoinPos { child, .. }) => {
-                    self.doc = *child;
-                    self.join_pos = None;
-                    self.force()
+                Count { zero, one, many } => match self.doc.num_children() {
+                    None => panic!("Count used on texty doc node"),
+                    Some(0) => self.notation = zero,
+                    Some(1) => self.notation = one,
+                    Some(_) => self.notation = many,
+                },
+                Fold { first, join } => match self.doc.num_children() {
+                    None => panic!("Fold used on texty doc node"),
+                    Some(0) => self.notation = first,
+                    Some(n) => {
+                        self.join_pos = Some(JoinPos {
+                            parent: self.doc,
+                            child: self.doc.unwrap_last_child(),
+                            index: n - 1,
+                            first,
+                            join,
+                        });
+                        self.notation = join;
+                    }
+                },
+                Left => {
+                    match &mut self.join_pos {
+                        None => {
+                            panic!("Bug: Left used outside of fold; should have been caught by validation")
+                        }
+                        Some(JoinPos {
+                            parent,
+                            child,
+                            index,
+                            first,
+                            join,
+                        }) => {
+                            if *index - 1 == 0 {
+                                self.notation = *first;
+                                self.join_pos = None;
+                            } else {
+                                *child = child.unwrap_prev_sibling(*parent, *index - 1);
+                                *index -= 1;
+                                self.notation = *join;
+                            }
+                        }
+                    }
                 }
-            },
+                Right => match &mut self.join_pos {
+                    None => {
+                        panic!("Bug: Right used outside of fold; should have been caught by validation")
+                    }
+                    Some(JoinPos { child, .. }) => {
+                        self.doc = *child;
+                        self.join_pos = None;
+                    }
+                },
+            }
         }
-    }
-
-    fn with_notation(self, notation: &'d Notation) -> Self {
-        let mut result = self;
-        result.notation = notation;
-        result
     }
 }
