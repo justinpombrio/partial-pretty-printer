@@ -44,7 +44,7 @@ enum Context {
     InCountOne,
     InCountMany,
     // in Count _and_ Fold
-    InFoldBase,
+    InFoldFirst,
     InFoldJoin,
     // in IfEmptyText
     InText,
@@ -81,14 +81,14 @@ impl Notation {
             Child(_) if ctx == InText => return Err(ChildInText),
             Child(_) if ctx == InCountZero => return Err(CountZeroChild),
             Child(n) if *n > 0 && ctx == InCountOne => return Err(CountOneChildIndex(*n)),
-            Child(n) if *n > 1 && matches!(ctx, InCountMany | InFoldBase | InFoldJoin) => {
+            Child(n) if *n > 1 && matches!(ctx, InCountMany | InFoldFirst | InFoldJoin) => {
                 return Err(CountManyChildIndex(*n))
             }
             Child(_) => (),
             Count { .. }
                 if matches!(
                     ctx,
-                    InCountZero | InCountOne | InCountMany | InFoldBase | InFoldJoin
+                    InCountZero | InCountOne | InCountMany | InFoldFirst | InFoldJoin
                 ) =>
             {
                 return Err(NestedCount)
@@ -98,10 +98,10 @@ impl Notation {
                 one.validate_rec(flat, InCountOne)?;
                 many.validate_rec(flat, InCountMany)?;
             }
-            Fold { .. } if matches!(ctx, InFoldBase | InFoldJoin) => return Err(NestedFold),
+            Fold { .. } if matches!(ctx, InFoldFirst | InFoldJoin) => return Err(NestedFold),
             Fold { .. } if !matches!(ctx, InCountMany) => return Err(FoldOutsideOfCount),
-            Fold { base, join } => {
-                base.validate_rec(flat, InFoldBase)?;
+            Fold { last, join } => {
+                last.validate_rec(flat, InFoldFirst)?;
                 join.validate_rec(flat, InFoldJoin)?;
             }
             Left if !matches!(ctx, InFoldJoin) => return Err(LeftOutsideOfJoin),

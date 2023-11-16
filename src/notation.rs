@@ -3,6 +3,8 @@ use crate::style::Style;
 use std::fmt;
 use std::ops::{Add, BitOr, BitXor, Shr};
 
+// TODO: Make generic over Style
+
 // TODO: Nail down this assumption further, I don't think this is _quite_ right.
 
 /// Describes how to display a syntactic construct. When constructing a Notation, you must obey one
@@ -54,18 +56,21 @@ pub enum Notation {
     /// Fold (a.k.a. reduce) over the node's children. This is a left-fold.
     Fold {
         /// How to display the first child on its own.
-        base: Box<Notation>,
+        first: Box<Notation>,
         /// How to append an additional child onto a partially displayed sequence of children.
         /// Within this notation, `Notation::Left` refers to the children displayed so far,
-        /// and `Notation::Right` refers to the next child to be appended. For example, when
-        /// displaying a comma separated list "1, 2, 3", `Notation::Left` would be "1, 2", while
-        /// `Notation::Right` would be "3".
+        /// and `Notation::Right` refers to the next child to be appended. For example, a comma
+        /// separated list "1, 2, 3" would be displayed in three steps:
+        ///
+        ///     first -> "1"
+        ///     join("1", "2") -> "1, 2"
+        ///     join("1, 2", "3") -> "1, 2, 3"
         join: Box<Notation>,
     },
-    /// Used in [`Fold`](Notation::Fold) to refer to the accumulated Notation in `join`.
+    /// Used in `Fold.join` to refer to the accumulated Notation.
     /// Illegal outside of `Fold`.
     Left,
-    /// Used in [`Fold`](Notation::Fold) to refer to the next child in `join`.
+    /// Used in `Fold.join` to refer to the next child.
     /// Illegal outside of `Fold`.
     Right,
 }
