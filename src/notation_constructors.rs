@@ -1,5 +1,6 @@
 // TODO: docs
 
+use super::geometry::Width;
 use super::notation::{Literal, Notation};
 use super::style::Style;
 
@@ -28,7 +29,17 @@ pub fn flat(n: Notation) -> Notation {
     Notation::Flat(Box::new(n))
 }
 
+pub fn indent(i: Width, n: Notation) -> Notation {
+    Notation::Indent(i, Box::new(n))
+}
+
 /* Count */
+
+pub struct Count {
+    zero: Notation,
+    one: Notation,
+    many: Notation,
+}
 
 pub fn count(count: Count) -> Notation {
     Notation::Count {
@@ -38,24 +49,18 @@ pub fn count(count: Count) -> Notation {
     }
 }
 
-pub struct Count {
-    zero: Notation,
-    one: Notation,
-    many: Notation,
-}
-
 /* Fold */
+
+pub struct Fold {
+    first: Notation,
+    join: Notation,
+}
 
 pub fn fold(fold: Fold) -> Notation {
     Notation::Fold {
         first: Box::new(fold.first),
         join: Box::new(fold.join),
     }
-}
-
-pub struct Fold {
-    first: Notation,
-    join: Notation,
 }
 
 pub fn left() -> Notation {

@@ -13,60 +13,55 @@ use std::ops::{Add, BitOr, BitXor, Shr};
 /// > For every choice `(x | y)`, the first line of `x` is shorter than (or equal to) the first
 ///   line of `y`.
 ///
-/// Additionally, whenever possible the leftmost option of a choice should be flat (contain no
-/// newlines). This allows containing notations to use the `Flat` constructor to attempt to fit it
-/// in one line.
+/// Additionally, whenever possible, `x` should be flat (contain no newlines). This allows
+/// notations to use the `Flat` variant to attempt to fit `(x | y)` all on one line.
 #[derive(Clone, Debug)]
 pub enum Notation {
-    /// Display nothing. Identical to `Literal("")`.
+    /// Display nothing.
     Empty,
-    /// Display a newline. If this is inside an `Indent`, the new line will be indented.
+    /// Display a newline followed a number of spaces determined by the indentation level. (See
+    /// [`Notation::Indent`]).
     Newline,
     /// Display a piece of text. Can only be used on a [`PrettyDoc`] node for which
     /// `.num_children()` returns `None` (implying that it contains text).
     Text(Style),
     /// Literal text. Cannot contain a newline.
     Literal(Literal),
-    /// Use the leftmost option of every choice in the contained notation. This should typically
-    /// mean not displaying any Newlines.
+    /// Use the leftmost option of every choice in the contained notation. If the notation author
+    /// followed the recommendation of not putting `Newline`s in the left-most options of choices,
+    /// then this `Flat` will be displayed all on one line.
     Flat(Box<Notation>),
-    /// Indent all lines of the contained notation except the first to the right by the given
-    /// number of spaces.
+    /// Increase the indentation level of the contained notation by the given width. The
+    /// indentation level determines the number of spaces put after `Newline`s. (It therefore
+    /// doesn't affect the first line of a notation.)
     Indent(Width, Box<Notation>),
     /// Display both notations. The first character of the right notation immediately follows the
-    /// last character of the left notation. The right notation's indentation level is not
-    /// affected.
+    /// last character of the left notation. Note that the column at which the right notation
+    /// starts does not affect its indentation level.
     Concat(Box<Notation>, Box<Notation>),
     /// If we're inside a `Flat`, _or_ the first line of the left notation fits within the required
-    /// width, then display the left notation, otherwise display the right.
+    /// width, then display the left notation. Otherwise, display the right notation.
     Choice(Box<Notation>, Box<Notation>),
-    /// Display the first notation in case this tree has empty text,
-    /// otherwise show the second notation.
+    /// If this [`PrettyDoc`] node is a text node containing the empty string, display the left
+    /// notation, otherwise show the right notation.
     IfEmptyText(Box<Notation>, Box<Notation>),
     /// Display the `i`th child of this node.  Can only be used on a [`PrettyDoc`] node for which
     /// `.num_children()` returns `Some(n)`, with `i < n`.
     Child(usize),
-    /// Determines what to display based on the arity of this node. Used for nodes that have
-    /// variable arity.
+    /// Determines what to display based on the number of children this [`PrettyDoc`] node has.
     Count {
         zero: Box<Notation>,
         one: Box<Notation>,
         many: Box<Notation>,
     },
-    /// Fold (a.k.a. reduce) over the node's children. This is a left-fold.
+    /// Fold (a.k.a. reduce) over the node's children. This is a left-fold. May only be used in
+    /// `Notation::Count.many`.
     Fold {
         /// How to display the first child on its own.
         first: Box<Notation>,
         /// How to append an additional child onto a partially displayed sequence of children.
         /// Within this notation, `Notation::Left` refers to the children displayed so far,
-        /// and `Notation::Right` refers to the next child to be appended. For example, a comma
-        /// separated list "1, 2, 3" would be displayed in three steps:
-        ///
-        /// ```text
-        ///     first -> "1"
-        ///     join("1", "2") -> "1, 2"
-        ///     join("1, 2", "3") -> "1, 2, 3"
-        /// ```
+        /// and `Notation::Right` refers to the next child to be appended.
         join: Box<Notation>,
     },
     /// Used in `Fold.join` to refer to the accumulated Notation.
@@ -81,7 +76,7 @@ pub enum Notation {
 #[derive(Clone, Debug)]
 pub struct Literal {
     string: String,
-    /// Width of the string in terminal columns. See [`Width`].
+    /// Width of the string in [`Col`]s. See [`Width`].
     width: Width,
     style: Style,
 }
@@ -108,6 +103,7 @@ impl Literal {
     }
 }
 
+// For debugging
 impl fmt::Display for Notation {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use Notation::*;
@@ -136,7 +132,7 @@ impl fmt::Display for Notation {
 impl Add<Notation> for Notation {
     type Output = Notation;
 
-    /// Shorthand for `Concat`.
+    /// `x + y` is shorthand for `Concat(x, y)`.
     fn add(self, other: Notation) -> Notation {
         Notation::Concat(Box::new(self), Box::new(other))
     }
@@ -145,7 +141,7 @@ impl Add<Notation> for Notation {
 impl BitOr<Notation> for Notation {
     type Output = Notation;
 
-    /// Shorthand for `Choice`.
+    /// `x | y` is shorthand for `Choice(x, y)`.
     fn bitor(self, other: Notation) -> Notation {
         Notation::Choice(Box::new(self), Box::new(other))
     }
@@ -154,7 +150,7 @@ impl BitOr<Notation> for Notation {
 impl BitXor<Notation> for Notation {
     type Output = Notation;
 
-    /// Shorthand for `X + newline() + Y`.
+    /// `x ^ y` is shorthand for `x + Newline + y`.
     fn bitxor(self, other: Notation) -> Notation {
         self + Notation::Newline + other
     }
@@ -163,7 +159,7 @@ impl BitXor<Notation> for Notation {
 impl Shr<Notation> for Width {
     type Output = Notation;
 
-    /// Shorthand for nesting (indented newline)
+    /// `i >> x` is shorthand for `Indent(i, Newline + x)` (sometimes called "nesting").
     fn shr(self, notation: Notation) -> Notation {
         Notation::Indent(
             self,
