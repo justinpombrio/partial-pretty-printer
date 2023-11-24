@@ -1,3 +1,5 @@
+// TODO: Delete from this crate?
+
 //! Text styles like color and boldness, for mediums that support it.
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

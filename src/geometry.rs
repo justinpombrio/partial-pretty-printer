@@ -4,18 +4,18 @@ use std::ops::Add;
 /// Line number. 0-indexed.
 pub type Row = u32;
 
-/// Column, measured in characters. 0-indexed.
+/// Zero-indexed column number. A typical ascii character is half-width and takes up one column.
+/// Some Unicode characters, especially in East-Asian languages, are full-width and take up two
+/// columns.
 pub type Col = u16;
 
 /// Height, measured in lines.
 pub type Height = u32;
 
-/// Width, measured in terminal columns. Not to be confused with number of bytes,
-/// Unicode code points, or Unicode grapheme clusters. Compute the `Width` of a
-/// string with [`str_width`].
+/// Width, measured in columns.
 pub type Width = u16;
 
-/// A character position, relative to the screen or the document.
+/// A position relative to the screen or the document.
 ///
 /// The origin is in the upper left, and is `(0, 0)`. I.e., this is 0-indexed.
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Ord, PartialOrd)]
@@ -24,7 +24,7 @@ pub struct Pos {
     pub col: Col,
 }
 
-/// A two-dimensional size, in characters.
+/// The size of a two-dimensional rectangular region.
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Ord, PartialOrd)]
 pub struct Size {
     pub height: Height,
@@ -76,7 +76,8 @@ impl Add<Size> for Pos {
     }
 }
 
-/// The width of a string in terminal columns. May be an overestimate.
+/// The width of a string in columns. May be an overestimate. Not to be confused with number of
+/// bytes, Unicode code points, or Unicode grapheme clusters.
 pub fn str_width(s: &str) -> Width {
     unicode_width::UnicodeWidthStr::width_cjk(s) as Width
 }
