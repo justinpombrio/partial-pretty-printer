@@ -1,4 +1,6 @@
-use super::notation_walker::{DelayedNotationWalker, NotationWalker};
+use super::consolidated_notation::{
+    ConsolidatedNotation, DelayedConsolidatedNotation, NotationMismatchError,
+};
 use super::pretty_doc::PrettyDoc;
 use crate::geometry::{str_width, Width};
 use std::fmt;
@@ -15,40 +17,43 @@ struct Layout(Vec<(Width, String)>);
 /// Pretty print the document with the given width. This is meant only for testing.
 /// It's slow: roughly exponential in the size of the doc.
 pub fn oracular_pretty_print<'d, D: PrettyDoc<'d>>(doc: D, width: Width) -> String {
-    let walker = DelayedNotationWalker::new(doc);
-    let layout = pp(Layout::empty(), walker, 0, width);
+    let note = ConsolidatedNotation::new(doc).expect("Notation mismatch in oracle test (root)");
+    let layout = pp(Layout::empty(), note, 0, width).expect("Notation mismatch in oracle test");
     format!("{}", layout)
 }
 
 fn pp<'d, D: PrettyDoc<'d>>(
     prefix: Layout,
-    walker: DelayedNotationWalker<'d, D>,
+    note: ConsolidatedNotation<'d, D>,
     suffix_len: Width,
     width: Width,
-) -> Layout {
-    use NotationWalker::*;
+) -> Result<Layout, NotationMismatchError> {
+    use ConsolidatedNotation::*;
 
     if DEBUG_PRINT {
         println!("==pp suffix_len:{:?} width:{}", suffix_len, width);
         println!("{}", prefix);
-        println!("{}", walker);
+        println!("{}", note);
         println!("==");
     }
 
-    match walker.force() {
-        Empty => prefix,
-        Literal(lit) => prefix.append(Layout::text(lit.str())),
-        Newline(indent) => prefix.append(Layout::newline(indent)),
-        Text(txt, _) => prefix.append(Layout::text(txt)),
-        Child(_, x) => pp(prefix, x, suffix_len, width),
+    match note {
+        Empty => Ok(prefix),
+        Literal(lit) => Ok(prefix.append(Layout::text(lit.str()))),
+        Newline(indent) => Ok(prefix.append(Layout::newline(indent))),
+        Text(txt, _) => Ok(prefix.append(Layout::text(txt))),
+        Child(_, x) => pp(prefix, x.eval()?, suffix_len, width),
         Concat(x, y) => {
-            let x_suffix_len = first_line_len(y, suffix_len);
-            let y_prefix = pp(prefix, x, x_suffix_len, width);
+            let x = x.eval()?;
+            let y = y.eval()?;
+            let x_suffix_len = first_line_len(y, suffix_len)?;
+            let y_prefix = pp(prefix, x, x_suffix_len, width)?;
             pp(y_prefix, y, suffix_len, width)
         }
         Choice(x, y) => {
+            let x = x.eval()?;
             let last_len = prefix.last_line_len();
-            let first_len = first_line_len(x, suffix_len);
+            let first_len = first_line_len(x, suffix_len)?;
             let fits = last_len + first_len <= width;
             if DEBUG_PRINT {
                 println!(
@@ -56,31 +61,35 @@ fn pp<'d, D: PrettyDoc<'d>>(
                     last_len, first_len, width, fits
                 );
             }
-            let z = if fits { x } else { y };
+            let z = if fits { x } else { y.eval()? };
             pp(prefix, z, suffix_len, width)
         }
     }
 }
 
+/// Smallest possible first line length of `note`, given that its last line will have an additional
+/// `suffix_len` columns after it. Assumes the rule that in (x | y), y's first line is no longer
+/// than x's.
 fn first_line_len<'d, D: PrettyDoc<'d>>(
-    walker: DelayedNotationWalker<'d, D>,
+    note: ConsolidatedNotation<'d, D>,
     suffix_len: Width,
-) -> Width {
-    use NotationWalker::*;
+) -> Result<Width, NotationMismatchError> {
+    use ConsolidatedNotation::*;
 
-    match walker.force() {
-        Empty => suffix_len,
-        Literal(lit) => lit.width() + suffix_len,
-        Newline(_) => 0,
-        Text(txt, _) => str_width(txt) + suffix_len,
-        Child(_, x) => first_line_len(x, suffix_len),
+    match note {
+        Empty => Ok(suffix_len),
+        Literal(lit) => Ok(lit.width() + suffix_len),
+        Newline(_) => Ok(0),
+        Text(txt, _) => Ok(str_width(txt) + suffix_len),
+        Child(_, x) => first_line_len(x.eval()?, suffix_len),
         Concat(x, y) => {
-            let suffix_len = first_line_len(y, suffix_len);
-            first_line_len(x, suffix_len)
+            let suffix_len = first_line_len(y.eval()?, suffix_len)?;
+            first_line_len(x.eval()?, suffix_len)
         }
         Choice(_, y) => {
-            // Wouldn't see a choice if we were flat, so use y
-            first_line_len(y, suffix_len)
+            // Wouldn't see a choice if we were flat, so use y.
+            // Relies on the rule that in (x | y), y's first line is no longer than x's.
+            first_line_len(y.eval()?, suffix_len)
         }
     }
 }

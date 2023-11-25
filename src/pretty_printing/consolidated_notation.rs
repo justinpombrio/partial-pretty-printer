@@ -216,6 +216,23 @@ impl<'d, D: PrettyDoc<'d>> DelayedConsolidatedNotation<'d, D> {
     }
 }
 
+// For debugging. Should match impl fmt::Display for Notation.
+impl<'d, D: PrettyDoc<'d>> fmt::Display for ConsolidatedNotation<'d, D> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use ConsolidatedNotation::*;
+
+        match self {
+            Empty => write!(f, "ε"),
+            Newline(_) => write!(f, "↵"),
+            Text(_, _) => write!(f, "TEXT"),
+            Literal(lit) => write!(f, "'{}'", lit.str()),
+            Concat(left, right) => write!(f, "{} + {}", left, right),
+            Choice(opt1, opt2) => write!(f, "({} | {})", opt1, opt2),
+            Child(i, _) => write!(f, "${}", i),
+        }
+    }
+}
+
 impl<'d, D: PrettyDoc<'d>> fmt::Display for DelayedConsolidatedNotation<'d, D> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.notation)
