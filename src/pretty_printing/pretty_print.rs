@@ -1,14 +1,19 @@
-use super::notation_ref::{NotationCase, NotationRef};
+use super::consolidated_notation::{
+    ConsolidatedNotation, DelayedConsolidatedNotation, NotationMismatchError,
+};
 use super::pretty_doc::PrettyDoc;
-use crate::geometry::Width;
+use crate::geometry::{str_width, Width};
 use crate::infra::span;
-use crate::style::{Shade, Style};
+use std::collections::HashSet;
 use std::iter::Iterator;
 
 /// Pretty print a document, focused at the node found by traversing `path` from the root.
 ///
 /// `width` is the desired line width. The algorithm will attempt to, but is not guaranteed to,
-/// find a layout that fits withing that width.
+/// find a layout that fits within that width.
+///
+/// `marks` is a set of document node ids to mark. Each chunk of text in the output will say which,
+/// if any, marked id it is part of.
 ///
 /// Returns a pair of iterators:
 ///
@@ -17,18 +22,23 @@ use std::iter::Iterator;
 ///
 /// It is expected that you will take only as many lines as you need from the iterators; doing so
 /// will save computation time.
-pub fn pretty_print<'d, D: PrettyDoc<'d>>(
+pub fn pretty_print<'d, S: 'd, D: PrettyDoc<'d, S>>(
     doc: D,
     width: Width,
     path: &[usize],
-) -> (
-    impl Iterator<Item = LineContents<'d>>,
-    impl Iterator<Item = LineContents<'d>>,
-) {
+    marks: HashSet<D::Id>,
+) -> Result<
+    (
+        impl Iterator<Item = Result<LineContents<'d, S, D>, NotationMismatchError>>,
+        impl Iterator<Item = Result<LineContents<'d, S, D>, NotationMismatchError>>,
+    ),
+    NotationMismatchError,
+> {
     span!("Pretty Print");
 
-    let notation = NotationRef::new(doc);
-    let seeker = Seeker::new(width, notation);
+    let id = doc.id();
+    let notation = ConsolidatedNotation::new(doc)?;
+    let seeker = Seeker::new(width, notation, id, marks);
     seeker.seek(path)
 }
 
@@ -36,35 +46,85 @@ pub fn pretty_print<'d, D: PrettyDoc<'d>>(
 ///
 /// `width` is the desired line width. The algorithm will attempt to, but is not guaranteed to,
 /// find a layout that fits withing that width.
-pub fn pretty_print_to_string<'d, D: PrettyDoc<'d>>(doc: D, width: Width) -> String {
-    let (_, mut lines_iter) = pretty_print(doc, width, &[]);
-    let mut string = lines_iter.next().unwrap().to_string();
+pub fn pretty_print_to_string<'d, S: 'd, D: PrettyDoc<'d, S>>(
+    doc: D,
+    width: Width,
+) -> Result<String, NotationMismatchError> {
+    let (_, mut lines_iter) = pretty_print(doc, width, &[], HashSet::new())?;
+    let mut string = lines_iter.next().unwrap()?.to_string();
     for line in lines_iter {
         string.push('\n');
-        string.push_str(&line.to_string());
+        string.push_str(&line?.to_string());
     }
-    string
+    Ok(string)
 }
 
-/// (flat, indent, is_in_cursor, notation)
-type Chunk<'d, D> = (bool, Width, Shade, NotationRef<'d, D>);
+#[derive(Debug)]
+struct Chunk<'d, S, D: PrettyDoc<'d, S>> {
+    id: D::Id,
+    mark: Option<D::Id>,
+    notation: ConsolidatedNotation<'d, S, D>,
+}
+
+impl<'d, S, D: PrettyDoc<'d, S>> Clone for Chunk<'d, S, D> {
+    fn clone(&self) -> Self {
+        Chunk {
+            id: self.id,
+            mark: self.mark,
+            notation: self.notation,
+        }
+    }
+}
+impl<'d, S, D: PrettyDoc<'d, S>> Copy for Chunk<'d, S, D> {}
+
+impl<'d, S, D: PrettyDoc<'d, S>> Chunk<'d, S, D> {
+    fn new_child(
+        self,
+        notation: DelayedConsolidatedNotation<'d, S, D>,
+        marks: &HashSet<D::Id>,
+    ) -> Result<Self, NotationMismatchError> {
+        let id = notation.id();
+        Ok(Chunk {
+            id,
+            mark: marks.get(&id).copied().or(self.mark),
+            notation: notation.eval()?,
+        })
+    }
+}
 
 /// The contents of a single pretty printed line.
-pub struct LineContents<'d> {
-    /// The indentation of this line in spaces, and the shade of those spaces.
-    pub spaces: (Width, Shade),
-    /// A sequence of (string, style, shade) triples, to be displayed after `spaces`, in order from
-    /// left to right, with no spacing in between.
-    pub contents: Vec<(&'d str, Style, Shade)>,
+pub struct LineContents<'d, S, D: PrettyDoc<'d, S>> {
+    /// The indentation of this line in spaces.
+    pub indentation: Indentation<'d, S, D>,
+    /// A sequence of pieces of text to be displayed after `spaces`, in order from left to right,
+    /// with no spacing in between.
+    pub pieces: Vec<Piece<'d, S, D>>,
 }
 
-impl<'d> ToString for LineContents<'d> {
+pub struct Indentation<'d, S, D: PrettyDoc<'d, S>> {
+    pub num_spaces: Width,
+    pub doc_id: D::Id,
+    pub mark: Option<D::Id>,
+}
+
+pub struct Piece<'d, S, D: PrettyDoc<'d, S>> {
+    pub str: &'d str,
+    pub style: &'d S,
+    pub doc_id: D::Id,
+    pub mark: Option<D::Id>,
+}
+
+impl<'d, S, D: PrettyDoc<'d, S>> ToString for LineContents<'d, S, D> {
     fn to_string(&self) -> String {
         span!("LineContents::to_string");
 
-        let mut string = format!("{:spaces$}", "", spaces = self.spaces.0 as usize);
-        for (text, _style, _shade) in &self.contents {
-            string.push_str(text);
+        let mut string = format!(
+            "{:spaces$}",
+            "",
+            spaces = self.indentation.num_spaces as usize
+        );
+        for piece in &self.pieces {
+            string.push_str(piece.str);
         }
         string
     }
@@ -72,176 +132,182 @@ impl<'d> ToString for LineContents<'d> {
 
 /// Can seek to an arbitrary position within the document, while resolving as few choices as
 /// possible.
-struct Seeker<'d, D: PrettyDoc<'d>> {
+struct Seeker<'d, S, D: PrettyDoc<'d, S>> {
     width: Width,
-    prev: Vec<Chunk<'d, D>>,
-    next: Vec<Chunk<'d, D>>,
+    prev: Vec<Chunk<'d, S, D>>,
+    next: Vec<Chunk<'d, S, D>>,
+    marks: HashSet<D::Id>,
 }
 
-impl<'d, D: PrettyDoc<'d>> Seeker<'d, D> {
-    fn new(width: Width, notation: NotationRef<'d, D>) -> Seeker<'d, D> {
-        let fake_nl = notation.make_fake_start_of_doc_newline();
+impl<'d, S, D: PrettyDoc<'d, S>> Seeker<'d, S, D> {
+    fn new(
+        width: Width,
+        notation: ConsolidatedNotation<'d, S, D>,
+        id: D::Id,
+        marks: HashSet<D::Id>,
+    ) -> Seeker<'d, S, D> {
         Seeker {
             width,
-            prev: vec![(false, 0, Shade::background(), fake_nl)],
-            next: vec![(false, 0, Shade::background(), notation)],
+            prev: vec![Chunk {
+                id: D::Id::default(),
+                mark: None,
+                notation: ConsolidatedNotation::Newline(0),
+            }],
+            next: vec![Chunk {
+                id,
+                mark: marks.get(&id).copied(),
+                notation,
+            }],
+            marks,
         }
     }
 
-    fn seek(mut self, path: &[usize]) -> (UpwardPrinter<'d, D>, DownwardPrinter<'d, D>) {
-        use NotationCase::*;
+    fn seek(
+        mut self,
+        path: &[usize],
+    ) -> Result<(UpwardPrinter<'d, S, D>, DownwardPrinter<'d, S, D>), NotationMismatchError> {
+        use ConsolidatedNotation::*;
 
         span!("seek");
 
-        // Seek to the descendant given by `path`. Highlight the descendency chain as we go.
+        // Seek to the descendant given by `path`.
         let mut path = path.iter();
-        self.highlight(path.len());
         while let Some(child_index) = path.next() {
-            self.seek_child(*child_index);
-            self.highlight(path.len());
+            self.seek_child(*child_index)?;
         }
 
         // Walk backward to the nearest Newline.
-        while let Some((flat, indent, shade, notation)) = self.prev.pop() {
-            match notation.case() {
-                Empty | Indent(_, _) | Flat(_) | Concat(_, _) | Choice(_, _) | Child(_, _) => {
-                    unreachable!()
-                }
-                Literal(_) => self.next.push((flat, indent, shade, notation)),
-                Text(_, _) => self.next.push((flat, indent, shade, notation)),
-                Newline => {
-                    self.next.push((flat, indent, shade, notation));
-                    break;
-                }
-            }
-        }
+        self.seek_start_of_line();
 
         let upward_printer = UpwardPrinter {
             width: self.width,
             prev: self.prev,
             next: vec![],
+            marks: self.marks.clone(),
         };
         let downward_printer = DownwardPrinter {
             width: self.width,
             next: self.next,
+            marks: self.marks,
         };
-        (upward_printer, downward_printer)
+        Ok((upward_printer, downward_printer))
     }
 
-    fn seek_child(&mut self, child_index: usize) {
-        use NotationCase::*;
+    fn seek_start_of_line(&mut self) {
+        use ConsolidatedNotation::*;
+
+        span!("seek_start_of_line");
+
+        while let Some(chunk) = self.prev.pop() {
+            match chunk.notation {
+                Empty | Concat(_, _) | Choice(_, _) | Child(_, _) => {
+                    unreachable!()
+                }
+                Literal(_) => self.next.push(chunk),
+                Text(_, _) => self.next.push(chunk),
+                Newline(_) => {
+                    self.next.push(chunk);
+                    break;
+                }
+            }
+        }
+    }
+
+    fn seek_child(&mut self, child_index: usize) -> Result<(), NotationMismatchError> {
+        use ConsolidatedNotation::*;
 
         span!("seek_child");
 
-        let parent_doc_id = self.next.last().unwrap().3.doc_id();
+        let parent_doc_id = self.next.last().unwrap().id;
         loop {
             // 1. Expand forward to the nearest `Choice` or `Child` belonging to `parent_doc`.
-            //    (NOTE: more precise would be looking for Child(child_index) or a Choice
-            //     containing it, but you can't tell right now what children a choice might
+            //    (It would be more precise to look for Child(child_index) or a Choice
+            //     containing it, but we can't tell right now what children a choice might
             //     contain.)
-            while let Some((flat, indent, shade, notation)) = self.next.pop() {
-                match notation.case() {
+            while let Some(chunk) = self.next.pop() {
+                match chunk.notation {
                     Empty => (),
-                    Literal(_) => self.prev.push((flat, indent, shade, notation)),
-                    Newline => self.prev.push((flat, indent, shade, notation)),
-                    Text(_, _) => self.prev.push((flat, indent, shade, notation)),
-                    Indent(j, note) => self.next.push((flat, indent + j, shade, note)),
-                    Flat(note) => self.next.push((true, indent, shade, note)),
+                    Literal(_) | Newline(_) | Text(_, _) => self.prev.push(chunk),
                     Concat(left, right) => {
-                        self.next.push((flat, indent, shade, right));
-                        self.next.push((flat, indent, shade, left));
+                        self.next.push(chunk.new_child(right, &self.marks)?);
+                        self.next.push(chunk.new_child(left, &self.marks)?);
                     }
-                    Choice(_, _) if notation.doc_id() == parent_doc_id => {
-                        self.next.push((flat, indent, shade, notation));
+                    Choice(_, _) if chunk.id == parent_doc_id => {
+                        self.next.push(chunk);
                         break;
                     }
-                    Choice(_, _) => self.prev.push((flat, indent, shade, notation)),
-                    Child(i, _) if notation.doc_id() == parent_doc_id && i == child_index => {
-                        self.next.push((flat, indent, shade, notation));
+                    // TODO: impossible case?
+                    Choice(_, _) => self.prev.push(chunk),
+                    Child(i, _) if chunk.id == parent_doc_id && i == child_index => {
+                        self.next.push(chunk);
+                        // TODO: can this just return, or do we need to expand any choices before
+                        // it on the same line?
                         break;
                     }
-                    Child(_, _) => self.prev.push((flat, indent, shade, notation)),
+                    Child(_, _) => self.prev.push(chunk),
                 }
             }
 
             // 2. Walk backward to the nearest Newline (or beginning of the doc).
             let mut prefix_len = 0;
-            while let Some((flat, indent, shade, notation)) = self.prev.pop() {
-                match notation.case() {
-                    Empty | Indent(_, _) | Flat(_) | Concat(_, _) => unreachable!(),
-                    Literal(_) | Text(_, _) | Choice(_, _) | Child(_, _) => {
-                        self.next.push((flat, indent, shade, notation))
-                    }
-                    Newline => {
+            while let Some(chunk) = self.prev.pop() {
+                match chunk.notation {
+                    Empty | Concat(_, _) => unreachable!(),
+                    Literal(_) | Text(_, _) | Choice(_, _) | Child(_, _) => self.next.push(chunk),
+                    Newline(indent) => {
                         prefix_len = indent;
-                        self.prev.push((flat, indent, shade, notation));
+                        self.prev.push(chunk);
                         break;
                     }
                 }
             }
 
             // 3. Walk forward to the nearest Child or Choice, and resolve it. Go back to 1.
-            //    If you hit `Child(i)` belonging to `parent_doc`, success.
-            //    If you hit end of doc, panic (every child must be present).
-            while let Some((flat, indent, shade, notation)) = self.next.pop() {
-                match notation.case() {
-                    Empty | Indent(_, _) | Flat(_) | Concat(_, _) | Newline => unreachable!(),
+            //    If we hit `Child(i)` belonging to `parent_doc`, success.
+            //    If we hit end of doc, panic (every child must be present).
+            while let Some(chunk) = self.next.pop() {
+                match chunk.notation {
+                    Empty | Concat(_, _) | Newline(_) => unreachable!(),
                     Literal(lit) => {
-                        prefix_len += lit.len();
-                        self.prev.push((flat, indent, shade, notation))
+                        prefix_len += lit.width();
+                        self.prev.push(chunk);
                     }
                     Text(text, _style) => {
-                        prefix_len += text.chars().count() as Width;
-                        self.prev.push((flat, indent, shade, notation));
+                        prefix_len += str_width(text);
+                        self.prev.push(chunk);
                     }
-                    Child(i, child) if notation.doc_id() == parent_doc_id && i == child_index => {
+                    Child(i, child) if chunk.id == parent_doc_id && i == child_index => {
                         // Found!
-                        self.next.push((flat, indent, shade, child));
-                        return;
+                        self.next.push(chunk.new_child(child, &self.marks)?);
+                        return Ok(());
                     }
                     Child(_, child) => {
-                        self.next.push((flat, indent, shade, child));
+                        self.next.push(chunk.new_child(child, &self.marks)?);
                         break;
                     }
                     Choice(opt1, opt2) => {
-                        let choice = choose(self.width, flat, prefix_len, opt1, opt2, &self.next);
-                        self.next.push((flat, indent, shade, choice));
+                        let choice = choose(self.width, prefix_len, opt1, opt2, &self.next)?;
+                        self.next.push(chunk.new_child(choice, &self.marks)?);
                         break;
                     }
                 }
             }
 
             if self.next.is_empty() {
+                // TODO: Err. Rename NotationMismatchError -> PrintError
                 panic!("Missing child ({})", child_index);
             }
         }
     }
 
-    fn highlight(&mut self, shade: usize) {
-        // TODO: longer paths?
-        self.next.last_mut().unwrap().2 = Shade(shade as u8);
-    }
-
     #[allow(unused)]
     fn display(&self) {
-        for (_, _, _, notation) in &self.prev {
-            print!("{} ", notation);
+        for chunk in &self.prev {
+            print!("{} ", chunk.notation);
         }
         print!(" / ");
-        for (_, _, _, notation) in self.next.iter().rev() {
-            print!("{} ", notation);
-        }
-        println!();
-    }
-
-    #[allow(unused)]
-    fn display_shades(&self) {
-        for (_, _, shade, _) in &self.prev {
-            print!("{} ", shade.0);
-        }
-        print!(" / ");
-        for (_, _, shade, _) in self.next.iter().rev() {
-            print!("{} ", shade.0);
+        for chunk in self.next.iter().rev() {
+            print!("{} ", chunk.notation);
         }
         println!();
     }
@@ -249,72 +315,88 @@ impl<'d, D: PrettyDoc<'d>> Seeker<'d, D> {
 
 /// Constructed at an arbitrary position within the document. Prints lines from there one at a
 /// time, going down.
-struct DownwardPrinter<'d, D: PrettyDoc<'d>> {
+struct DownwardPrinter<'d, S, D: PrettyDoc<'d, S>> {
     width: Width,
-    next: Vec<Chunk<'d, D>>,
+    next: Vec<Chunk<'d, S, D>>,
+    marks: HashSet<D::Id>,
 }
 
-impl<'d, D: PrettyDoc<'d>> DownwardPrinter<'d, D> {
-    fn print_first_line(&mut self) -> Option<LineContents<'d>> {
-        use NotationCase::*;
+impl<'d, S, D: PrettyDoc<'d, S>> DownwardPrinter<'d, S, D> {
+    fn print_first_line(
+        &mut self,
+    ) -> Result<Option<LineContents<'d, S, D>>, NotationMismatchError> {
+        use ConsolidatedNotation::*;
 
         span!("print_first_line");
 
-        // We should be at the start of a line (in which case we look a the Newline's indentation
+        // We should be at the start of a line (in which case we look at the Newline's indentation
         // level to see how many spaces are at the start of this line), or at the very end of the
         // document (in which case our iteration is done).
-        let (spaces, spaces_shade) = if let Some((_flat, indent, shade, notation)) = self.next.pop()
-        {
-            assert!(matches!(notation.case(), Newline));
-            (indent, shade)
+        let indentation = if let Some(chunk) = self.next.pop() {
+            match chunk.notation {
+                Newline(num_spaces) => Indentation {
+                    num_spaces,
+                    doc_id: chunk.id,
+                    mark: chunk.mark,
+                },
+                _ => panic!("Bug: print_first_line not invoked after newline"),
+            }
         } else {
-            return None;
+            return Ok(None);
         };
 
-        let mut contents = vec![];
-        let mut prefix_len = spaces;
-        while let Some((flat, indent, shade, notation)) = self.next.pop() {
-            match notation.case() {
+        let mut pieces = vec![];
+        let mut prefix_len = indentation.num_spaces;
+        while let Some(chunk) = self.next.pop() {
+            match chunk.notation {
                 Empty => (),
                 Literal(lit) => {
-                    contents.push((lit.str(), lit.style(), shade));
-                    prefix_len += lit.len();
+                    pieces.push(Piece {
+                        str: lit.str(),
+                        style: lit.style(),
+                        doc_id: chunk.id,
+                        mark: chunk.mark,
+                    });
+                    prefix_len += lit.width();
                 }
                 Text(text, style) => {
-                    contents.push((text, style, shade));
-                    prefix_len += text_len(text);
-                }
-                Newline => {
-                    self.next.push((flat, indent, shade, notation));
-                    return Some(LineContents {
-                        spaces: (spaces, spaces_shade),
-                        contents,
+                    pieces.push(Piece {
+                        str: text,
+                        style,
+                        doc_id: chunk.id,
+                        mark: chunk.mark,
                     });
+                    prefix_len += str_width(text);
                 }
-                Indent(j, note) => self.next.push((flat, indent + j, shade, note)),
-                Flat(note) => self.next.push((true, indent, shade, note)),
+                Newline(indent) => {
+                    self.next.push(chunk);
+                    return Ok(Some(LineContents {
+                        indentation,
+                        pieces,
+                    }));
+                }
                 Concat(left, right) => {
-                    self.next.push((flat, indent, shade, right));
-                    self.next.push((flat, indent, shade, left));
+                    self.next.push(chunk.new_child(right, &self.marks)?);
+                    self.next.push(chunk.new_child(left, &self.marks)?);
                 }
                 Choice(opt1, opt2) => {
-                    let choice = choose(self.width, flat, prefix_len, opt1, opt2, &self.next);
-                    self.next.push((flat, indent, shade, choice));
+                    let choice = choose(self.width, prefix_len, opt1, opt2, &self.next)?;
+                    self.next.push(chunk.new_child(choice, &self.marks)?);
                 }
-                Child(_, child_note) => self.next.push((flat, indent, shade, child_note)),
+                Child(_, child_note) => self.next.push(chunk.new_child(child_note, &self.marks)?),
             }
         }
 
-        Some(LineContents {
-            spaces: (spaces, spaces_shade),
-            contents,
-        })
+        Ok(Some(LineContents {
+            indentation,
+            pieces,
+        }))
     }
 
     #[allow(unused)]
     fn display(&self) {
-        for (_, _, _, notation) in self.next.iter().rev() {
-            print!("{} ", notation);
+        for chunk in self.next.iter().rev() {
+            print!("{} ", chunk.notation);
         }
         println!();
     }
@@ -322,227 +404,235 @@ impl<'d, D: PrettyDoc<'d>> DownwardPrinter<'d, D> {
 
 /// Constructed at an arbitrary position within the document. Prints lines from there one at a
 /// time, going up.
-struct UpwardPrinter<'d, D: PrettyDoc<'d>> {
+// INVARIANT: `next` only ever contains `Literal`, `Text`, and `Choice` notations.
+struct UpwardPrinter<'d, S, D: PrettyDoc<'d, S>> {
     width: Width,
-    prev: Vec<Chunk<'d, D>>,
-    // INVARIANT: only ever contains `Literal`, `Text`, and `Choice` notations.
-    next: Vec<Chunk<'d, D>>,
+    prev: Vec<Chunk<'d, S, D>>,
+    next: Vec<Chunk<'d, S, D>>,
+    marks: HashSet<D::Id>,
 }
 
-impl<'d, D: PrettyDoc<'d>> UpwardPrinter<'d, D> {
-    fn print_last_line(&mut self) -> Option<LineContents<'d>> {
-        use NotationCase::*;
+impl<'d, S, D: PrettyDoc<'d, S>> UpwardPrinter<'d, S, D> {
+    fn print_last_line(&mut self) -> Result<Option<LineContents<'d, S, D>>, NotationMismatchError> {
+        use ConsolidatedNotation::*;
 
         span!("print_last_line");
 
         // 1. Go to the start of the "last line", and remember its indentation. However, the "last
         //    line" might not be fully expanded, and could contain hidden newlines in it.
-        self.seek_start_of_line();
-        let mut prefix_len = if let Some((flat, indent, shade, notation)) = self.next.pop() {
-            self.prev.push((flat, indent, shade, notation));
-            indent
-        } else {
-            return None;
+        let mut prefix_len = match self.seek_start_of_line()? {
+            None => return Ok(None),
+            Some(prefix_len) => prefix_len,
         };
 
         // 2. Start expanding the "last line". If we encounter a choice, resolve it, but then seek
         //    back to the "start of the last line" again, as where that is might have changed if
         //    the choice contained a newline.
-        while let Some((flat, indent, shade, notation)) = self.next.pop() {
-            match notation.case() {
+        while let Some(chunk) = self.next.pop() {
+            match chunk.notation {
                 Literal(lit) => {
-                    prefix_len += lit.len();
-                    self.prev.push((flat, indent, shade, notation));
+                    prefix_len += lit.width();
+                    self.prev.push(chunk);
                 }
                 Text(text, _style) => {
-                    prefix_len += text_len(text);
-                    self.prev.push((flat, indent, shade, notation));
+                    prefix_len += str_width(text);
+                    self.prev.push(chunk);
                 }
                 Choice(opt1, opt2) => {
-                    let choice = choose(self.width, flat, prefix_len, opt1, opt2, &self.next);
-                    self.prev.push((flat, indent, shade, choice));
+                    let choice = choose(self.width, prefix_len, opt1, opt2, &self.next)?;
+                    self.prev.push(chunk.new_child(choice, &self.marks)?);
 
                     // Reset everything. This is equivalent to a recursive call.
                     self.seek_end();
-                    self.seek_start_of_line();
-                    prefix_len = if let Some((flat, indent, _shade, notation)) = self.next.pop() {
-                        self.prev.push((flat, indent, shade, notation));
-                        indent
-                    } else {
-                        return None;
+                    prefix_len = match self.seek_start_of_line()? {
+                        None => return Ok(None),
+                        Some(prefix_len) => prefix_len,
                     };
                 }
-                Empty | Newline | Indent(_, _) | Flat(_) | Concat(_, _) | Child(_, _) => {
+                Empty | Newline(_) | Concat(_, _) | Child(_, _) => {
                     unreachable!()
                 }
             }
         }
 
-        self.seek_start_of_line();
-        let (_flat, indent, shade, _notation) = self.next.pop().unwrap();
-        let (spaces, spaces_shade) = (indent, shade);
+        let num_spaces = match self.seek_start_of_line()? {
+            None => return Ok(None),
+            Some(num_spaces) => num_spaces,
+        };
+        let newline_chunk = self.prev.pop().unwrap();
+        let indentation = Indentation {
+            num_spaces,
+            doc_id: newline_chunk.id,
+            mark: newline_chunk.mark,
+        };
 
-        let mut contents = vec![];
-        while let Some((_flat, _indent, shade, notation)) = self.next.pop() {
-            match notation.case() {
-                NotationCase::Literal(lit) => contents.push((lit.str(), lit.style(), shade)),
-                NotationCase::Text(text, style) => contents.push((text, style, shade)),
-                _ => panic!("display_line: expected only literals and text"),
+        let mut pieces = vec![];
+        while let Some(chunk) = self.next.pop() {
+            match chunk.notation {
+                Literal(lit) => pieces.push(Piece {
+                    str: lit.str(),
+                    style: lit.style(),
+                    doc_id: chunk.id,
+                    mark: chunk.mark,
+                }),
+                Text(text, style) => pieces.push(Piece {
+                    str: text,
+                    style,
+                    doc_id: chunk.id,
+                    mark: chunk.mark,
+                }),
+                _ => panic!("Bug (display_line): expected only literals and text"),
             }
         }
-        Some(LineContents {
-            spaces: (spaces, spaces_shade),
-            contents,
-        })
+        Ok(Some(LineContents {
+            indentation,
+            pieces,
+        }))
     }
 
     fn seek_end(&mut self) {
         span!("seek_end");
 
-        while let Some((flat, indent, shade, notation)) = self.next.pop() {
-            self.prev.push((flat, indent, shade, notation));
+        while let Some(chunk) = self.next.pop() {
+            self.prev.push(chunk);
         }
     }
 
-    /// Move the "printing cursor" to just before the previous newline. (Or do nothing if there is
-    /// no such newline.)
-    // Maintains the invariant that `next` only ever contains `Literal` and `Choice` notations.
-    fn seek_start_of_line(&mut self) {
-        use NotationCase::*;
+    /// Move the "printing cursor" to just after the previous newline. Returns None if there is
+    /// no such newline, or Some of the newline's indentation if there is.
+    // Maintains the invariant that `next` only ever contains `Literal`, `Text`, and `Choice` notations.
+    fn seek_start_of_line(&mut self) -> Result<Option<Width>, NotationMismatchError> {
+        use ConsolidatedNotation::*;
 
         span!("seek_start_of_line");
 
-        while let Some((flat, indent, shade, notation)) = self.prev.pop() {
-            match notation.case() {
+        while let Some(chunk) = self.prev.pop() {
+            match chunk.notation {
                 Empty => (),
-                Text(_, _) => self.next.push((flat, indent, shade, notation)),
-                Literal(_) => self.next.push((flat, indent, shade, notation)),
-                Newline => {
-                    self.next.push((flat, indent, shade, notation));
-                    return;
+                Text(_, _) | Literal(_) => self.next.push(chunk),
+                Newline(indent) => {
+                    self.prev.push(chunk);
+                    return Ok(Some(indent));
                 }
-                Indent(j, note) => self.prev.push((flat, indent + j, shade, note)),
-                Flat(note) => self.prev.push((true, indent, shade, note)),
                 Concat(left, right) => {
-                    self.prev.push((flat, indent, shade, left));
-                    self.prev.push((flat, indent, shade, right));
+                    self.prev.push(chunk.new_child(left, &self.marks)?);
+                    self.prev.push(chunk.new_child(right, &self.marks)?);
                 }
-                Choice(_, _) => self.next.push((flat, indent, shade, notation)),
-                Child(_, note) => self.prev.push((flat, indent, shade, note)),
+                Choice(_, _) => self.next.push(chunk),
+                Child(_, note) => self.prev.push(chunk.new_child(note, &self.marks)?),
             }
         }
+        Ok(None)
     }
 
     #[allow(unused)]
     fn display(&self) {
-        for (_, _, _, notation) in &self.prev {
-            print!("{} ", notation);
+        for chunk in &self.prev {
+            print!("{} ", chunk.notation);
         }
         print!(" / ");
-        for (_, _, _, notation) in self.next.iter().rev() {
-            print!("{} ", notation);
+        for chunk in self.next.iter().rev() {
+            print!("{} ", chunk.notation);
         }
         println!();
     }
 }
 
-/// Determine which of the two options of the choice to select. Pick the first option if it fits,
-/// or if we're inside a 'flat'.
-fn choose<'d, D: PrettyDoc<'d>>(
+/// Determine which of the two options of the choice to select. Pick the first option if it fits.
+/// (We also want to pick the first option if we're inside a `Flat`, but ConsolidatedNotation already
+/// took care of that.)
+fn choose<'d, S, D: PrettyDoc<'d, S>>(
     width: Width,
-    flat: bool,
     prefix_len: Width,
-    opt1: NotationRef<'d, D>,
-    opt2: NotationRef<'d, D>,
-    suffix: &[Chunk<'d, D>],
-) -> NotationRef<'d, D> {
+    opt1: DelayedConsolidatedNotation<'d, S, D>,
+    opt2: DelayedConsolidatedNotation<'d, S, D>,
+    next_chunks: &[Chunk<'d, S, D>],
+) -> Result<DelayedConsolidatedNotation<'d, S, D>, NotationMismatchError> {
     span!("choose");
 
-    if flat {
-        return opt1;
-    }
+    let opt1_evaled = opt1.eval()?;
 
-    // Pick the first option iff it fits.
-    let chunks = suffix
-        .iter()
-        .map(|(f, _, _, n)| (*f, *n))
-        .chain(std::iter::once((flat, opt1)))
-        .collect();
-    if width >= prefix_len && fits(width - prefix_len, chunks) {
-        opt1
+    if width >= prefix_len && fits(width - prefix_len, opt1_evaled, next_chunks)? {
+        Ok(opt1)
     } else {
-        opt2
+        Ok(opt2)
     }
 }
 
-/// Determine whether the first line of the chunks fits within the `remaining` space.
-fn fits<'d, D: PrettyDoc<'d>>(width: Width, chunks: Vec<(bool, NotationRef<'d, D>)>) -> bool {
-    use NotationCase::*;
+/// Determine whether the first line of the notations (`notation` followed by `chunks`) fits within
+/// `width`.
+fn fits<'d, S, D: PrettyDoc<'d, S>>(
+    width: Width,
+    notation: ConsolidatedNotation<'d, S, D>,
+    next_chunks: &[Chunk<'d, S, D>],
+) -> Result<bool, NotationMismatchError> {
+    use ConsolidatedNotation::*;
 
     span!("fits");
 
+    let mut next_chunks = next_chunks;
     let mut remaining = width;
-    let mut chunks = chunks;
+    let mut notations = vec![notation];
 
-    while let Some((flat, notation)) = chunks.pop() {
-        match notation.case() {
+    loop {
+        let notation = match notations.pop() {
+            Some(notation) => notation,
+            None => match next_chunks.split_last() {
+                None => return Ok(true),
+                Some((chunk, more)) => {
+                    next_chunks = more;
+                    chunk.notation
+                }
+            },
+        };
+
+        match notation {
             Empty => (),
             Literal(lit) => {
-                let lit_len = lit.len();
+                let lit_len = lit.width();
                 if lit_len <= remaining {
                     remaining -= lit_len;
                 } else {
-                    return false;
+                    return Ok(false);
                 }
             }
             Text(text, _) => {
-                let text_len = text.chars().count() as Width;
+                let text_len = str_width(text);
                 if text_len <= remaining {
                     remaining -= text_len;
                 } else {
-                    return false;
+                    return Ok(false);
                 }
             }
-            Newline => return !flat,
-            // TODO: eliminate the `Flat` and `Indent` cases
-            Flat(note) => chunks.push((true, note)),
-            Indent(_, note) => chunks.push((flat, note)),
-            Child(_, note) => chunks.push((flat, note)),
+            Newline(_) => return Ok(true),
+            Child(_, note) => notations.push(note.eval()?),
             Concat(note1, note2) => {
-                chunks.push((flat, note2));
-                chunks.push((flat, note1));
+                notations.push(note2.eval()?);
+                notations.push(note1.eval()?);
             }
             Choice(opt1, opt2) => {
-                if flat {
-                    chunks.push((flat, opt1));
-                } else {
-                    // This assumes that:
-                    //     For every layout a in opt1 and b in opt2,
-                    //     first_line_len(a) >= first_line_len(b)
-                    chunks.push((flat, opt2));
-                }
+                // This assumes that:
+                //     For every layout a in opt1 and b in opt2,
+                //     first_line_len(a) >= first_line_len(b)
+                // And also that ConsolidatedNotation would have removed this choice if we're in a Flat
+                notations.push(opt2.eval()?);
             }
         }
     }
-    true
 }
 
-fn text_len(text: &str) -> Width {
-    text.chars().count() as Width
-}
+impl<'d, S, D: PrettyDoc<'d, S>> Iterator for DownwardPrinter<'d, S, D> {
+    type Item = Result<LineContents<'d, S, D>, NotationMismatchError>;
 
-impl<'d, D: PrettyDoc<'d>> Iterator for DownwardPrinter<'d, D> {
-    type Item = LineContents<'d>;
-
-    fn next(&mut self) -> Option<LineContents<'d>> {
-        self.print_first_line()
+    fn next(&mut self) -> Option<Self::Item> {
+        self.print_first_line().transpose()
     }
 }
 
-impl<'d, D: PrettyDoc<'d>> Iterator for UpwardPrinter<'d, D> {
-    type Item = LineContents<'d>;
+impl<'d, S, D: PrettyDoc<'d, S>> Iterator for UpwardPrinter<'d, S, D> {
+    type Item = Result<LineContents<'d, S, D>, NotationMismatchError>;
 
-    fn next(&mut self) -> Option<LineContents<'d>> {
-        self.print_last_line()
+    fn next(&mut self) -> Option<Self::Item> {
+        self.print_last_line().transpose()
     }
 }

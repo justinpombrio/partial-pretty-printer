@@ -1,8 +1,9 @@
 use crate::valid_notation::ValidNotation;
+use std::hash::Hash;
 
 /// A node in a "document" that supports the necessary methods to be pretty-printed.
 pub trait PrettyDoc<'d, S>: Copy {
-    type Id: Eq + Copy + Default;
+    type Id: Eq + Hash + Copy + Default;
 
     /// An id that uniquely identifies this node. It should not be `Id::default()`.
     fn id(self) -> Self::Id;
