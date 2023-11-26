@@ -2,8 +2,6 @@ use crate::geometry::{str_width, Width};
 use std::fmt;
 use std::ops::{Add, BitOr, BitXor, Shr};
 
-// TODO: Make generic over Style
-
 // TODO: Nail down this assumption further, I don't think this is _quite_ right.
 
 /// Describes how to display a syntactic construct. When constructing a Notation, you must obey one

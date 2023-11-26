@@ -1,5 +1,5 @@
 use super::consolidated_notation::{
-    ConsolidatedNotation, DelayedConsolidatedNotation, NotationMismatchError,
+    ConsolidatedNotation, DelayedConsolidatedNotation, PrintingError,
 };
 use super::pretty_doc::PrettyDoc;
 use crate::geometry::{str_width, Width};
@@ -29,10 +29,10 @@ pub fn pretty_print<'d, S: 'd, D: PrettyDoc<'d, S>>(
     marks: HashSet<D::Id>,
 ) -> Result<
     (
-        impl Iterator<Item = Result<LineContents<'d, S, D>, NotationMismatchError>>,
-        impl Iterator<Item = Result<LineContents<'d, S, D>, NotationMismatchError>>,
+        impl Iterator<Item = Result<LineContents<'d, S, D>, PrintingError>>,
+        impl Iterator<Item = Result<LineContents<'d, S, D>, PrintingError>>,
     ),
-    NotationMismatchError,
+    PrintingError,
 > {
     span!("Pretty Print");
 
@@ -49,7 +49,7 @@ pub fn pretty_print<'d, S: 'd, D: PrettyDoc<'d, S>>(
 pub fn pretty_print_to_string<'d, S: 'd, D: PrettyDoc<'d, S>>(
     doc: D,
     width: Width,
-) -> Result<String, NotationMismatchError> {
+) -> Result<String, PrintingError> {
     let (_, mut lines_iter) = pretty_print(doc, width, &[], HashSet::new())?;
     let mut string = lines_iter.next().unwrap()?.to_string();
     for line in lines_iter {
@@ -82,7 +82,7 @@ impl<'d, S, D: PrettyDoc<'d, S>> Chunk<'d, S, D> {
         self,
         notation: DelayedConsolidatedNotation<'d, S, D>,
         marks: &HashSet<D::Id>,
-    ) -> Result<Self, NotationMismatchError> {
+    ) -> Result<Self, PrintingError> {
         let id = notation.id();
         Ok(Chunk {
             id,
@@ -165,7 +165,7 @@ impl<'d, S, D: PrettyDoc<'d, S>> Seeker<'d, S, D> {
     fn seek(
         mut self,
         path: &[usize],
-    ) -> Result<(UpwardPrinter<'d, S, D>, DownwardPrinter<'d, S, D>), NotationMismatchError> {
+    ) -> Result<(UpwardPrinter<'d, S, D>, DownwardPrinter<'d, S, D>), PrintingError> {
         use ConsolidatedNotation::*;
 
         span!("seek");
@@ -213,7 +213,7 @@ impl<'d, S, D: PrettyDoc<'d, S>> Seeker<'d, S, D> {
         }
     }
 
-    fn seek_child(&mut self, child_index: usize) -> Result<(), NotationMismatchError> {
+    fn seek_child(&mut self, child_index: usize) -> Result<(), PrintingError> {
         use ConsolidatedNotation::*;
 
         span!("seek_child");
@@ -294,8 +294,7 @@ impl<'d, S, D: PrettyDoc<'d, S>> Seeker<'d, S, D> {
             }
 
             if self.next.is_empty() {
-                // TODO: Err. Rename NotationMismatchError -> PrintError
-                panic!("Missing child ({})", child_index);
+                return Err(PrintingError::InvalidPath(child_index));
             }
         }
     }
@@ -322,9 +321,7 @@ struct DownwardPrinter<'d, S, D: PrettyDoc<'d, S>> {
 }
 
 impl<'d, S, D: PrettyDoc<'d, S>> DownwardPrinter<'d, S, D> {
-    fn print_first_line(
-        &mut self,
-    ) -> Result<Option<LineContents<'d, S, D>>, NotationMismatchError> {
+    fn print_first_line(&mut self) -> Result<Option<LineContents<'d, S, D>>, PrintingError> {
         use ConsolidatedNotation::*;
 
         span!("print_first_line");
@@ -413,7 +410,7 @@ struct UpwardPrinter<'d, S, D: PrettyDoc<'d, S>> {
 }
 
 impl<'d, S, D: PrettyDoc<'d, S>> UpwardPrinter<'d, S, D> {
-    fn print_last_line(&mut self) -> Result<Option<LineContents<'d, S, D>>, NotationMismatchError> {
+    fn print_last_line(&mut self) -> Result<Option<LineContents<'d, S, D>>, PrintingError> {
         use ConsolidatedNotation::*;
 
         span!("print_last_line");
@@ -501,7 +498,7 @@ impl<'d, S, D: PrettyDoc<'d, S>> UpwardPrinter<'d, S, D> {
     /// Move the "printing cursor" to just after the previous newline. Returns None if there is
     /// no such newline, or Some of the newline's indentation if there is.
     // Maintains the invariant that `next` only ever contains `Literal`, `Text`, and `Choice` notations.
-    fn seek_start_of_line(&mut self) -> Result<Option<Width>, NotationMismatchError> {
+    fn seek_start_of_line(&mut self) -> Result<Option<Width>, PrintingError> {
         use ConsolidatedNotation::*;
 
         span!("seek_start_of_line");
@@ -547,7 +544,7 @@ fn choose<'d, S, D: PrettyDoc<'d, S>>(
     opt1: DelayedConsolidatedNotation<'d, S, D>,
     opt2: DelayedConsolidatedNotation<'d, S, D>,
     next_chunks: &[Chunk<'d, S, D>],
-) -> Result<DelayedConsolidatedNotation<'d, S, D>, NotationMismatchError> {
+) -> Result<DelayedConsolidatedNotation<'d, S, D>, PrintingError> {
     span!("choose");
 
     let opt1_evaled = opt1.eval()?;
@@ -565,7 +562,7 @@ fn fits<'d, S, D: PrettyDoc<'d, S>>(
     width: Width,
     notation: ConsolidatedNotation<'d, S, D>,
     next_chunks: &[Chunk<'d, S, D>],
-) -> Result<bool, NotationMismatchError> {
+) -> Result<bool, PrintingError> {
     use ConsolidatedNotation::*;
 
     span!("fits");
@@ -622,7 +619,7 @@ fn fits<'d, S, D: PrettyDoc<'d, S>>(
 }
 
 impl<'d, S, D: PrettyDoc<'d, S>> Iterator for DownwardPrinter<'d, S, D> {
-    type Item = Result<LineContents<'d, S, D>, NotationMismatchError>;
+    type Item = Result<LineContents<'d, S, D>, PrintingError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.print_first_line().transpose()
@@ -630,7 +627,7 @@ impl<'d, S, D: PrettyDoc<'d, S>> Iterator for DownwardPrinter<'d, S, D> {
 }
 
 impl<'d, S, D: PrettyDoc<'d, S>> Iterator for UpwardPrinter<'d, S, D> {
-    type Item = Result<LineContents<'d, S, D>, NotationMismatchError>;
+    type Item = Result<LineContents<'d, S, D>, PrintingError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.print_last_line().transpose()

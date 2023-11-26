@@ -94,13 +94,15 @@ impl<'d, S, D: PrettyDoc<'d, S>> Clone for JoinPos<'d, S, D> {
 impl<'d, S, D: PrettyDoc<'d, S>> Copy for JoinPos<'d, S, D> {}
 
 impl<'d, S, D: PrettyDoc<'d, S>> ConsolidatedNotation<'d, S, D> {
-    pub fn new(doc: D) -> Result<ConsolidatedNotation<'d, S, D>, NotationMismatchError> {
+    pub fn new(doc: D) -> Result<ConsolidatedNotation<'d, S, D>, PrintingError> {
         DelayedConsolidatedNotation::new(doc).eval()
     }
 }
 
 #[derive(thiserror::Error, Debug, Clone)]
-pub enum NotationMismatchError {
+pub enum PrintingError {
+    #[error("Pretty printing path invalid at child index {0}.")]
+    InvalidPath(usize),
     #[error("Notation/doc mismatch: Notation was Text but doc node did not contain text.")]
     TextNotationOnTextlessDoc,
     #[error("Notation/doc mismatch: Notation was IfEmptyText but doc node did not contain text.")]
@@ -136,7 +138,7 @@ impl<'d, S, D: PrettyDoc<'d, S>> DelayedConsolidatedNotation<'d, S, D> {
     }
 
     /// Expand this node, to get a usable `ConsolidatedNotation`.
-    pub fn eval(mut self) -> Result<ConsolidatedNotation<'d, S, D>, NotationMismatchError> {
+    pub fn eval(mut self) -> Result<ConsolidatedNotation<'d, S, D>, PrintingError> {
         use Notation::*;
 
         loop {
@@ -146,7 +148,7 @@ impl<'d, S, D: PrettyDoc<'d, S>> DelayedConsolidatedNotation<'d, S, D> {
                 Literal(lit) => return Ok(ConsolidatedNotation::Literal(lit)),
                 Text(style) => {
                     if self.doc.num_children().is_some() {
-                        return Err(NotationMismatchError::TextNotationOnTextlessDoc);
+                        return Err(PrintingError::TextNotationOnTextlessDoc);
                     } else {
                         return Ok(ConsolidatedNotation::Text(self.doc.unwrap_text(), style));
                     }
@@ -178,7 +180,7 @@ impl<'d, S, D: PrettyDoc<'d, S>> DelayedConsolidatedNotation<'d, S, D> {
                 }
                 IfEmptyText(note1, note2) => {
                     if self.doc.num_children().is_some() {
-                        return Err(NotationMismatchError::IfEmptyTextNotationOnTextlessDoc);
+                        return Err(PrintingError::IfEmptyTextNotationOnTextlessDoc);
                     }
                     if self.doc.unwrap_text().is_empty() {
                         self.notation = note1;
@@ -187,12 +189,9 @@ impl<'d, S, D: PrettyDoc<'d, S>> DelayedConsolidatedNotation<'d, S, D> {
                     }
                 }
                 Child(i) => match self.doc.num_children() {
-                    None => return Err(NotationMismatchError::ChildNotationOnChildlessDoc),
+                    None => return Err(PrintingError::ChildNotationOnChildlessDoc),
                     Some(n) if *i >= n => {
-                        return Err(NotationMismatchError::ChildIndexOutOfBounds {
-                            index: *i,
-                            len: n,
-                        })
+                        return Err(PrintingError::ChildIndexOutOfBounds { index: *i, len: n })
                     }
                     Some(n) => {
                         self.doc = self.doc.unwrap_child(n);
@@ -201,14 +200,14 @@ impl<'d, S, D: PrettyDoc<'d, S>> DelayedConsolidatedNotation<'d, S, D> {
                     }
                 },
                 Count { zero, one, many } => match self.doc.num_children() {
-                    None => return Err(NotationMismatchError::CountNotationOnChildlessDoc),
+                    None => return Err(PrintingError::CountNotationOnChildlessDoc),
                     Some(0) => self.notation = zero,
                     Some(1) => self.notation = one,
                     Some(_) => self.notation = many,
                 },
                 Fold { first, join } => match self.doc.num_children() {
-                    None => return Err(NotationMismatchError::NumChildrenChanged),
-                    Some(0) => return Err(NotationMismatchError::FoldNotationOnChildlessDoc),
+                    None => return Err(PrintingError::NumChildrenChanged),
+                    Some(0) => return Err(PrintingError::FoldNotationOnChildlessDoc),
                     Some(1) => self.notation = first,
                     Some(n) => {
                         self.join_pos = Some(JoinPos {

@@ -1,5 +1,5 @@
 use super::consolidated_notation::{
-    ConsolidatedNotation, DelayedConsolidatedNotation, NotationMismatchError,
+    ConsolidatedNotation, DelayedConsolidatedNotation, PrintingError,
 };
 use super::pretty_doc::PrettyDoc;
 use crate::geometry::{str_width, Width};
@@ -27,7 +27,7 @@ fn pp<'d, S, D: PrettyDoc<'d, S>>(
     note: ConsolidatedNotation<'d, S, D>,
     suffix_len: Width,
     width: Width,
-) -> Result<Layout, NotationMismatchError> {
+) -> Result<Layout, PrintingError> {
     use ConsolidatedNotation::*;
 
     if DEBUG_PRINT {
@@ -73,7 +73,7 @@ fn pp<'d, S, D: PrettyDoc<'d, S>>(
 fn first_line_len<'d, S, D: PrettyDoc<'d, S>>(
     note: ConsolidatedNotation<'d, S, D>,
     suffix_len: Width,
-) -> Result<Width, NotationMismatchError> {
+) -> Result<Width, PrintingError> {
     use ConsolidatedNotation::*;
 
     match note {
