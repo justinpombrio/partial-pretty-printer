@@ -3,7 +3,6 @@
 use super::pretty_doc::PrettyDoc;
 use crate::geometry::Width;
 use crate::notation::{Literal, Notation};
-use crate::style::Style;
 use std::fmt;
 
 /// A `Notation` says how to print a _single_ node in a document. The _notation tree_ is what you
@@ -14,45 +13,88 @@ use std::fmt;
 ///
 /// (Note that this is not a "visitor". It does not invoke a callback on every node. Instead, it
 ///  allows you to walk the (simplified) tree yourself.)
-#[derive(Debug, Clone, Copy)]
-pub enum ConsolidatedNotation<'d, D: PrettyDoc<'d>> {
+#[derive(Debug)]
+pub enum ConsolidatedNotation<'d, S, D: PrettyDoc<'d, S>> {
     Empty,
     Newline(Width),
-    Literal(&'d Literal),
-    Text(&'d str, Style),
+    Literal(&'d Literal<S>),
+    Text(&'d str, &'d S),
     Concat(
-        DelayedConsolidatedNotation<'d, D>,
-        DelayedConsolidatedNotation<'d, D>,
+        DelayedConsolidatedNotation<'d, S, D>,
+        DelayedConsolidatedNotation<'d, S, D>,
     ),
     Choice(
-        DelayedConsolidatedNotation<'d, D>,
-        DelayedConsolidatedNotation<'d, D>,
+        DelayedConsolidatedNotation<'d, S, D>,
+        DelayedConsolidatedNotation<'d, S, D>,
     ),
-    Child(usize, DelayedConsolidatedNotation<'d, D>),
+    Child(usize, DelayedConsolidatedNotation<'d, S, D>),
 }
 
 /// A `ConsolidatedNotation` that has not yet been evaluated, to prevent the entire notation tree
 /// from being in memory at once. Call `.eval()` to get a `ConsolidatedNotation`.
-#[derive(Debug, Clone, Copy)]
-pub struct DelayedConsolidatedNotation<'d, D: PrettyDoc<'d>> {
+#[derive(Debug)]
+pub struct DelayedConsolidatedNotation<'d, S, D: PrettyDoc<'d, S>> {
     doc: D,
-    notation: &'d Notation,
+    notation: &'d Notation<S>,
     flat: bool,
     indent: Width,
-    join_pos: Option<JoinPos<'d, D>>,
+    join_pos: Option<JoinPos<'d, S, D>>,
 }
 
-#[derive(Debug, Clone, Copy)]
-struct JoinPos<'d, D: PrettyDoc<'d>> {
+#[derive(Debug)]
+struct JoinPos<'d, S, D: PrettyDoc<'d, S>> {
     parent: D,
     child: D,
     index: usize,
-    first: &'d Notation,
-    join: &'d Notation,
+    first: &'d Notation<S>,
+    join: &'d Notation<S>,
 }
 
-impl<'d, D: PrettyDoc<'d>> ConsolidatedNotation<'d, D> {
-    pub fn new(doc: D) -> Result<ConsolidatedNotation<'d, D>, NotationMismatchError> {
+impl<'d, S, D: PrettyDoc<'d, S>> Clone for ConsolidatedNotation<'d, S, D> {
+    fn clone(&self) -> Self {
+        use ConsolidatedNotation::*;
+
+        match self {
+            Empty => Empty,
+            Newline(ind) => Newline(*ind),
+            Literal(lit) => Literal(*lit),
+            Text(str, style) => Text(*str, *style),
+            Concat(note1, note2) => Concat(*note1, *note2),
+            Choice(note1, note2) => Choice(*note1, *note2),
+            Child(i, child) => Child(*i, *child),
+        }
+    }
+}
+impl<'d, S, D: PrettyDoc<'d, S>> Copy for ConsolidatedNotation<'d, S, D> {}
+
+impl<'d, S, D: PrettyDoc<'d, S>> Clone for DelayedConsolidatedNotation<'d, S, D> {
+    fn clone(&self) -> Self {
+        DelayedConsolidatedNotation {
+            doc: self.doc,
+            notation: self.notation,
+            flat: self.flat,
+            indent: self.indent,
+            join_pos: self.join_pos,
+        }
+    }
+}
+impl<'d, S, D: PrettyDoc<'d, S>> Copy for DelayedConsolidatedNotation<'d, S, D> {}
+
+impl<'d, S, D: PrettyDoc<'d, S>> Clone for JoinPos<'d, S, D> {
+    fn clone(&self) -> Self {
+        JoinPos {
+            parent: self.parent,
+            child: self.child,
+            index: self.index,
+            first: self.first,
+            join: self.join,
+        }
+    }
+}
+impl<'d, S, D: PrettyDoc<'d, S>> Copy for JoinPos<'d, S, D> {}
+
+impl<'d, S, D: PrettyDoc<'d, S>> ConsolidatedNotation<'d, S, D> {
+    pub fn new(doc: D) -> Result<ConsolidatedNotation<'d, S, D>, NotationMismatchError> {
         DelayedConsolidatedNotation::new(doc).eval()
     }
 }
@@ -78,7 +120,7 @@ pub enum NotationMismatchError {
     FoldNotationOnChildlessDoc,
 }
 
-impl<'d, D: PrettyDoc<'d>> DelayedConsolidatedNotation<'d, D> {
+impl<'d, S, D: PrettyDoc<'d, S>> DelayedConsolidatedNotation<'d, S, D> {
     pub fn new(doc: D) -> Self {
         DelayedConsolidatedNotation {
             doc,
@@ -94,7 +136,7 @@ impl<'d, D: PrettyDoc<'d>> DelayedConsolidatedNotation<'d, D> {
     }
 
     /// Expand this node, to get a usable `ConsolidatedNotation`.
-    pub fn eval(mut self) -> Result<ConsolidatedNotation<'d, D>, NotationMismatchError> {
+    pub fn eval(mut self) -> Result<ConsolidatedNotation<'d, S, D>, NotationMismatchError> {
         use Notation::*;
 
         loop {
@@ -106,7 +148,7 @@ impl<'d, D: PrettyDoc<'d>> DelayedConsolidatedNotation<'d, D> {
                     if self.doc.num_children().is_some() {
                         return Err(NotationMismatchError::TextNotationOnTextlessDoc);
                     } else {
-                        return Ok(ConsolidatedNotation::Text(self.doc.unwrap_text(), *style));
+                        return Ok(ConsolidatedNotation::Text(self.doc.unwrap_text(), style));
                     }
                 }
                 Flat(note) => {
@@ -217,7 +259,7 @@ impl<'d, D: PrettyDoc<'d>> DelayedConsolidatedNotation<'d, D> {
 }
 
 // For debugging. Should match impl fmt::Display for Notation.
-impl<'d, D: PrettyDoc<'d>> fmt::Display for ConsolidatedNotation<'d, D> {
+impl<'d, S, D: PrettyDoc<'d, S>> fmt::Display for ConsolidatedNotation<'d, S, D> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use ConsolidatedNotation::*;
 
@@ -233,7 +275,7 @@ impl<'d, D: PrettyDoc<'d>> fmt::Display for ConsolidatedNotation<'d, D> {
     }
 }
 
-impl<'d, D: PrettyDoc<'d>> fmt::Display for DelayedConsolidatedNotation<'d, D> {
+impl<'d, S, D: PrettyDoc<'d, S>> fmt::Display for DelayedConsolidatedNotation<'d, S, D> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.notation)
     }

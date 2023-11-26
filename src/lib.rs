@@ -137,11 +137,9 @@ mod geometry;
 mod infra;
 mod notation;
 mod pretty_printing;
-mod style;
 mod valid_notation;
 
 pub use geometry::{Col, Height, Pos, Row, Size, Width};
-pub use style::{Color, Style};
 pub use valid_notation::{NotationError, ValidNotation};
 
 pub mod notation_constructors;

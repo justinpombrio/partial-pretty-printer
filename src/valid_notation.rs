@@ -4,7 +4,7 @@ use std::fmt;
 /// A Notation that has passed validation. Obtain one by constructing a [Notation] and then calling
 /// [`Notation::validate`].
 #[derive(Clone, Debug)]
-pub struct ValidNotation(pub(crate) Notation);
+pub struct ValidNotation<S>(pub(crate) Notation<S>);
 
 #[derive(thiserror::Error, Debug, Clone)]
 pub enum NotationError {
@@ -76,8 +76,8 @@ impl Context {
     }
 }
 
-impl Notation {
-    pub fn validate(mut self) -> Result<ValidNotation, NotationError> {
+impl<S> Notation<S> {
+    pub fn validate(mut self) -> Result<ValidNotation<S>, NotationError> {
         self.validate_rec(false, Context::InNothing)?;
         Ok(ValidNotation(self))
     }

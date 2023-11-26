@@ -2,46 +2,45 @@
 
 use super::geometry::Width;
 use super::notation::{Literal, Notation};
-use super::style::Style;
 
-pub fn empty() -> Notation {
+pub fn empty<S>() -> Notation<S> {
     Notation::Empty
 }
 
-pub fn nl() -> Notation {
+pub fn nl<S>() -> Notation<S> {
     Notation::Newline
 }
 
-pub fn child(i: usize) -> Notation {
+pub fn child<S>(i: usize) -> Notation<S> {
     Notation::Child(i)
 }
 
-pub fn text(style: Style) -> Notation {
+pub fn text<S>(style: S) -> Notation<S> {
     Notation::Text(style)
 }
 
-pub fn lit(s: &str, style: Style) -> Notation {
+pub fn lit<S>(s: &str, style: S) -> Notation<S> {
     let literal = Literal::new(s, style);
     Notation::Literal(literal)
 }
 
-pub fn flat(n: Notation) -> Notation {
+pub fn flat<S>(n: Notation<S>) -> Notation<S> {
     Notation::Flat(Box::new(n))
 }
 
-pub fn indent(i: Width, n: Notation) -> Notation {
+pub fn indent<S>(i: Width, n: Notation<S>) -> Notation<S> {
     Notation::Indent(i, Box::new(n))
 }
 
 /* Count */
 
-pub struct Count {
-    zero: Notation,
-    one: Notation,
-    many: Notation,
+pub struct Count<S> {
+    zero: Notation<S>,
+    one: Notation<S>,
+    many: Notation<S>,
 }
 
-pub fn count(count: Count) -> Notation {
+pub fn count<S>(count: Count<S>) -> Notation<S> {
     Notation::Count {
         zero: Box::new(count.zero),
         one: Box::new(count.one),
@@ -51,22 +50,22 @@ pub fn count(count: Count) -> Notation {
 
 /* Fold */
 
-pub struct Fold {
-    first: Notation,
-    join: Notation,
+pub struct Fold<S> {
+    first: Notation<S>,
+    join: Notation<S>,
 }
 
-pub fn fold(fold: Fold) -> Notation {
+pub fn fold<S>(fold: Fold<S>) -> Notation<S> {
     Notation::Fold {
         first: Box::new(fold.first),
         join: Box::new(fold.join),
     }
 }
 
-pub fn left() -> Notation {
+pub fn left<S>() -> Notation<S> {
     Notation::Left
 }
 
-pub fn right() -> Notation {
+pub fn right<S>() -> Notation<S> {
     Notation::Right
 }

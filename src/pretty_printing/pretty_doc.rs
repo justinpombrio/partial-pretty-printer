@@ -1,14 +1,14 @@
 use crate::valid_notation::ValidNotation;
 
 /// A node in a "document" that supports the necessary methods to be pretty-printed.
-pub trait PrettyDoc<'d>: Copy {
+pub trait PrettyDoc<'d, S>: Copy {
     type Id: Eq + Copy + Default;
 
     /// An id that uniquely identifies this node. It should not be `Id::default()`.
     fn id(self) -> Self::Id;
 
     /// The node's notation.
-    fn notation(self) -> &'d ValidNotation;
+    fn notation(self) -> &'d ValidNotation<S>;
 
     /// Get this node's number of children, or `None` if it contains text instead. `Some(0)` means
     /// that this node contains no children, and no text.
