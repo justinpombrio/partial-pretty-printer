@@ -1,7 +1,9 @@
-use crate::notation::{Notation, RepeatInner};
-use crate::notation_constructors::{child, flat, left, lit, nl, repeat, right, surrounded, text};
+use super::{BasicStyle, Color};
+use crate::notation::Notation;
+use crate::notation_constructors::{
+    child, count, flat, fold, left, lit, nl, right, text, Count, Fold,
+};
 use crate::pretty_printing::PrettyDoc;
-use crate::style::{Color, Style};
 use crate::valid_notation::ValidNotation;
 use once_cell::sync::Lazy;
 use std::fmt::Debug;
@@ -27,59 +29,80 @@ pub enum JsonData {
     DictEntry(Box<[Json; 2]>),
 }
 
-fn punct(s: &'static str) -> Notation {
-    lit(s, Style::plain())
-}
-
-fn constant(s: &'static str) -> Notation {
+fn punct(s: &'static str) -> Notation<BasicStyle> {
     lit(
         s,
-        Style {
-            color: Color::Base09,
-            bold: true,
-            underlined: false,
-            reversed: false,
+        BasicStyle {
+            color: Color::White,
+            bold: false,
         },
     )
 }
 
-static JSON_NULL_NOTATION: Lazy<ValidNotation> = Lazy::new(|| constant("null").validate().unwrap());
-static JSON_TRUE_NOTATION: Lazy<ValidNotation> = Lazy::new(|| constant("true").validate().unwrap());
-static JSON_FALSE_NOTATION: Lazy<ValidNotation> =
+fn constant(s: &'static str) -> Notation<BasicStyle> {
+    lit(
+        s,
+        BasicStyle {
+            color: Color::Green,
+            bold: true,
+        },
+    )
+}
+
+static JSON_NULL_NOTATION: Lazy<ValidNotation<BasicStyle>> =
+    Lazy::new(|| constant("null").validate().unwrap());
+static JSON_TRUE_NOTATION: Lazy<ValidNotation<BasicStyle>> =
+    Lazy::new(|| constant("true").validate().unwrap());
+static JSON_FALSE_NOTATION: Lazy<ValidNotation<BasicStyle>> =
     Lazy::new(|| constant("false").validate().unwrap());
-static JSON_STRING_NOTATION: Lazy<ValidNotation> = Lazy::new(|| {
-    (punct("\"") + text(Style::color(Color::Base0B)) + punct("\""))
+static JSON_STRING_NOTATION: Lazy<ValidNotation<BasicStyle>> = Lazy::new(|| {
+    let style = BasicStyle {
+        color: Color::Magenta,
+        bold: false,
+    };
+    (punct("\"") + text(style) + punct("\""))
         .validate()
         .unwrap()
 });
-static JSON_NUMBER_NOTATION: Lazy<ValidNotation> =
-    Lazy::new(|| text(Style::color(Color::Base09)).validate().unwrap());
-static JSON_LIST_NOTATION: Lazy<ValidNotation> = Lazy::new(|| {
-    repeat(RepeatInner {
-        empty: punct("[]"),
-        lone: punct("[") + child(0) + punct("]"),
+static JSON_NUMBER_NOTATION: Lazy<ValidNotation<BasicStyle>> = Lazy::new(|| {
+    let style = BasicStyle {
+        color: Color::Yellow,
+        bold: false,
+    };
+    text(style).validate().unwrap()
+});
+static JSON_LIST_NOTATION: Lazy<ValidNotation<BasicStyle>> = Lazy::new(|| {
+    let seq = fold(Fold {
+        first: child(0),
         join: left() + punct(",") + (punct(" ") | nl()) + right(),
-        surround: {
-            let single = punct("[") + flat(surrounded()) + punct("]");
-            let multi = (punct("[") + (4 >> surrounded())) ^ punct("]");
-            single | multi
-        },
+    });
+    let single = punct("[") + flat(seq.clone()) + punct("]");
+    let multi = (punct("[") + (4 >> seq)) ^ punct("]");
+
+    count(Count {
+        zero: punct("[]"),
+        one: punct("[") + child(0) + punct("]"),
+        many: single | multi,
     })
     .validate()
     .unwrap()
 });
-static JSON_DICT_ENTRY_NOTATION: Lazy<ValidNotation> =
+static JSON_DICT_ENTRY_NOTATION: Lazy<ValidNotation<BasicStyle>> =
     Lazy::new(|| (child(0) + punct(": ") + child(1)).validate().unwrap());
-static JSON_DICT_NOTATION: Lazy<ValidNotation> = Lazy::new(|| {
-    repeat(RepeatInner {
-        empty: punct("{}"),
-        lone: {
+static JSON_DICT_NOTATION: Lazy<ValidNotation<BasicStyle>> = Lazy::new(|| {
+    count(Count {
+        zero: punct("{}"),
+        one: {
             let single = punct("{") + child(0) + punct("}");
             let multi = (punct("{") + (4 >> child(0))) ^ punct("}");
             single | multi
         },
-        join: left() + punct(",") ^ right(),
-        surround: (punct("{") + (4 >> surrounded())) ^ punct("}"),
+        many: punct("                                                                                                                               ") | punct("{")
+            + (4 >> fold(Fold {
+                first: child(0),
+                join: left() + punct(",") ^ right(),
+            }))
+            ^ punct("}"),
     })
     .validate()
     .unwrap()
@@ -108,14 +131,14 @@ impl Json {
     }
 }
 
-impl<'a> PrettyDoc<'a> for &'a Json {
+impl<'a> PrettyDoc<'a, BasicStyle> for &'a Json {
     type Id = usize;
 
     fn id(self) -> usize {
         self.id
     }
 
-    fn notation(self) -> &'a ValidNotation {
+    fn notation(self) -> &'a ValidNotation<BasicStyle> {
         use JsonData::*;
 
         match &self.data {
@@ -149,6 +172,17 @@ impl<'a> PrettyDoc<'a> for &'a Json {
             JsonContents::Text(_) => panic!("Json: no children"),
             JsonContents::Children(slice) => &slice[i],
         }
+    }
+
+    fn unwrap_last_child(self) -> Self {
+        match self.contents() {
+            JsonContents::Text(_) => panic!("Json: no children"),
+            JsonContents::Children(slice) => slice.last().expect("Json: zero children"),
+        }
+    }
+
+    fn unwrap_prev_sibling(self, parent: Self, i: usize) -> Self {
+        parent.unwrap_child(i)
     }
 }
 

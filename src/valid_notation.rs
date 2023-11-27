@@ -9,10 +9,6 @@ pub struct ValidNotation<S>(pub(crate) Notation<S>);
 #[derive(thiserror::Error, Debug, Clone)]
 pub enum NotationError {
     #[error(
-        "Notation contains a Choice inside a Flat, so only the first option would ever be picked."
-    )]
-    ChoiceInsideFlat,
-    #[error(
         "Notation contains a Fold outside of Count.many, but it's only meaningful inside of that."
     )]
     FoldOutsideCount,
@@ -96,7 +92,6 @@ impl<S> Notation<S> {
                 note1.validate_rec(flat, ctx)?;
                 note2.validate_rec(flat, ctx)?;
             }
-            Choice(_, _) if flat => return Err(ChoiceInsideFlat),
             Choice(note1, note2) => {
                 note1.validate_rec(flat, ctx)?;
                 note2.validate_rec(flat, ctx)?;

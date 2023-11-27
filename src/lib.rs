@@ -139,21 +139,22 @@ mod notation;
 mod pretty_printing;
 mod valid_notation;
 
-pub use geometry::{Col, Height, Pos, Row, Size, Width};
-pub use valid_notation::{NotationError, ValidNotation};
-
 pub mod notation_constructors;
-
-/*
-mod pane_printing;
 
 pub mod examples;
 
+pub use geometry::{Col, Height, Pos, Row, Size, Width};
+pub use notation::Notation;
 pub use pretty_printing::{pretty_print, pretty_print_to_string, LineContents, PrettyDoc};
+pub use valid_notation::{NotationError, ValidNotation};
 
 pub mod testing {
+    pub use super::geometry::str_width;
     pub use super::pretty_printing::oracular_pretty_print;
 }
+
+/*
+mod pane_printing;
 
 pub mod pane {
     //! Print to multiple rectangular sub-panes of a window.

@@ -35,9 +35,9 @@ pub fn indent<S>(i: Width, n: Notation<S>) -> Notation<S> {
 /* Count */
 
 pub struct Count<S> {
-    zero: Notation<S>,
-    one: Notation<S>,
-    many: Notation<S>,
+    pub zero: Notation<S>,
+    pub one: Notation<S>,
+    pub many: Notation<S>,
 }
 
 pub fn count<S>(count: Count<S>) -> Notation<S> {
@@ -51,8 +51,8 @@ pub fn count<S>(count: Count<S>) -> Notation<S> {
 /* Fold */
 
 pub struct Fold<S> {
-    first: Notation<S>,
-    join: Notation<S>,
+    pub first: Notation<S>,
+    pub join: Notation<S>,
 }
 
 pub fn fold<S>(fold: Fold<S>) -> Notation<S> {

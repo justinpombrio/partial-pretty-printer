@@ -194,7 +194,7 @@ impl<'d, S, D: PrettyDoc<'d, S>> DelayedConsolidatedNotation<'d, S, D> {
                         return Err(PrintingError::ChildIndexOutOfBounds { index: *i, len: n })
                     }
                     Some(n) => {
-                        self.doc = self.doc.unwrap_child(n);
+                        self.doc = self.doc.unwrap_child(*i);
                         self.notation = &self.doc.notation().0;
                         return Ok(ConsolidatedNotation::Child(*i, self));
                     }
@@ -247,9 +247,12 @@ impl<'d, S, D: PrettyDoc<'d, S>> DelayedConsolidatedNotation<'d, S, D> {
                     None => {
                         panic!("Bug: Right used outside of fold; should have been caught by validation")
                     }
-                    Some(JoinPos { child, .. }) => {
+                    Some(JoinPos { child, index, .. }) => {
+                        let index = *index;
                         self.doc = *child;
+                        self.notation = &child.notation().0;
                         self.join_pos = None;
+                        return Ok(ConsolidatedNotation::Child(index, self));
                     }
                 },
             }

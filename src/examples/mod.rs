@@ -2,8 +2,7 @@
 //!
 //! - [`Json`](json::Json)
 
-mod json_notation;
+mod style;
 
-pub mod json {
-    pub use super::json_notation::*;
-}
+pub mod json;
+pub use style::{BasicStyle, Color};

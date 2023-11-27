@@ -170,9 +170,16 @@ impl<'d, S, D: PrettyDoc<'d, S>> Seeker<'d, S, D> {
 
         span!("seek");
 
+        // TODO: temp
+        println!("\n\nSEEK {:?}", path);
+
         // Seek to the descendant given by `path`.
         let mut path = path.iter();
         while let Some(child_index) = path.next() {
+            // TODO: temp
+            self.display();
+            println!("Seek {}", child_index);
+
             self.seek_child(*child_index)?;
         }
 
@@ -224,6 +231,8 @@ impl<'d, S, D: PrettyDoc<'d, S>> Seeker<'d, S, D> {
             //    (It would be more precise to look for Child(child_index) or a Choice
             //     containing it, but we can't tell right now what children a choice might
             //     contain.)
+            // TODO: temp
+            self.display();
             while let Some(chunk) = self.next.pop() {
                 match chunk.notation {
                     Empty => (),
@@ -249,6 +258,9 @@ impl<'d, S, D: PrettyDoc<'d, S>> Seeker<'d, S, D> {
             }
 
             // 2. Walk backward to the nearest Newline (or beginning of the doc).
+            // TODO: temp
+            println!("Step 1");
+            self.display();
             let mut prefix_len = 0;
             while let Some(chunk) = self.prev.pop() {
                 match chunk.notation {
@@ -265,6 +277,9 @@ impl<'d, S, D: PrettyDoc<'d, S>> Seeker<'d, S, D> {
             // 3. Walk forward to the nearest Child or Choice, and resolve it. Go back to 1.
             //    If we hit `Child(i)` belonging to `parent_doc`, success.
             //    If we hit end of doc, panic (every child must be present).
+            // TODO: temp
+            println!("Step 2");
+            self.display();
             while let Some(chunk) = self.next.pop() {
                 match chunk.notation {
                     Empty | Concat(_, _) | Newline(_) => unreachable!(),
@@ -279,9 +294,17 @@ impl<'d, S, D: PrettyDoc<'d, S>> Seeker<'d, S, D> {
                     Child(i, child) if chunk.id == parent_doc_id && i == child_index => {
                         // Found!
                         self.next.push(chunk.new_child(child, &self.marks)?);
+
+                        // TODO: temp
+                        println!("Step 3 (found)");
+                        self.display();
+
                         return Ok(());
                     }
-                    Child(_, child) => {
+                    Child(i, child) => {
+                        // TODO: temp
+                        println!("? {:?} {:?} {} {}", chunk.id, parent_doc_id, i, child_index);
+
                         self.next.push(chunk.new_child(child, &self.marks)?);
                         break;
                     }
@@ -292,6 +315,9 @@ impl<'d, S, D: PrettyDoc<'d, S>> Seeker<'d, S, D> {
                     }
                 }
             }
+            // TODO: temp
+            println!("Step 3");
+            self.display();
 
             if self.next.is_empty() {
                 return Err(PrintingError::InvalidPath(child_index));
