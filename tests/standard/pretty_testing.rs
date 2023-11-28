@@ -2,7 +2,6 @@ use partial_pretty_printer::{
     notation_constructors::lit, pretty_print, pretty_print_to_string,
     testing::oracular_pretty_print, Notation, NotationError, PrettyDoc, ValidNotation, Width,
 };
-use std::collections::HashSet;
 
 // TODO: temporary
 #[allow(unused)]
@@ -23,8 +22,10 @@ impl<S> SimpleDoc<S> {
     }
 }
 
-impl<'a, S> PrettyDoc<'a, S> for &'a SimpleDoc<S> {
+impl<'a, S> PrettyDoc<'a> for &'a SimpleDoc<S> {
     type Id = usize;
+    type Style = S;
+    type Mark = ();
 
     fn id(self) -> usize {
         // shouldn't be the default of usize
@@ -33,6 +34,10 @@ impl<'a, S> PrettyDoc<'a, S> for &'a SimpleDoc<S> {
 
     fn notation(self) -> &'a ValidNotation<S> {
         &self.0
+    }
+
+    fn mark(self) -> Option<&'a ()> {
+        None
     }
 
     fn num_children(self) -> Option<usize> {
@@ -44,14 +49,6 @@ impl<'a, S> PrettyDoc<'a, S> for &'a SimpleDoc<S> {
     }
 
     fn unwrap_child(self, _i: usize) -> Self {
-        panic!("Nothing in a simple doc");
-    }
-
-    fn unwrap_last_child(self) -> Self {
-        panic!("Nothing in a simple doc");
-    }
-
-    fn unwrap_prev_sibling(self, _parent: Self, _i: usize) -> Self {
         panic!("Nothing in a simple doc");
     }
 }
@@ -67,13 +64,12 @@ fn compare_lines(message: &str, expected: String, actual: String) {
     }
 }
 
-fn print_above_and_below<'d, S: 'd, D: PrettyDoc<'d, S>>(
+fn print_above_and_below<'d, D: PrettyDoc<'d>>(
     doc: D,
     width: Width,
     path: &[usize],
 ) -> (Vec<String>, Vec<String>) {
-    let (upward_printer, downward_printer) =
-        pretty_print(doc, width, path, HashSet::new()).unwrap();
+    let (upward_printer, downward_printer) = pretty_print(doc, width, path).unwrap();
     let mut lines_above = upward_printer
         .map(|line| line.unwrap().to_string())
         .collect::<Vec<_>>();
@@ -85,12 +81,8 @@ fn print_above_and_below<'d, S: 'd, D: PrettyDoc<'d, S>>(
 }
 
 #[allow(unused)]
-pub fn all_paths<'d, S, D: PrettyDoc<'d, S>>(doc: D) -> Vec<Vec<usize>> {
-    fn recur<'d, S, D: PrettyDoc<'d, S>>(
-        doc: D,
-        path: &mut Vec<usize>,
-        paths: &mut Vec<Vec<usize>>,
-    ) {
+pub fn all_paths<'d, D: PrettyDoc<'d>>(doc: D) -> Vec<Vec<usize>> {
+    fn recur<'d, D: PrettyDoc<'d>>(doc: D, path: &mut Vec<usize>, paths: &mut Vec<Vec<usize>>) {
         paths.push(path.clone());
         for i in 0..doc.num_children().unwrap_or(0) {
             path.push(i);
@@ -104,14 +96,13 @@ pub fn all_paths<'d, S, D: PrettyDoc<'d, S>>(doc: D) -> Vec<Vec<usize>> {
 }
 
 #[allow(unused)]
-pub fn print_region<'d, S: 'd, D: PrettyDoc<'d, S>>(
+pub fn print_region<'d, D: PrettyDoc<'d>>(
     doc: D,
     width: Width,
     path: &[usize],
     rows: usize,
 ) -> Vec<String> {
-    let (upward_printer, downward_printer) =
-        pretty_print(doc, width, path, HashSet::new()).unwrap();
+    let (upward_printer, downward_printer) = pretty_print(doc, width, path).unwrap();
     let mut lines = upward_printer
         .map(|line| line.unwrap().to_string())
         .take(rows / 2)
@@ -126,21 +117,17 @@ pub fn print_region<'d, S: 'd, D: PrettyDoc<'d, S>>(
 }
 
 #[track_caller]
-pub fn assert_pp<'d, S: 'd, D: PrettyDoc<'d, S>>(doc: D, width: Width, expected_lines: &[&str]) {
+pub fn assert_pp<'d, D: PrettyDoc<'d>>(doc: D, width: Width, expected_lines: &[&str]) {
     assert_pp_impl(doc, width, Some(expected_lines));
 }
 
 #[track_caller]
-pub fn assert_pp_without_expectation<'d, S: 'd, D: PrettyDoc<'d, S>>(doc: D, width: Width) {
+pub fn assert_pp_without_expectation<'d, D: PrettyDoc<'d>>(doc: D, width: Width) {
     assert_pp_impl(doc, width, None)
 }
 
 #[track_caller]
-fn assert_pp_impl<'d, S: 'd, D: PrettyDoc<'d, S>>(
-    doc: D,
-    width: Width,
-    expected_lines: Option<&[&str]>,
-) {
+fn assert_pp_impl<'d, D: PrettyDoc<'d>>(doc: D, width: Width, expected_lines: Option<&[&str]>) {
     let oracle_result = oracular_pretty_print(doc, width);
     if let Some(expected_lines) = expected_lines {
         compare_lines(
@@ -172,7 +159,7 @@ fn assert_pp_impl<'d, S: 'd, D: PrettyDoc<'d, S>>(
 }
 
 #[track_caller]
-pub fn assert_pp_seek<'d, S: 'd, D: PrettyDoc<'d, S>>(
+pub fn assert_pp_seek<'d, D: PrettyDoc<'d>>(
     doc: D,
     width: Width,
     path: &[usize],
@@ -193,7 +180,7 @@ pub fn assert_pp_seek<'d, S: 'd, D: PrettyDoc<'d, S>>(
 }
 
 #[track_caller]
-pub fn assert_pp_region<'d, S: 'd, D: PrettyDoc<'d, S>>(
+pub fn assert_pp_region<'d, D: PrettyDoc<'d>>(
     doc: D,
     width: Width,
     path: &[usize],

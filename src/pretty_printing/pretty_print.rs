@@ -22,23 +22,20 @@ use std::iter::Iterator;
 ///
 /// It is expected that you will take only as many lines as you need from the iterators; doing so
 /// will save computation time.
-pub fn pretty_print<'d, S: 'd, D: PrettyDoc<'d, S>>(
+pub fn pretty_print<'d, D: PrettyDoc<'d>>(
     doc: D,
     width: Width,
     path: &[usize],
-    marks: HashSet<D::Id>,
 ) -> Result<
     (
-        impl Iterator<Item = Result<LineContents<'d, S, D>, PrintingError>>,
-        impl Iterator<Item = Result<LineContents<'d, S, D>, PrintingError>>,
+        impl Iterator<Item = Result<LineContents<'d, D>, PrintingError>>,
+        impl Iterator<Item = Result<LineContents<'d, D>, PrintingError>>,
     ),
     PrintingError,
 > {
     span!("Pretty Print");
 
-    let id = doc.id();
-    let notation = ConsolidatedNotation::new(doc)?;
-    let seeker = Seeker::new(width, notation, id, marks);
+    let seeker = Seeker::new(width, doc)?;
     seeker.seek(path)
 }
 
@@ -46,11 +43,11 @@ pub fn pretty_print<'d, S: 'd, D: PrettyDoc<'d, S>>(
 ///
 /// `width` is the desired line width. The algorithm will attempt to, but is not guaranteed to,
 /// find a layout that fits withing that width.
-pub fn pretty_print_to_string<'d, S: 'd, D: PrettyDoc<'d, S>>(
+pub fn pretty_print_to_string<'d, D: PrettyDoc<'d>>(
     doc: D,
     width: Width,
 ) -> Result<String, PrintingError> {
-    let (_, mut lines_iter) = pretty_print(doc, width, &[], HashSet::new())?;
+    let (_, mut lines_iter) = pretty_print(doc, width, &[])?;
     let mut string = lines_iter.next().unwrap()?.to_string();
     for line in lines_iter {
         string.push('\n');
@@ -59,14 +56,13 @@ pub fn pretty_print_to_string<'d, S: 'd, D: PrettyDoc<'d, S>>(
     Ok(string)
 }
 
-#[derive(Debug)]
-struct Chunk<'d, S, D: PrettyDoc<'d, S>> {
+struct Chunk<'d, D: PrettyDoc<'d>> {
     id: D::Id,
-    mark: Option<D::Id>,
-    notation: ConsolidatedNotation<'d, S, D>,
+    mark: Option<&'d D::Mark>,
+    notation: ConsolidatedNotation<'d, D>,
 }
 
-impl<'d, S, D: PrettyDoc<'d, S>> Clone for Chunk<'d, S, D> {
+impl<'d, D: PrettyDoc<'d>> Clone for Chunk<'d, D> {
     fn clone(&self) -> Self {
         Chunk {
             id: self.id,
@@ -75,46 +71,41 @@ impl<'d, S, D: PrettyDoc<'d, S>> Clone for Chunk<'d, S, D> {
         }
     }
 }
-impl<'d, S, D: PrettyDoc<'d, S>> Copy for Chunk<'d, S, D> {}
+impl<'d, D: PrettyDoc<'d>> Copy for Chunk<'d, D> {}
 
-impl<'d, S, D: PrettyDoc<'d, S>> Chunk<'d, S, D> {
-    fn new_child(
-        self,
-        notation: DelayedConsolidatedNotation<'d, S, D>,
-        marks: &HashSet<D::Id>,
-    ) -> Result<Self, PrintingError> {
-        let id = notation.id();
+impl<'d, D: PrettyDoc<'d>> Chunk<'d, D> {
+    fn new(notation: DelayedConsolidatedNotation<'d, D>) -> Result<Self, PrintingError> {
         Ok(Chunk {
-            id,
-            mark: marks.get(&id).copied().or(self.mark),
+            id: notation.doc().id(),
+            mark: notation.doc().mark(),
             notation: notation.eval()?,
         })
     }
 }
 
 /// The contents of a single pretty printed line.
-pub struct LineContents<'d, S, D: PrettyDoc<'d, S>> {
+pub struct LineContents<'d, D: PrettyDoc<'d>> {
     /// The indentation of this line in spaces.
-    pub indentation: Indentation<'d, S, D>,
+    pub indentation: Indentation<'d, D>,
     /// A sequence of pieces of text to be displayed after `spaces`, in order from left to right,
     /// with no spacing in between.
-    pub pieces: Vec<Piece<'d, S, D>>,
+    pub pieces: Vec<Piece<'d, D>>,
 }
 
-pub struct Indentation<'d, S, D: PrettyDoc<'d, S>> {
+pub struct Indentation<'d, D: PrettyDoc<'d>> {
     pub num_spaces: Width,
     pub doc_id: D::Id,
-    pub mark: Option<D::Id>,
+    pub mark: Option<&'d D::Mark>,
 }
 
-pub struct Piece<'d, S, D: PrettyDoc<'d, S>> {
+pub struct Piece<'d, D: PrettyDoc<'d>> {
     pub str: &'d str,
-    pub style: &'d S,
+    pub style: &'d D::Style,
     pub doc_id: D::Id,
-    pub mark: Option<D::Id>,
+    pub mark: Option<&'d D::Mark>,
 }
 
-impl<'d, S, D: PrettyDoc<'d, S>> ToString for LineContents<'d, S, D> {
+impl<'d, D: PrettyDoc<'d>> ToString for LineContents<'d, D> {
     fn to_string(&self) -> String {
         span!("LineContents::to_string");
 
@@ -132,40 +123,30 @@ impl<'d, S, D: PrettyDoc<'d, S>> ToString for LineContents<'d, S, D> {
 
 /// Can seek to an arbitrary position within the document, while resolving as few choices as
 /// possible.
-struct Seeker<'d, S, D: PrettyDoc<'d, S>> {
+struct Seeker<'d, D: PrettyDoc<'d>> {
     width: Width,
-    prev: Vec<Chunk<'d, S, D>>,
-    next: Vec<Chunk<'d, S, D>>,
-    marks: HashSet<D::Id>,
+    prev: Vec<Chunk<'d, D>>,
+    next: Vec<Chunk<'d, D>>,
 }
 
-impl<'d, S, D: PrettyDoc<'d, S>> Seeker<'d, S, D> {
-    fn new(
-        width: Width,
-        notation: ConsolidatedNotation<'d, S, D>,
-        id: D::Id,
-        marks: HashSet<D::Id>,
-    ) -> Seeker<'d, S, D> {
-        Seeker {
+impl<'d, D: PrettyDoc<'d>> Seeker<'d, D> {
+    fn new(width: Width, doc: D) -> Result<Seeker<'d, D>, PrintingError> {
+        let notation = DelayedConsolidatedNotation::new(doc);
+        Ok(Seeker {
             width,
             prev: vec![Chunk {
                 id: D::Id::default(),
                 mark: None,
                 notation: ConsolidatedNotation::Newline(0),
             }],
-            next: vec![Chunk {
-                id,
-                mark: marks.get(&id).copied(),
-                notation,
-            }],
-            marks,
-        }
+            next: vec![Chunk::new(notation)?],
+        })
     }
 
     fn seek(
         mut self,
         path: &[usize],
-    ) -> Result<(UpwardPrinter<'d, S, D>, DownwardPrinter<'d, S, D>), PrintingError> {
+    ) -> Result<(UpwardPrinter<'d, D>, DownwardPrinter<'d, D>), PrintingError> {
         use ConsolidatedNotation::*;
 
         span!("seek");
@@ -190,12 +171,10 @@ impl<'d, S, D: PrettyDoc<'d, S>> Seeker<'d, S, D> {
             width: self.width,
             prev: self.prev,
             next: vec![],
-            marks: self.marks.clone(),
         };
         let downward_printer = DownwardPrinter {
             width: self.width,
             next: self.next,
-            marks: self.marks,
         };
         Ok((upward_printer, downward_printer))
     }
@@ -238,8 +217,8 @@ impl<'d, S, D: PrettyDoc<'d, S>> Seeker<'d, S, D> {
                     Empty => (),
                     Literal(_) | Newline(_) | Text(_, _) => self.prev.push(chunk),
                     Concat(left, right) => {
-                        self.next.push(chunk.new_child(right, &self.marks)?);
-                        self.next.push(chunk.new_child(left, &self.marks)?);
+                        self.next.push(Chunk::new(right)?);
+                        self.next.push(Chunk::new(left)?);
                     }
                     Choice(_, _) if chunk.id == parent_doc_id => {
                         self.next.push(chunk);
@@ -293,7 +272,7 @@ impl<'d, S, D: PrettyDoc<'d, S>> Seeker<'d, S, D> {
                     }
                     Child(i, child) if chunk.id == parent_doc_id && i == child_index => {
                         // Found!
-                        self.next.push(chunk.new_child(child, &self.marks)?);
+                        self.next.push(Chunk::new(child)?);
 
                         // TODO: temp
                         println!("Step 3 (found)");
@@ -305,12 +284,12 @@ impl<'d, S, D: PrettyDoc<'d, S>> Seeker<'d, S, D> {
                         // TODO: temp
                         println!("? {:?} {:?} {} {}", chunk.id, parent_doc_id, i, child_index);
 
-                        self.next.push(chunk.new_child(child, &self.marks)?);
+                        self.next.push(Chunk::new(child)?);
                         break;
                     }
                     Choice(opt1, opt2) => {
                         let choice = choose(self.width, prefix_len, opt1, opt2, &self.next)?;
-                        self.next.push(chunk.new_child(choice, &self.marks)?);
+                        self.next.push(Chunk::new(choice)?);
                         break;
                     }
                 }
@@ -340,14 +319,13 @@ impl<'d, S, D: PrettyDoc<'d, S>> Seeker<'d, S, D> {
 
 /// Constructed at an arbitrary position within the document. Prints lines from there one at a
 /// time, going down.
-struct DownwardPrinter<'d, S, D: PrettyDoc<'d, S>> {
+struct DownwardPrinter<'d, D: PrettyDoc<'d>> {
     width: Width,
-    next: Vec<Chunk<'d, S, D>>,
-    marks: HashSet<D::Id>,
+    next: Vec<Chunk<'d, D>>,
 }
 
-impl<'d, S, D: PrettyDoc<'d, S>> DownwardPrinter<'d, S, D> {
-    fn print_first_line(&mut self) -> Result<Option<LineContents<'d, S, D>>, PrintingError> {
+impl<'d, D: PrettyDoc<'d>> DownwardPrinter<'d, D> {
+    fn print_first_line(&mut self) -> Result<Option<LineContents<'d, D>>, PrintingError> {
         use ConsolidatedNotation::*;
 
         span!("print_first_line");
@@ -399,14 +377,14 @@ impl<'d, S, D: PrettyDoc<'d, S>> DownwardPrinter<'d, S, D> {
                     }));
                 }
                 Concat(left, right) => {
-                    self.next.push(chunk.new_child(right, &self.marks)?);
-                    self.next.push(chunk.new_child(left, &self.marks)?);
+                    self.next.push(Chunk::new(right)?);
+                    self.next.push(Chunk::new(left)?);
                 }
                 Choice(opt1, opt2) => {
                     let choice = choose(self.width, prefix_len, opt1, opt2, &self.next)?;
-                    self.next.push(chunk.new_child(choice, &self.marks)?);
+                    self.next.push(Chunk::new(choice)?);
                 }
-                Child(_, child_note) => self.next.push(chunk.new_child(child_note, &self.marks)?),
+                Child(_, child_note) => self.next.push(Chunk::new(child_note)?),
             }
         }
 
@@ -428,15 +406,14 @@ impl<'d, S, D: PrettyDoc<'d, S>> DownwardPrinter<'d, S, D> {
 /// Constructed at an arbitrary position within the document. Prints lines from there one at a
 /// time, going up.
 // INVARIANT: `next` only ever contains `Literal`, `Text`, and `Choice` notations.
-struct UpwardPrinter<'d, S, D: PrettyDoc<'d, S>> {
+struct UpwardPrinter<'d, D: PrettyDoc<'d>> {
     width: Width,
-    prev: Vec<Chunk<'d, S, D>>,
-    next: Vec<Chunk<'d, S, D>>,
-    marks: HashSet<D::Id>,
+    prev: Vec<Chunk<'d, D>>,
+    next: Vec<Chunk<'d, D>>,
 }
 
-impl<'d, S, D: PrettyDoc<'d, S>> UpwardPrinter<'d, S, D> {
-    fn print_last_line(&mut self) -> Result<Option<LineContents<'d, S, D>>, PrintingError> {
+impl<'d, D: PrettyDoc<'d>> UpwardPrinter<'d, D> {
+    fn print_last_line(&mut self) -> Result<Option<LineContents<'d, D>>, PrintingError> {
         use ConsolidatedNotation::*;
 
         span!("print_last_line");
@@ -463,7 +440,7 @@ impl<'d, S, D: PrettyDoc<'d, S>> UpwardPrinter<'d, S, D> {
                 }
                 Choice(opt1, opt2) => {
                     let choice = choose(self.width, prefix_len, opt1, opt2, &self.next)?;
-                    self.prev.push(chunk.new_child(choice, &self.marks)?);
+                    self.prev.push(Chunk::new(choice)?);
 
                     // Reset everything. This is equivalent to a recursive call.
                     self.seek_end();
@@ -538,11 +515,11 @@ impl<'d, S, D: PrettyDoc<'d, S>> UpwardPrinter<'d, S, D> {
                     return Ok(Some(indent));
                 }
                 Concat(left, right) => {
-                    self.prev.push(chunk.new_child(left, &self.marks)?);
-                    self.prev.push(chunk.new_child(right, &self.marks)?);
+                    self.prev.push(Chunk::new(left)?);
+                    self.prev.push(Chunk::new(right)?);
                 }
                 Choice(_, _) => self.next.push(chunk),
-                Child(_, note) => self.prev.push(chunk.new_child(note, &self.marks)?),
+                Child(_, note) => self.prev.push(Chunk::new(note)?),
             }
         }
         Ok(None)
@@ -564,13 +541,13 @@ impl<'d, S, D: PrettyDoc<'d, S>> UpwardPrinter<'d, S, D> {
 /// Determine which of the two options of the choice to select. Pick the first option if it fits.
 /// (We also want to pick the first option if we're inside a `Flat`, but ConsolidatedNotation already
 /// took care of that.)
-fn choose<'d, S, D: PrettyDoc<'d, S>>(
+fn choose<'d, D: PrettyDoc<'d>>(
     width: Width,
     prefix_len: Width,
-    opt1: DelayedConsolidatedNotation<'d, S, D>,
-    opt2: DelayedConsolidatedNotation<'d, S, D>,
-    next_chunks: &[Chunk<'d, S, D>],
-) -> Result<DelayedConsolidatedNotation<'d, S, D>, PrintingError> {
+    opt1: DelayedConsolidatedNotation<'d, D>,
+    opt2: DelayedConsolidatedNotation<'d, D>,
+    next_chunks: &[Chunk<'d, D>],
+) -> Result<DelayedConsolidatedNotation<'d, D>, PrintingError> {
     span!("choose");
 
     let opt1_evaled = opt1.eval()?;
@@ -584,10 +561,10 @@ fn choose<'d, S, D: PrettyDoc<'d, S>>(
 
 /// Determine whether the first line of the notations (`notation` followed by `chunks`) fits within
 /// `width`.
-fn fits<'d, S, D: PrettyDoc<'d, S>>(
+fn fits<'d, D: PrettyDoc<'d>>(
     width: Width,
-    notation: ConsolidatedNotation<'d, S, D>,
-    next_chunks: &[Chunk<'d, S, D>],
+    notation: ConsolidatedNotation<'d, D>,
+    next_chunks: &[Chunk<'d, D>],
 ) -> Result<bool, PrintingError> {
     use ConsolidatedNotation::*;
 
@@ -644,16 +621,16 @@ fn fits<'d, S, D: PrettyDoc<'d, S>>(
     }
 }
 
-impl<'d, S, D: PrettyDoc<'d, S>> Iterator for DownwardPrinter<'d, S, D> {
-    type Item = Result<LineContents<'d, S, D>, PrintingError>;
+impl<'d, D: PrettyDoc<'d>> Iterator for DownwardPrinter<'d, D> {
+    type Item = Result<LineContents<'d, D>, PrintingError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.print_first_line().transpose()
     }
 }
 
-impl<'d, S, D: PrettyDoc<'d, S>> Iterator for UpwardPrinter<'d, S, D> {
-    type Item = Result<LineContents<'d, S, D>, PrintingError>;
+impl<'d, D: PrettyDoc<'d>> Iterator for UpwardPrinter<'d, D> {
+    type Item = Result<LineContents<'d, D>, PrintingError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.print_last_line().transpose()

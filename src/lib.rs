@@ -140,9 +140,8 @@ mod pane_printing;
 mod pretty_printing;
 mod valid_notation;
 
-pub mod notation_constructors;
-
 pub mod examples;
+pub mod notation_constructors;
 
 pub use geometry::{Col, Height, Pos, Row, Size, Width};
 pub use notation::Notation;

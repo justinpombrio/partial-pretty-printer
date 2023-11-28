@@ -131,8 +131,10 @@ impl Json {
     }
 }
 
-impl<'a> PrettyDoc<'a, BasicStyle> for &'a Json {
+impl<'a> PrettyDoc<'a> for &'a Json {
     type Id = usize;
+    type Style = BasicStyle;
+    type Mark = ();
 
     fn id(self) -> usize {
         self.id
@@ -151,6 +153,10 @@ impl<'a> PrettyDoc<'a, BasicStyle> for &'a Json {
             DictEntry(_) => &JSON_DICT_ENTRY_NOTATION,
             Dict(_) => &JSON_DICT_NOTATION,
         }
+    }
+
+    fn mark(self) -> Option<&'a ()> {
+        None
     }
 
     fn num_children(self) -> Option<usize> {

@@ -57,8 +57,10 @@ impl FlowWrap {
     }
 }
 
-impl<'d> PrettyDoc<'d, ()> for &'d FlowWrap {
+impl<'d> PrettyDoc<'d> for &'d FlowWrap {
     type Id = usize;
+    type Style = ();
+    type Mark = ();
 
     fn id(self) -> usize {
         self.id
@@ -72,6 +74,10 @@ impl<'d> PrettyDoc<'d, ()> for &'d FlowWrap {
             Words(_) => &WORDS_NOTATION,
             Paragraph(_) => &PARAGRAPH_NOTATION,
         }
+    }
+
+    fn mark(self) -> Option<&'d ()> {
+        None
     }
 
     fn num_children(self) -> Option<usize> {
@@ -93,17 +99,6 @@ impl<'d> PrettyDoc<'d, ()> for &'d FlowWrap {
             Contents::Text(_) => unreachable!(),
             Contents::Children(slice) => &slice[i],
         }
-    }
-
-    fn unwrap_last_child(self) -> Self {
-        match self.contents() {
-            Contents::Text(_) => unreachable!(),
-            Contents::Children(slice) => slice.last().unwrap(),
-        }
-    }
-
-    fn unwrap_prev_sibling(self, parent: Self, i: usize) -> Self {
-        parent.unwrap_child(i)
     }
 }
 

@@ -3,14 +3,25 @@ use std::fmt;
 use std::hash::Hash;
 
 /// A node in a "document" that supports the necessary methods to be pretty-printed.
-pub trait PrettyDoc<'d, S>: Copy {
+///
+/// Consider implementing `unwrap_last_child` and `unwrap_prev_sibling`. Depending on
+/// your representation of documents, they may be much more efficient than their default
+/// implementations, which call `unwrap_child`.
+pub trait PrettyDoc<'d>: Copy {
     type Id: Eq + Hash + Copy + Default + fmt::Debug;
+    /// The style used in this document's notation.
+    type Style: 'd;
+    /// Arbitrary data associated with some nodes in the document.
+    type Mark: 'd;
 
     /// An id that uniquely identifies this node. It should not be `Id::default()`.
     fn id(self) -> Self::Id;
 
     /// The node's notation.
-    fn notation(self) -> &'d ValidNotation<S>;
+    fn notation(self) -> &'d ValidNotation<Self::Style>;
+
+    /// The mark on this node, if any.
+    fn mark(self) -> Option<&'d Self::Mark>;
 
     /// Get this node's number of children, or `None` if it contains text instead. `Some(0)` means
     /// that this node contains no children, and no text.
@@ -31,7 +42,12 @@ pub trait PrettyDoc<'d, S>: Copy {
     ///
     /// This method is redundant with `unwrap_child`, but depending on your document representation
     /// it could have a more efficient implementation.
-    fn unwrap_last_child(self) -> Self;
+    fn unwrap_last_child(self) -> Self {
+        match self.num_children() {
+            None => panic!("Bug in PrettyDoc impl: num_children's return value changed"),
+            Some(n) => self.unwrap_child(n - 1),
+        }
+    }
 
     /// Access this node's previous sibling, or panic. `parent` is this node's parent, and `i` is
     /// the index of its previous sibling. The pretty printer will only call this method if:
@@ -43,5 +59,7 @@ pub trait PrettyDoc<'d, S>: Copy {
     ///
     /// This method is redundant with `unwrap_child`, but depending on your document representation
     /// it could have a more efficient implementation.
-    fn unwrap_prev_sibling(self, parent: Self, i: usize) -> Self;
+    fn unwrap_prev_sibling(self, parent: Self, i: usize) -> Self {
+        parent.unwrap_child(i)
+    }
 }

@@ -16,15 +16,15 @@ struct Layout(Vec<(Width, String)>);
 ///
 /// Pretty print the document with the given width. This is meant only for testing.
 /// It's slow: roughly exponential in the size of the doc.
-pub fn oracular_pretty_print<'d, S: 'd, D: PrettyDoc<'d, S>>(doc: D, width: Width) -> String {
+pub fn oracular_pretty_print<'d, D: PrettyDoc<'d>>(doc: D, width: Width) -> String {
     let note = ConsolidatedNotation::new(doc).expect("Notation mismatch in oracle test (root)");
     let layout = pp(Layout::empty(), note, 0, width).expect("Notation mismatch in oracle test");
     format!("{}", layout)
 }
 
-fn pp<'d, S, D: PrettyDoc<'d, S>>(
+fn pp<'d, D: PrettyDoc<'d>>(
     prefix: Layout,
-    note: ConsolidatedNotation<'d, S, D>,
+    note: ConsolidatedNotation<'d, D>,
     suffix_len: Width,
     width: Width,
 ) -> Result<Layout, PrintingError> {
@@ -70,8 +70,8 @@ fn pp<'d, S, D: PrettyDoc<'d, S>>(
 /// Smallest possible first line length of `note`, given that its last line will have an additional
 /// `suffix_len` columns after it. Assumes the rule that in (x | y), y's first line is no longer
 /// than x's.
-fn first_line_len<'d, S, D: PrettyDoc<'d, S>>(
-    note: ConsolidatedNotation<'d, S, D>,
+fn first_line_len<'d, D: PrettyDoc<'d>>(
+    note: ConsolidatedNotation<'d, D>,
     suffix_len: Width,
 ) -> Result<Width, PrintingError> {
     use ConsolidatedNotation::*;

@@ -68,8 +68,10 @@ impl IterChain {
     }
 }
 
-impl<'d> PrettyDoc<'d, ()> for &'d IterChain {
+impl<'d> PrettyDoc<'d> for &'d IterChain {
     type Id = usize;
+    type Style = ();
+    type Mark = ();
 
     fn id(self) -> usize {
         self.id
@@ -84,6 +86,10 @@ impl<'d> PrettyDoc<'d, ()> for &'d IterChain {
             Closure(_) => &CLOSURE_NOTATION,
             Times(_) => &TIMES_NOTATION,
         }
+    }
+
+    fn mark(self) -> Option<&'d ()> {
+        None
     }
 
     fn num_children(self) -> Option<usize> {
@@ -105,17 +111,6 @@ impl<'d> PrettyDoc<'d, ()> for &'d IterChain {
             Contents::Text(_) => unreachable!(),
             Contents::Children(slice) => &slice[i],
         }
-    }
-
-    fn unwrap_last_child(self) -> Self {
-        match self.contents() {
-            Contents::Text(_) => unreachable!(),
-            Contents::Children(slice) => slice.last().unwrap(),
-        }
-    }
-
-    fn unwrap_prev_sibling(self, parent: Self, i: usize) -> Self {
-        parent.unwrap_child(i)
     }
 }
 
