@@ -136,6 +136,7 @@
 mod geometry;
 mod infra;
 mod notation;
+mod pane_printing;
 mod pretty_printing;
 mod valid_notation;
 
@@ -154,7 +155,6 @@ pub mod testing {
 }
 
 /*
-mod pane_printing;
 
 pub mod pane {
     //! Print to multiple rectangular sub-panes of a window.
