@@ -6,6 +6,7 @@ use crate::geometry::{str_width, Width};
 use std::fmt;
 
 const DEBUG_PRINT: bool = false;
+const MAX_WIDTH: Width = 10_000;
 
 /// A list of lines; each line has (indentation, contents)
 ///
@@ -30,6 +31,8 @@ fn pp<'d, D: PrettyDoc<'d>>(
 ) -> Result<Layout, PrintingError> {
     use ConsolidatedNotation::*;
 
+    assert!(width < MAX_WIDTH);
+
     if DEBUG_PRINT {
         println!("==pp suffix_len:{:?} width:{}", suffix_len, width);
         println!("{}", prefix);
@@ -46,7 +49,7 @@ fn pp<'d, D: PrettyDoc<'d>>(
         Concat(x, y) => {
             let x = x.eval()?;
             let y = y.eval()?;
-            let x_suffix_len = first_line_len(y, suffix_len)?;
+            let x_suffix_len = first_line_len(y, suffix_len)?.min(MAX_WIDTH);
             let y_prefix = pp(prefix, x, x_suffix_len, width)?;
             pp(y_prefix, y, suffix_len, width)
         }
@@ -83,7 +86,7 @@ fn first_line_len<'d, D: PrettyDoc<'d>>(
         Text(txt, _) => Ok(str_width(txt) + suffix_len),
         Child(_, x) => first_line_len(x.eval()?, suffix_len),
         Concat(x, y) => {
-            let suffix_len = first_line_len(y.eval()?, suffix_len)?;
+            let suffix_len = first_line_len(y.eval()?, suffix_len)?.min(MAX_WIDTH);
             first_line_len(x.eval()?, suffix_len)
         }
         Choice(_, y) => {
