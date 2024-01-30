@@ -54,11 +54,11 @@ impl<'a, S> PrettyDoc<'a> for &'a SimpleDoc<S> {
 }
 
 #[track_caller]
-fn compare_lines(message: &str, expected: String, actual: String) {
-    if actual != expected {
+fn compare_lines(message: &str, expected: (&'static str, String), actual: (&'static str, String)) {
+    if actual.1 != expected.1 {
         eprintln!(
-            "{}\nEXPECTED:\n{}\nACTUAL:\n{}\n=========",
-            message, expected, actual,
+            "{}\n{}:\n{}\n{}:\n{}\n=========",
+            message, expected.0, expected.1, actual.0, actual.1,
         );
         assert_eq!(actual, expected);
     }
@@ -132,8 +132,8 @@ fn assert_pp_impl<'d, D: PrettyDoc<'d>>(doc: D, width: Width, expected_lines: Op
     if let Some(expected_lines) = expected_lines {
         compare_lines(
             "ORACLE DISAGREES WITH TEST CASE, SO TEST CASE MUST BE WRONG",
-            oracle_result.clone(),
-            expected_lines.join("\n"),
+            ("ORACLE", oracle_result.clone()),
+            ("TEST CASE", expected_lines.join("\n")),
         );
     }
     let lines = pretty_print_to_string(doc, width)
@@ -143,8 +143,8 @@ fn assert_pp_impl<'d, D: PrettyDoc<'d>>(doc: D, width: Width, expected_lines: Op
         .collect::<Vec<_>>();
     compare_lines(
         &format!("IN PRETTY PRINTING WITH WIDTH {}", width),
-        oracle_result.clone(),
-        lines.join("\n"),
+        ("EXPECTED", oracle_result.clone()),
+        ("ACTUAL", lines.join("\n")),
     );
     for path in all_paths(doc) {
         let (lines_above, mut lines_below) = print_above_and_below(doc, width, &path);
@@ -152,8 +152,8 @@ fn assert_pp_impl<'d, D: PrettyDoc<'d>>(doc: D, width: Width, expected_lines: Op
         lines.append(&mut lines_below);
         compare_lines(
             &format!("IN PRETTY PRINTING AT PATH {:?}", path),
-            oracle_result.clone(),
-            lines.join("\n"),
+            ("EXPECTED", oracle_result.clone()),
+            ("ACTUAL", lines.join("\n")),
         );
     }
 }
@@ -169,13 +169,13 @@ pub fn assert_pp_seek<'d, D: PrettyDoc<'d>>(
     let (lines_above, lines_below) = print_above_and_below(doc, width, path);
     compare_lines(
         &format!("IN DOWNWARD PRINTING AT PATH {:?}", path),
-        expected_lines_below.join("\n"),
-        lines_below.join("\n"),
+        ("EXPECTED", expected_lines_below.join("\n")),
+        ("ACTUAL", lines_below.join("\n")),
     );
     compare_lines(
         &format!("IN UPWARD PRINTING AT PATH {:?}", path),
-        expected_lines_above.join("\n"),
-        lines_above.join("\n"),
+        ("EXPECTED", expected_lines_above.join("\n")),
+        ("ACTUAL", lines_above.join("\n")),
     );
 }
 
@@ -190,7 +190,7 @@ pub fn assert_pp_region<'d, D: PrettyDoc<'d>>(
     let lines = print_region(doc, width, path, rows);
     compare_lines(
         &format!("IN PRINTING {} ROWS AT PATH {:?}", rows, path),
-        expected_lines.join("\n"),
-        lines.join("\n"),
+        ("EXPECTED", expected_lines.join("\n")),
+        ("ACTUAL", lines.join("\n")),
     );
 }
