@@ -63,14 +63,12 @@ fn oracle_tests() {
     let mut valid_count = 0;
     let mut invalid_count = 0;
     for notation in notations {
-        println!("{}", notation);
         if let Ok(doc) = SimpleDoc::try_new(notation) {
             for width in 1..=8 {
                 assert_pp_without_expectation(&doc, width);
             }
             valid_count += 1;
         } else {
-            println!("  (invalid)");
             invalid_count += 1;
         }
     }
