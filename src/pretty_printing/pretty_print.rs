@@ -81,6 +81,17 @@ impl<'d, D: PrettyDoc<'d>> Chunk<'d, D> {
             notation: notation.eval()?,
         })
     }
+
+    fn sub_chunk(
+        &self,
+        notation: DelayedConsolidatedNotation<'d, D>,
+    ) -> Result<Self, PrintingError> {
+        Ok(Chunk {
+            id: notation.doc().id(),
+            mark: notation.doc().mark().or(self.mark),
+            notation: notation.eval()?,
+        })
+    }
 }
 
 /// The contents of a single pretty printed line.
@@ -208,8 +219,8 @@ impl<'d, D: PrettyDoc<'d>> Seeker<'d, D> {
                     Empty => (),
                     Literal(_) | Newline(_) | Text(_, _) => self.prev.push(chunk),
                     Concat(left, right) => {
-                        self.next.push(Chunk::new(right)?);
-                        self.next.push(Chunk::new(left)?);
+                        self.next.push(chunk.sub_chunk(right)?);
+                        self.next.push(chunk.sub_chunk(left)?);
                     }
                     Choice(_, _) if chunk.id == parent_doc_id => {
                         self.next.push(chunk);
@@ -257,17 +268,17 @@ impl<'d, D: PrettyDoc<'d>> Seeker<'d, D> {
                     }
                     Child(i, child) if chunk.id == parent_doc_id && i == child_index => {
                         // Found!
-                        self.next.push(Chunk::new(child)?);
+                        self.next.push(chunk.sub_chunk(child)?);
 
                         return Ok(());
                     }
                     Child(i, child) => {
-                        self.next.push(Chunk::new(child)?);
+                        self.next.push(chunk.sub_chunk(child)?);
                         break;
                     }
                     Choice(opt1, opt2) => {
                         let choice = choose(self.width, prefix_len, opt1, opt2, &self.next)?;
-                        self.next.push(Chunk::new(choice)?);
+                        self.next.push(chunk.sub_chunk(choice)?);
                         break;
                     }
                 }
@@ -351,14 +362,14 @@ impl<'d, D: PrettyDoc<'d>> DownwardPrinter<'d, D> {
                     }));
                 }
                 Concat(left, right) => {
-                    self.next.push(Chunk::new(right)?);
-                    self.next.push(Chunk::new(left)?);
+                    self.next.push(chunk.sub_chunk(right)?);
+                    self.next.push(chunk.sub_chunk(left)?);
                 }
                 Choice(opt1, opt2) => {
                     let choice = choose(self.width, prefix_len, opt1, opt2, &self.next)?;
-                    self.next.push(Chunk::new(choice)?);
+                    self.next.push(chunk.sub_chunk(choice)?);
                 }
-                Child(_, child_note) => self.next.push(Chunk::new(child_note)?),
+                Child(_, child_note) => self.next.push(chunk.sub_chunk(child_note)?),
             }
         }
 
@@ -414,7 +425,7 @@ impl<'d, D: PrettyDoc<'d>> UpwardPrinter<'d, D> {
                 }
                 Choice(opt1, opt2) => {
                     let choice = choose(self.width, prefix_len, opt1, opt2, &self.next)?;
-                    self.prev.push(Chunk::new(choice)?);
+                    self.prev.push(chunk.sub_chunk(choice)?);
 
                     // Reset everything. This is equivalent to a recursive call.
                     self.seek_end();
@@ -489,11 +500,11 @@ impl<'d, D: PrettyDoc<'d>> UpwardPrinter<'d, D> {
                     return Ok(Some(indent));
                 }
                 Concat(left, right) => {
-                    self.prev.push(Chunk::new(left)?);
-                    self.prev.push(Chunk::new(right)?);
+                    self.prev.push(chunk.sub_chunk(left)?);
+                    self.prev.push(chunk.sub_chunk(right)?);
                 }
                 Choice(_, _) => self.next.push(chunk),
-                Child(_, note) => self.prev.push(Chunk::new(note)?),
+                Child(_, note) => self.prev.push(chunk.sub_chunk(note)?),
             }
         }
         Ok(None)
