@@ -9,7 +9,7 @@ pub struct ValidNotation<S>(pub(crate) Notation<S>);
 #[derive(thiserror::Error, Debug, Clone)]
 pub enum NotationError {
     #[error(
-        "Notation contains a Fold outside of Count.many, but it's only meaningful inside of that."
+        "Notation contains a Fold outside of Count.many or Count.one, but it's only meaningful inside of those."
     )]
     FoldOutsideCount,
     #[error(
@@ -112,7 +112,9 @@ impl<S> Notation<S> {
                 many.validate_rec(flat, InCountMany)?;
             }
             Fold { .. } if ctx.in_fold() => return Err(NestedFold),
-            Fold { .. } if ctx != InCountMany => return Err(FoldOutsideCount),
+            Fold { .. } if !matches!(ctx, InCountMany | InCountOne) => {
+                return Err(FoldOutsideCount)
+            }
             Fold { first, join } => {
                 first.validate_rec(flat, InFoldFirst)?;
                 join.validate_rec(flat, InFoldJoin)?;

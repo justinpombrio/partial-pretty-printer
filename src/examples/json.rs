@@ -1,17 +1,19 @@
 use super::{BasicStyle, Color};
 use crate::notation::Notation;
 use crate::notation_constructors::{
-    child, count, flat, fold, left, lit, nl, right, text, Count, Fold,
+    child, count, empty, flat, fold, left, lit, nl, right, text, Count, Fold,
 };
 use crate::pretty_printing::PrettyDoc;
 use crate::valid_notation::ValidNotation;
 use once_cell::sync::Lazy;
 use std::fmt::Debug;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::ops::Deref;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Json {
-    id: usize,
+    id: u32,
+    comment: Option<String>,
     data: JsonData,
 }
 
@@ -23,135 +25,192 @@ pub enum JsonData {
     String(String),
     Number(String),
     List(Vec<Json>),
-    // Must contain DictEntries
-    Dict(Vec<Json>),
-    // First Json must be a Json::String
-    DictEntry(Box<[Json; 2]>),
+    Dict(Vec<(String, Json)>),
 }
 
 fn punct(s: &'static str) -> Notation<BasicStyle> {
-    lit(
-        s,
-        BasicStyle {
-            color: Color::White,
-            bold: false,
-        },
-    )
+    lit(s, BasicStyle::new())
 }
 
 fn constant(s: &'static str) -> Notation<BasicStyle> {
-    lit(
-        s,
-        BasicStyle {
-            color: Color::Green,
-            bold: true,
-        },
-    )
+    lit(s, BasicStyle::new().color(Color::Green).bold())
 }
 
 static JSON_NULL_NOTATION: Lazy<ValidNotation<BasicStyle>> =
     Lazy::new(|| constant("null").validate().unwrap());
+
 static JSON_TRUE_NOTATION: Lazy<ValidNotation<BasicStyle>> =
     Lazy::new(|| constant("true").validate().unwrap());
+
 static JSON_FALSE_NOTATION: Lazy<ValidNotation<BasicStyle>> =
     Lazy::new(|| constant("false").validate().unwrap());
+
 static JSON_STRING_NOTATION: Lazy<ValidNotation<BasicStyle>> = Lazy::new(|| {
-    let style = BasicStyle {
-        color: Color::Magenta,
-        bold: false,
-    };
+    let style = BasicStyle::new().color(Color::Magenta);
     (punct("\"") + text(style) + punct("\""))
         .validate()
         .unwrap()
 });
+
 static JSON_NUMBER_NOTATION: Lazy<ValidNotation<BasicStyle>> = Lazy::new(|| {
-    let style = BasicStyle {
-        color: Color::Yellow,
-        bold: false,
-    };
+    let style = BasicStyle::new().color(Color::Blue);
     text(style).validate().unwrap()
 });
+
 static JSON_LIST_NOTATION: Lazy<ValidNotation<BasicStyle>> = Lazy::new(|| {
-    let seq = fold(Fold {
-        first: child(0),
-        join: left() + punct(",") + (punct(" ") | nl()) + right(),
+    let single_seq = fold(Fold {
+        first: flat(child(0)),
+        join: left() + punct(", ") + flat(right()),
     });
-    let single = punct("[") + flat(seq.clone()) + punct("]");
-    let multi = (punct("[") + (4 >> seq)) ^ punct("]");
+    let single = punct("[") + single_seq + punct("]");
+
+    let multi_seq = 4
+        >> fold(Fold {
+            first: child(0),
+            join: left() + punct(",") ^ right(),
+        });
+    let multi = punct("[") + multi_seq ^ punct("]");
+
+    let list = single | multi;
 
     count(Count {
         zero: punct("[]"),
-        one: punct("[") + child(0) + punct("]"),
-        many: single | multi,
+        one: list.clone(),
+        many: list,
     })
     .validate()
     .unwrap()
 });
+
 static JSON_DICT_ENTRY_NOTATION: Lazy<ValidNotation<BasicStyle>> =
     Lazy::new(|| (child(0) + punct(": ") + child(1)).validate().unwrap());
+
 static JSON_DICT_NOTATION: Lazy<ValidNotation<BasicStyle>> = Lazy::new(|| {
+    let single_seq = fold(Fold {
+        first: flat(child(0)),
+        join: left() + punct(", ") + flat(right()),
+    });
+    let single = punct("{") + single_seq + punct("}");
+
+    let multi_seq = fold(Fold {
+        first: child(0),
+        join: left() + punct(",") ^ right(),
+    });
+    let multi = punct("{") + (4 >> multi_seq) ^ punct("}");
+
+    let dict = single | multi;
+
     count(Count {
         zero: punct("{}"),
-        one: {
-            let single = punct("{") + child(0) + punct("}");
-            let multi = (punct("{") + (4 >> child(0))) ^ punct("}");
-            single | multi
-        },
-        many: punct("{")
-            + (4 >> fold(Fold {
-                first: child(0),
-                join: left() + punct(",") ^ right(),
-            }))
-            ^ punct("}"),
+        one: dict.clone(),
+        many: dict,
     })
     .validate()
     .unwrap()
 });
 
-enum JsonContents<'a> {
-    Text(&'a str),
-    Children(&'a [Json]),
+static JSON_COMMENTED_NOTATION: Lazy<ValidNotation<BasicStyle>> =
+    Lazy::new(|| (child(0) ^ child(1)).validate().unwrap());
+
+static JSON_COMMENT_NOTATION: Lazy<ValidNotation<BasicStyle>> = Lazy::new(|| {
+    let style = BasicStyle::new().color(Color::Yellow);
+    let notation = lit("// ", style)
+        + count(Count {
+            zero: empty(),
+            one: child(0),
+            many: fold(Fold {
+                first: child(0),
+                join: left() + (punct(" ") | nl() + lit("// ", style)) + right(),
+            }),
+        });
+    notation.validate().unwrap()
+});
+
+static JSON_COMMENT_WORD_NOTATION: Lazy<ValidNotation<BasicStyle>> = Lazy::new(|| {
+    let style = BasicStyle::new().color(Color::Yellow);
+    text(style).validate().unwrap()
+});
+
+#[derive(Debug, Clone, Copy)]
+pub enum JsonRef<'a> {
+    /// e.g. // some comment \n 17
+    Commented(&'a str, &'a Json),
+    /// e.g. 17
+    Json(&'a Json),
+    /// e.g. // some comment
+    Comment(&'a str, &'a Json),
+    /// e.g. some
+    CommentWord(&'a str, &'a Json, usize),
+    /// e.g. "key": 17
+    DictEntry(&'a str, &'a Json),
+    /// e.g. "key"
+    DictKey(&'a str, &'a Json),
 }
 
-impl Json {
-    fn contents(&self) -> JsonContents {
-        use JsonContents::{Children, Text};
-        use JsonData::*;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum JsonId {
+    Commented(u32),
+    Json(u32),
+    Comment(u32),
+    CommentWord(u32, usize),
+    DictEntry(u32),
+    DictKey(u32),
+}
 
-        match &self.data {
-            Null => Children(&[]),
-            True => Children(&[]),
-            False => Children(&[]),
-            String(txt) => Text(txt),
-            Number(txt) => Text(txt),
-            List(children) => Children(children),
-            DictEntry(entry) => Children(&**entry),
-            Dict(children) => Children(children),
+impl Default for JsonId {
+    fn default() -> JsonId {
+        // id 0 is otherwise unused
+        JsonId::Json(0)
+    }
+}
+
+impl<'a> JsonRef<'a> {
+    fn new(json: &'a Json) -> JsonRef<'a> {
+        if let Some(comment) = &json.comment {
+            JsonRef::Commented(comment, json)
+        } else {
+            JsonRef::Json(json)
         }
     }
 }
 
-impl<'a> PrettyDoc<'a> for &'a Json {
-    type Id = usize;
+impl<'a> PrettyDoc<'a> for JsonRef<'a> {
+    type Id = JsonId;
     type Style = BasicStyle;
     type Mark = ();
 
-    fn id(self) -> usize {
-        self.id
+    fn id(self) -> JsonId {
+        use JsonRef::*;
+
+        match self {
+            Commented(_, json) => JsonId::Commented(json.id),
+            Json(json) => JsonId::Json(json.id),
+            Comment(_, json) => JsonId::Comment(json.id),
+            CommentWord(_, json, index) => JsonId::CommentWord(json.id, index),
+            DictEntry(_, val) => JsonId::DictEntry(val.id),
+            DictKey(_, val) => JsonId::DictKey(val.id),
+        }
     }
 
     fn notation(self) -> &'a ValidNotation<BasicStyle> {
         use JsonData::*;
+        use JsonRef::*;
 
-        match &self.data {
-            Null => &JSON_NULL_NOTATION,
-            True => &JSON_TRUE_NOTATION,
-            False => &JSON_FALSE_NOTATION,
-            String(_) => &JSON_STRING_NOTATION,
-            Number(_) => &JSON_NUMBER_NOTATION,
-            List(_) => &JSON_LIST_NOTATION,
-            DictEntry(_) => &JSON_DICT_ENTRY_NOTATION,
-            Dict(_) => &JSON_DICT_NOTATION,
+        match self {
+            Commented(_, _) => &JSON_COMMENTED_NOTATION,
+            Json(json) => match &json.data {
+                Null => &JSON_NULL_NOTATION,
+                True => &JSON_TRUE_NOTATION,
+                False => &JSON_FALSE_NOTATION,
+                String(_) => &JSON_STRING_NOTATION,
+                Number(_) => &JSON_NUMBER_NOTATION,
+                List(_) => &JSON_LIST_NOTATION,
+                Dict(_) => &JSON_DICT_NOTATION,
+            },
+            Comment(_, _) => &JSON_COMMENT_NOTATION,
+            CommentWord(_, _, _) => &JSON_COMMENT_WORD_NOTATION,
+            DictEntry(_, _) => &JSON_DICT_ENTRY_NOTATION,
+            DictKey(_, _) => &JSON_STRING_NOTATION,
         }
     }
 
@@ -160,43 +219,82 @@ impl<'a> PrettyDoc<'a> for &'a Json {
     }
 
     fn num_children(self) -> Option<usize> {
-        match self.contents() {
-            JsonContents::Text(_) => None,
-            JsonContents::Children(slice) => Some(slice.len()),
+        use JsonData::*;
+        use JsonRef::*;
+
+        match self {
+            Commented(_, _) => Some(2),
+            Json(json) => match &json.data {
+                Null | True | False => Some(0),
+                String(_) => None,
+                Number(_) => None,
+                List(list) => Some(list.len()),
+                Dict(dict) => Some(dict.len()),
+            },
+            Comment(text, _) => Some(text.split(' ').count()),
+            CommentWord(_, _, _) => None,
+            DictEntry(_, _) => Some(2),
+            DictKey(_, _) => None,
         }
     }
 
     fn unwrap_text(self) -> &'a str {
-        match self.contents() {
-            JsonContents::Text(txt) => txt,
-            JsonContents::Children(_) => panic!("Json: not text"),
+        use JsonData::*;
+        use JsonRef::*;
+
+        match self {
+            Json(json) => match &json.data {
+                Null | True | False | List(_) | Dict(_) => {
+                    panic!("Json: not text")
+                }
+                String(text) => text,
+                Number(text) => text,
+            },
+            Commented(_, _) | DictEntry(_, _) | Comment(_, _) => panic!("Json: not text"),
+            CommentWord(word, _, _) => word,
+            DictKey(text, _) => text,
         }
     }
 
     fn unwrap_child(self, i: usize) -> Self {
-        match self.contents() {
-            JsonContents::Text(_) => panic!("Json: no children"),
-            JsonContents::Children(slice) => &slice[i],
-        }
-    }
+        use JsonData::*;
+        use JsonRef::*;
 
-    fn unwrap_last_child(self) -> Self {
-        match self.contents() {
-            JsonContents::Text(_) => panic!("Json: no children"),
-            JsonContents::Children(slice) => slice.last().expect("Json: zero children"),
+        match self {
+            CommentWord(_, _, _) | DictKey(_, _) => panic!("Json: no children"),
+            Comment(comment, json) => {
+                // inefficient
+                let word = comment.split(' ').nth(i).unwrap();
+                CommentWord(word, json, i)
+            }
+            Commented(text, json) => match i {
+                0 => Comment(text, json),
+                1 => Json(json),
+                _ => panic!("Json: invalid index (commented)"),
+            },
+            Json(json) => match &json.data {
+                Null | True | False | String(_) | Number(_) => panic!("Json: no children"),
+                List(elems) => JsonRef::new(&elems[i]),
+                Dict(pairs) => {
+                    let (key, val) = &pairs[i];
+                    DictEntry(key, val)
+                }
+            },
+            DictEntry(key, val) => match i {
+                0 => DictKey(key, val),
+                1 => JsonRef::new(val),
+                _ => panic!("Json: invalid index (dict entry)"),
+            },
         }
-    }
-
-    fn unwrap_prev_sibling(self, parent: Self, i: usize) -> Self {
-        parent.unwrap_child(i)
     }
 }
 
-static ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
+static ID_COUNTER: AtomicU32 = AtomicU32::new(1); // id 0 reserved for Default
 
 fn new_node(data: JsonData) -> Json {
     Json {
         id: ID_COUNTER.fetch_add(1, Ordering::SeqCst),
+        comment: None,
         data,
     }
 }
@@ -221,14 +319,26 @@ pub fn json_number(f: f64) -> Json {
     new_node(JsonData::Number(f.to_string()))
 }
 
-pub fn json_dict_entry(key: &str, value: Json) -> Json {
-    new_node(JsonData::DictEntry(Box::new([json_string(key), value])))
-}
-
 pub fn json_list(elements: Vec<Json>) -> Json {
     new_node(JsonData::List(elements))
 }
 
-pub fn json_dict(entries: Vec<Json>) -> Json {
-    new_node(JsonData::Dict(entries))
+pub fn json_dict(entries: Vec<(&str, Json)>) -> Json {
+    new_node(JsonData::Dict(
+        entries
+            .into_iter()
+            .map(|(k, v)| (k.to_owned(), v))
+            .collect::<Vec<_>>(),
+    ))
+}
+
+impl Json {
+    pub fn as_ref(&self) -> JsonRef {
+        JsonRef::new(self)
+    }
+
+    pub fn with_comment(mut self, comment: String) -> Self {
+        self.comment = Some(comment);
+        self
+    }
 }

@@ -110,17 +110,6 @@ impl<'d> PrettyDoc<'d, ()> for &'d LetList {
             Contents::Children(slice) => &slice[i],
         }
     }
-
-    fn unwrap_last_child(self) -> Self {
-        match self.contents() {
-            Contents::Text(_) => unreachable!(),
-            Contents::Children(slice) => slice.last().unwrap(),
-        }
-    }
-
-    fn unwrap_prev_sibling(self, parent: Self, i: usize) -> Self {
-        parent.unwrap_child(i)
-    }
 }
 
 static ID_COUNTER: AtomicUsize = AtomicUsize::new(0);

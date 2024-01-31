@@ -47,6 +47,7 @@ fn basics_choice() {
 #[test]
 fn test_all_paths_fn() {
     use partial_pretty_printer::examples::json::{json_list, json_string};
+
     let doc = json_list(vec![
         json_list(vec![json_string("0.0"), json_string("0.1")]),
         json_string("1"),
@@ -56,7 +57,7 @@ fn test_all_paths_fn() {
         ]),
     ]);
     assert_eq!(
-        all_paths(&doc),
+        all_paths(doc.as_ref()),
         vec![
             vec![],
             vec![0],
