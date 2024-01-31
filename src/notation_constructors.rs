@@ -32,6 +32,10 @@ pub fn indent<S>(i: Width, n: Notation<S>) -> Notation<S> {
     Notation::Indent(i, Box::new(n))
 }
 
+pub fn mark<S>(mark_name: &'static str, n: Notation<S>) -> Notation<S> {
+    Notation::Mark(mark_name, Box::new(n))
+}
+
 /* Count */
 
 pub struct Count<S> {

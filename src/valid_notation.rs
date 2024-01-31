@@ -105,6 +105,7 @@ impl<S> Notation<S> {
             Child(_) if ctx == InCountZero => return Err(CountZeroChild),
             Child(n) if *n > 0 && ctx == InCountOne => return Err(CountOneChildIndex(*n)),
             Child(_) => (),
+            Mark(_, note) => note.validate_rec(flat, ctx)?,
             Count { .. } if ctx.in_count() => return Err(NestedCount),
             Count { zero, one, many } => {
                 zero.validate_rec(flat, InCountZero)?;

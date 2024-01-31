@@ -45,6 +45,9 @@ pub enum Notation<S> {
     /// Display the `i`th child of this node.  Can only be used on a [`PrettyDoc`] node for which
     /// `.num_children()` returns `Some(n)`, with `i < n`.
     Child(usize),
+    /// Look up the mark with the given name in the current node, if any, and apply it to this
+    /// notation. (The lookup happens via `PrettyDoc::partial_node_mark()`.)
+    Mark(&'static str, Box<Notation<S>>),
     /// Determines what to display based on the number of children this [`PrettyDoc`] node has.
     Count {
         zero: Box<Notation<S>>,
@@ -116,6 +119,7 @@ impl<S> fmt::Display for Notation<S> {
             Choice(opt1, opt2) => write!(f, "({} | {})", opt1, opt2),
             IfEmptyText(opt1, opt2) => write!(f, "IfEmptyText({} | {})", opt1, opt2),
             Child(i) => write!(f, "${}", i),
+            Mark(mark_name, note) => write!(f, "Mark({}, {})", mark_name, note),
             Count { zero, one, many } => {
                 write!(f, "Count(zero={}, one={}, many={})", zero, one, many)
             }

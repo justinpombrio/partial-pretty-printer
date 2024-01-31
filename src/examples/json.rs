@@ -1,3 +1,5 @@
+#![allow(clippy::precedence)]
+
 use super::{BasicStyle, Color};
 use crate::notation::Notation;
 use crate::notation_constructors::{
@@ -212,10 +214,6 @@ impl<'a> PrettyDoc<'a> for JsonRef<'a> {
             DictEntry(_, _) => &JSON_DICT_ENTRY_NOTATION,
             DictKey(_, _) => &JSON_STRING_NOTATION,
         }
-    }
-
-    fn mark(self) -> Option<&'a ()> {
-        None
     }
 
     fn num_children(self) -> Option<usize> {

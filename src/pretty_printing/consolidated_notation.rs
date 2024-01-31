@@ -39,6 +39,7 @@ pub struct DelayedConsolidatedNotation<'d, D: PrettyDoc<'d>> {
     flat: bool,
     indent: Width,
     join_pos: Option<JoinPos<'d, D>>,
+    mark: Option<&'d D::Mark>,
 }
 
 #[derive(Debug)]
@@ -75,6 +76,7 @@ impl<'d, D: PrettyDoc<'d>> Clone for DelayedConsolidatedNotation<'d, D> {
             flat: self.flat,
             indent: self.indent,
             join_pos: self.join_pos,
+            mark: self.mark,
         }
     }
 }
@@ -92,12 +94,6 @@ impl<'d, D: PrettyDoc<'d>> Clone for JoinPos<'d, D> {
     }
 }
 impl<'d, D: PrettyDoc<'d>> Copy for JoinPos<'d, D> {}
-
-impl<'d, D: PrettyDoc<'d>> ConsolidatedNotation<'d, D> {
-    pub fn new(doc: D) -> Result<ConsolidatedNotation<'d, D>, PrintingError> {
-        DelayedConsolidatedNotation::new(doc).eval()
-    }
-}
 
 #[derive(thiserror::Error, Debug, Clone)]
 pub enum PrintingError {
@@ -130,6 +126,7 @@ impl<'d, D: PrettyDoc<'d>> DelayedConsolidatedNotation<'d, D> {
             flat: false,
             indent: 0,
             join_pos: None,
+            mark: doc.whole_node_mark(),
         }
     }
 
@@ -137,8 +134,15 @@ impl<'d, D: PrettyDoc<'d>> DelayedConsolidatedNotation<'d, D> {
         &self.doc
     }
 
-    /// Expand this node, to get a usable `ConsolidatedNotation`.
-    pub fn eval(mut self) -> Result<ConsolidatedNotation<'d, D>, PrintingError> {
+    /// Expand this node, to get a usable `ConsolidatedNotation` and its mark (if any).
+    pub fn eval(
+        mut self,
+    ) -> Result<(ConsolidatedNotation<'d, D>, Option<&'d D::Mark>), PrintingError> {
+        let notation = self.eval_notation()?;
+        Ok((notation, self.mark))
+    }
+
+    fn eval_notation(mut self) -> Result<ConsolidatedNotation<'d, D>, PrintingError> {
         use Notation::*;
 
         loop {
@@ -196,9 +200,18 @@ impl<'d, D: PrettyDoc<'d>> DelayedConsolidatedNotation<'d, D> {
                     Some(n) => {
                         self.doc = self.doc.unwrap_child(*i);
                         self.notation = &self.doc.notation().0;
+                        if let Some(mark) = self.doc.whole_node_mark() {
+                            self.mark = Some(mark);
+                        }
                         return Ok(ConsolidatedNotation::Child(*i, self));
                     }
                 },
+                Mark(mark_name, note) => {
+                    if let Some(mark) = self.doc.partial_node_mark(mark_name) {
+                        self.mark = Some(mark);
+                    }
+                    self.notation = note;
+                }
                 Count { zero, one, many } => match self.doc.num_children() {
                     None => return Err(PrintingError::CountNotationOnChildlessDoc),
                     Some(0) => self.notation = zero,

@@ -88,10 +88,6 @@ impl<'d> PrettyDoc<'d> for &'d IterChain {
         }
     }
 
-    fn mark(self) -> Option<&'d ()> {
-        None
-    }
-
     fn num_children(self) -> Option<usize> {
         match self.contents() {
             Contents::Text(_) => None,

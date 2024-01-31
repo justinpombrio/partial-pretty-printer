@@ -2,6 +2,7 @@ use partial_pretty_printer::{
     notation_constructors::lit, pretty_print, pretty_print_to_string,
     testing::oracular_pretty_print, Notation, NotationError, PrettyDoc, ValidNotation, Width,
 };
+use std::fmt;
 
 // TODO: temporary
 #[allow(unused)]
@@ -22,7 +23,7 @@ impl<S> SimpleDoc<S> {
     }
 }
 
-impl<'a, S> PrettyDoc<'a> for &'a SimpleDoc<S> {
+impl<'a, S: fmt::Debug> PrettyDoc<'a> for &'a SimpleDoc<S> {
     type Id = usize;
     type Style = S;
     type Mark = ();
@@ -34,10 +35,6 @@ impl<'a, S> PrettyDoc<'a> for &'a SimpleDoc<S> {
 
     fn notation(self) -> &'a ValidNotation<S> {
         &self.0
-    }
-
-    fn mark(self) -> Option<&'a ()> {
-        None
     }
 
     fn num_children(self) -> Option<usize> {

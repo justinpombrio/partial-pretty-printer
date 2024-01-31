@@ -75,22 +75,19 @@ impl<'d, D: PrettyDoc<'d>> Copy for Chunk<'d, D> {}
 
 impl<'d, D: PrettyDoc<'d>> Chunk<'d, D> {
     fn new(notation: DelayedConsolidatedNotation<'d, D>) -> Result<Self, PrintingError> {
-        Ok(Chunk {
-            id: notation.doc().id(),
-            mark: notation.doc().mark(),
-            notation: notation.eval()?,
-        })
+        let id = notation.doc().id();
+        let (notation, mark) = notation.eval()?;
+        Ok(Chunk { id, mark, notation })
     }
 
     fn sub_chunk(
         &self,
         notation: DelayedConsolidatedNotation<'d, D>,
     ) -> Result<Self, PrintingError> {
-        Ok(Chunk {
-            id: notation.doc().id(),
-            mark: notation.doc().mark().or(self.mark),
-            notation: notation.eval()?,
-        })
+        let id = notation.doc().id();
+        let (notation, mark) = notation.eval()?;
+        let mark = mark.or(self.mark);
+        Ok(Chunk { id, mark, notation })
     }
 }
 
@@ -535,7 +532,7 @@ fn choose<'d, D: PrettyDoc<'d>>(
 ) -> Result<DelayedConsolidatedNotation<'d, D>, PrintingError> {
     span!("choose");
 
-    let opt1_evaled = opt1.eval()?;
+    let opt1_evaled = opt1.eval()?.0;
 
     if width >= prefix_len && fits(width - prefix_len, opt1_evaled, next_chunks)? {
         Ok(opt1)
@@ -590,17 +587,17 @@ fn fits<'d, D: PrettyDoc<'d>>(
                 }
             }
             Newline(_) => return Ok(true),
-            Child(_, note) => notations.push(note.eval()?),
+            Child(_, note) => notations.push(note.eval()?.0),
             Concat(note1, note2) => {
-                notations.push(note2.eval()?);
-                notations.push(note1.eval()?);
+                notations.push(note2.eval()?.0);
+                notations.push(note1.eval()?.0);
             }
             Choice(opt1, opt2) => {
                 // This assumes that:
                 //     For every layout a in opt1 and b in opt2,
                 //     first_line_len(a) >= first_line_len(b)
                 // And also that ConsolidatedNotation would have removed this choice if we're in a Flat
-                notations.push(opt2.eval()?);
+                notations.push(opt2.eval()?.0);
             }
         }
     }

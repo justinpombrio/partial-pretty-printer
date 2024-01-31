@@ -7,6 +7,10 @@ pub trait PrettyWindow<S>: Sized {
     // `PrettyWindow` as a trait object.
     type Error: std::error::Error + 'static;
 
+    /// Arbitrary data associated with some nodes in the document. Returned as part of
+    /// `LineContents` when pretty printing.
+    type Mark;
+
     /// Get the size of this window.
     fn size(&self) -> Result<Size, Self::Error>;
 
@@ -17,6 +21,7 @@ pub trait PrettyWindow<S>: Sized {
         &mut self,
         ch: char,
         pos: Pos,
+        mark: &Self::Mark,
         style: &S,
         width: usize,
     ) -> Result<(), Self::Error>;

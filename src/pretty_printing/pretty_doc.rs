@@ -10,9 +10,10 @@ use std::hash::Hash;
 pub trait PrettyDoc<'d>: Copy {
     type Id: Eq + Hash + Copy + Default + fmt::Debug;
     /// The style used in this document's notation.
-    type Style: 'd;
-    /// Arbitrary data associated with some nodes in the document.
-    type Mark: 'd;
+    type Style: fmt::Debug + 'd;
+    /// Arbitrary data associated with some nodes in the document. Returned as part of
+    /// `LineContents` when pretty printing.
+    type Mark: fmt::Debug + 'd;
 
     /// An id that uniquely identifies this node. It should not be `Id::default()`.
     fn id(self) -> Self::Id;
@@ -20,8 +21,18 @@ pub trait PrettyDoc<'d>: Copy {
     /// The node's notation.
     fn notation(self) -> &'d ValidNotation<Self::Style>;
 
-    /// The mark on this node, if any.
-    fn mark(self) -> Option<&'d Self::Mark>;
+    /// The mark on this node, if any. This method is called once per document node. If it returns
+    /// `Some(mark)`, the mark is applied to that node.
+    fn whole_node_mark(self) -> Option<&'d Self::Mark> {
+        None
+    }
+
+    /// Look up a mark that applies to only part of this node. Whenever `Notation::Mark(mark_name,
+    /// notation)` is encountered while printing, `partial_node_mark(mark_name)` is invoked. If it
+    /// returns `Some(mark)`, then that mark is applied to `notation`.
+    fn partial_node_mark(self, mark_name: &'static str) -> Option<&'d Self::Mark> {
+        None
+    }
 
     /// Get this node's number of children, or `None` if it contains text instead. `Some(0)` means
     /// that this node contains no children, and no text.
