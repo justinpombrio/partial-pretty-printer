@@ -1,11 +1,15 @@
 use crate::geometry::{Pos, Size, Width};
+use std::fmt;
 
 /// A "window" that supports the methods necessary to render a set of
 /// [PrettyDocument](crate::PrettyDoc)s.
-pub trait PrettyWindow<S>: Sized {
+pub trait PrettyWindow: Sized {
     // Forbid the Error type from containing non-static references so we can use
     // `PrettyWindow` as a trait object.
     type Error: std::error::Error + 'static;
+
+    /// The style used in the document's notation.
+    type Style: fmt::Debug;
 
     /// Arbitrary data associated with some nodes in the document. Returned as part of
     /// `LineContents` when pretty printing.
@@ -22,7 +26,7 @@ pub trait PrettyWindow<S>: Sized {
         ch: char,
         pos: Pos,
         mark: &Self::Mark,
-        style: &S,
-        width: usize,
+        style: &Self::Style,
+        full_width: bool,
     ) -> Result<(), Self::Error>;
 }
