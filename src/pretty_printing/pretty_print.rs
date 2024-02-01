@@ -91,6 +91,7 @@ impl<'d, D: PrettyDoc<'d>> Chunk<'d, D> {
     }
 }
 
+// TODO: Remove D::Id from these? Seems redundant with marks.
 /// The contents of a single pretty printed line.
 pub struct LineContents<'d, D: PrettyDoc<'d>> {
     /// The indentation of this line in spaces.
@@ -111,6 +112,16 @@ pub struct Piece<'d, D: PrettyDoc<'d>> {
     pub style: &'d D::Style,
     pub doc_id: D::Id,
     pub mark: Option<&'d D::Mark>,
+}
+
+impl<'d, D: PrettyDoc<'d>> LineContents<'d, D> {
+    pub fn width(&self) -> Width {
+        let mut width = self.indentation.num_spaces;
+        for piece in &self.pieces {
+            width += str_width(piece.str);
+        }
+        width
+    }
 }
 
 impl<'d, D: PrettyDoc<'d>> ToString for LineContents<'d, D> {

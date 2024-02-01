@@ -9,7 +9,7 @@ pub trait PrettyWindow: Sized {
     type Error: std::error::Error + 'static;
 
     /// The style used in the document's notation.
-    type Style: fmt::Debug;
+    type Style: fmt::Debug + Default;
 
     /// Arbitrary data associated with some nodes in the document. Returned as part of
     /// `LineContents` when pretty printing.
@@ -25,7 +25,7 @@ pub trait PrettyWindow: Sized {
         &mut self,
         ch: char,
         pos: Pos,
-        mark: &Self::Mark,
+        mark: Option<&Self::Mark>,
         style: &Self::Style,
         full_width: bool,
     ) -> Result<(), Self::Error>;

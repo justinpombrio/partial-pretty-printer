@@ -61,8 +61,8 @@ impl PrettyWindow for PlainText {
         &mut self,
         ch: char,
         pos: Pos,
-        mark: &Self::Mark,
-        style: &Self::Style,
+        _mark: Option<&Self::Mark>,
+        _style: &Self::Style,
         full_width: bool,
     ) -> Result<(), Self::Error> {
         let row = pos.row as usize;

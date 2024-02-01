@@ -3,9 +3,6 @@ use crate::geometry::{Height, Row, Width};
 /// Options for how to display a document within a `Pane`.
 #[derive(Debug, Clone, Copy)]
 pub struct RenderOptions {
-    /// Whether to highlight the node in the document located at the `path` argument given to
-    /// `pretty_print`.
-    pub highlight_cursor: bool,
     /// Position the document such that the top of the cursor is at this height,
     /// where 1.0 is the top line of the Pane and 0.0 is the bottom line.
     pub cursor_height: f32,

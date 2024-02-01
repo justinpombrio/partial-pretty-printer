@@ -1,45 +1,78 @@
-use super::pane::{Pane, PaneError};
 use super::pane_notation::{Label, PaneNotation, PaneSize};
 use super::pretty_window::PrettyWindow;
-use crate::geometry::{Height, Pos, Rectangle, Width};
-use crate::pretty_printing::{pretty_print, PrettyDoc};
-use crate::style::{Shade, ShadedStyle};
+use crate::geometry::{is_char_full_width, Height, Pos, Rectangle, Width};
+use crate::pretty_printing::{pretty_print, LineContents, Piece, PrettyDoc, PrintingError};
 
-/// A list of child indices, describing the path from the root to a node in the document.
+/// A list of child indices describing the path from the root to a node in the document.
 pub type Path = Vec<usize>;
+
+/// Errors that can occur while attempting to render to a `Pane`.
+#[derive(thiserror::Error, Debug)]
+pub enum PaneError<W: PrettyWindow> {
+    #[error(
+        "invalid pane notation: PaneSize::Dyanmic may only be used in a PaneNotation::Doc pane"
+    )]
+    InvalidUseOfDynamic,
+    #[error("missing document in pane notation: {0}")]
+    MissingLabel(String),
+
+    #[error("Window error: {0}")]
+    PrettyWindowError(#[source] W::Error),
+
+    #[error("Printing error: {0}")]
+    PrintingError(#[from] PrintingError),
+}
 
 /// Render to this pane according to the given [PaneNotation].
 ///
 /// - `window` is the `PrettyWindow` to display to.
-/// - `note` is the `PaneNotation` to render. It says how to break up the screen into rectangular
+/// - `notation` is the `PaneNotation` to render. It says how to break up the screen into rectangular
 ///   "panes", and which document to display in each pane. It does not contain the Documents
 ///   directly, instead it references them by `Label`.
 /// - `get_content` is a function to look up a document by label. It returns both the document, and
 ///   the path to the node in the document to focus on.
-pub fn pane_print<'d, L: Label, D: PrettyDoc<'d>, W: PrettyWindow>(
+pub fn pane_print<'d, L, D, W>(
     window: &mut W,
-    note: &PaneNotation<L>,
+    notation: &PaneNotation<L, D::Style>,
     get_content: &impl Fn(L) -> Option<(D, Path)>,
-) -> Result<(), PaneError<W>> {
-    let mut pane = Pane::new(window)?;
-    pane_print_rec(&mut pane, note, get_content)
+) -> Result<(), PaneError<W>>
+where
+    L: Label,
+    D: PrettyDoc<'d>,
+    W: PrettyWindow<Style = D::Style, Mark = D::Mark>,
+{
+    let size = window.size().map_err(PaneError::PrettyWindowError)?;
+    let rect = Rectangle::from_size(size);
+    pane_print_rec(window, notation, get_content, rect)
 }
 
 type DynSizeFn<'l, W> = Box<dyn FnOnce(usize) -> Result<usize, PaneError<W>> + 'l>;
 
-fn pane_print_rec<'d, L: Label, D: PrettyDoc<'d>, W: PrettyWindow>(
-    pane: &mut Pane<W>,
-    note: &PaneNotation<L>,
+fn pane_print_rec<'d, L, D, W>(
+    window: &mut W,
+    notation: &PaneNotation<L, D::Style>,
     get_content: &impl Fn(L) -> Option<(D, Path)>,
-) -> Result<(), PaneError<W>> {
-    match note {
+    rect: Rectangle,
+) -> Result<(), PaneError<W>>
+where
+    L: Label,
+    D: PrettyDoc<'d>,
+    W: PrettyWindow<Style = D::Style, Mark = D::Mark>,
+{
+    match notation {
         PaneNotation::Empty => (),
         PaneNotation::Fill { ch, style } => {
-            for row in pane.rect.min_row..pane.rect.max_row {
-                let col = pane.rect.min_col;
-                let shaded_style = ShadedStyle::new(*style, Shade::background());
-                let len = pane.rect.max_col - col;
-                pane.fill(Pos { row, col }, *ch, len, shaded_style)?;
+            let is_full_width = is_char_full_width(*ch);
+            let char_width = if is_full_width { 2 } else { 1 };
+
+            for row in rect.min_row..rect.max_row {
+                let mut col = rect.min_col;
+                while col + char_width <= rect.max_col {
+                    window
+                        .print_char(*ch, Pos { row, col }, None, style, is_full_width)
+                        .map_err(PaneError::PrettyWindowError)?;
+                    col += char_width;
+                }
             }
         }
         PaneNotation::Doc {
@@ -48,20 +81,19 @@ fn pane_print_rec<'d, L: Label, D: PrettyDoc<'d>, W: PrettyWindow>(
         } => {
             let (doc, path) = get_content(label.clone())
                 .ok_or_else(|| PaneError::MissingLabel(format!("{:?}", label)))?;
-            let doc_width = render_options.choose_width(pane.rect.width());
-            let focal_line = render_options.focal_line(pane.rect.height());
-            let (mut upward_printer, mut downward_printer) = pretty_print(doc, doc_width, &path);
-            let highlight_cursor = render_options.highlight_cursor;
+            let doc_width = render_options.choose_width(rect.width());
+            let focal_line = render_options.focal_line(rect.height());
+            let (mut upward_printer, mut downward_printer) = pretty_print(doc, doc_width, &path)?;
             for row in (0..focal_line).into_iter().rev() {
                 if let Some(contents) = upward_printer.next() {
-                    pane.print_line(row, contents, highlight_cursor)?;
+                    print_line_contents(window, contents?, Pos { row, col: 0 }, rect)?;
                 } else {
                     break;
                 }
             }
-            for row in focal_line..pane.rect.height() {
+            for row in focal_line..rect.height() {
                 if let Some(contents) = downward_printer.next() {
-                    pane.print_line(row, contents, highlight_cursor)?;
+                    print_line_contents(window, contents?, Pos { row, col: 0 }, rect)?;
                 } else {
                     break;
                 }
@@ -76,40 +108,38 @@ fn pane_print_rec<'d, L: Label, D: PrettyDoc<'d>, W: PrettyWindow>(
                     } else {
                         return Err(PaneError::InvalidUseOfDynamic);
                     };
-                    let height = pane.rect.height();
+                    let height = rect.height();
                     let func = move |available_width: usize| {
                         let (doc, path) = get_content(label.clone())
                             .ok_or_else(|| PaneError::MissingLabel(format!("{:?}", label)))?;
-                        Ok(doc_width(doc, &path, height, available_width as Width) as usize)
+                        Ok(doc_width(doc, &path, height, available_width as Width)? as usize)
                     };
                     dynamic_sizes.push(Box::new(func) as DynSizeFn<W>);
                 }
             }
 
             let child_sizes = &panes.iter().map(|(size, _)| *size).collect::<Vec<_>>();
-            let widths: Vec<_> = divvy(pane.rect.width() as usize, &child_sizes, dynamic_sizes)?
+            let widths: Vec<_> = divvy(rect.width() as usize, &child_sizes, dynamic_sizes)?
                 .into_iter()
                 .map(|n| n as Width)
                 .collect();
 
             // Split this pane's rectangle horizontally (a.k.a. vertical slices) into multiple subpanes.
-            let mut col = pane.rect.min_col;
-            let pane_rect = pane.rect;
+            let mut col = rect.min_col;
             let rects = widths.into_iter().map(|width| {
                 let old_col = col;
                 col += width;
                 Rectangle {
                     min_col: old_col,
                     max_col: col,
-                    min_row: pane_rect.min_row,
-                    max_row: pane_rect.max_row,
+                    min_row: rect.min_row,
+                    max_row: rect.max_row,
                 }
             });
 
             let child_notes = &panes.iter().map(|(_, note)| note).collect::<Vec<_>>();
-            for (rect, child_note) in rects.into_iter().zip(child_notes.iter()) {
-                let mut child_pane = pane.sub_pane(rect).ok_or(PaneError::NotSubPane)?;
-                pane_print_rec(&mut child_pane, child_note, get_content)?;
+            for (child_rect, child_note) in rects.into_iter().zip(child_notes.iter()) {
+                pane_print_rec(window, child_note, get_content, child_rect)?;
             }
         }
         PaneNotation::Vert(panes) => {
@@ -121,25 +151,25 @@ fn pane_print_rec<'d, L: Label, D: PrettyDoc<'d>, W: PrettyWindow>(
                     } else {
                         return Err(PaneError::InvalidUseOfDynamic);
                     };
-                    let width = pane.rect.width();
+                    let width = rect.width();
                     let func = move |available_height: usize| {
                         let (doc, path) = get_content(label.clone())
                             .ok_or_else(|| PaneError::MissingLabel(format!("{:?}", label)))?;
-                        Ok(doc_height(doc, &path, width, available_height as Height) as usize)
+                        Ok(doc_height(doc, &path, width, available_height as Height)? as usize)
                     };
                     dynamic_sizes.push(Box::new(func) as DynSizeFn<W>);
                 }
             }
 
             let child_sizes = &panes.iter().map(|(size, _)| *size).collect::<Vec<_>>();
-            let heights: Vec<_> = divvy(pane.rect.height() as usize, &child_sizes, dynamic_sizes)?
+            let heights: Vec<_> = divvy(rect.height() as usize, &child_sizes, dynamic_sizes)?
                 .into_iter()
                 .map(|n| n as Height)
                 .collect();
 
             // Split this pane's rectangle vertically (a.k.a. horizontal slices) into multiple subpanes.
-            let mut row = pane.rect.min_row;
-            let pane_rect = pane.rect;
+            let mut row = rect.min_row;
+            let pane_rect = rect;
             let rects = heights.into_iter().map(|height| {
                 let old_row = row;
                 row += height;
@@ -152,12 +182,11 @@ fn pane_print_rec<'d, L: Label, D: PrettyDoc<'d>, W: PrettyWindow>(
             });
 
             let child_notes = &panes.iter().map(|(_, note)| note).collect::<Vec<_>>();
-            for (rect, child_note) in rects.zip(child_notes.iter()) {
-                let mut child_pane = pane.sub_pane(rect).ok_or(PaneError::NotSubPane)?;
-                pane_print_rec(&mut child_pane, child_note, get_content)?;
+            for (child_rect, child_note) in rects.zip(child_notes.iter()) {
+                pane_print_rec(window, child_note, get_content, child_rect)?;
             }
         }
-    };
+    }
     Ok(())
 }
 
@@ -168,9 +197,9 @@ fn doc_height<'d>(
     path: &[usize],
     width: Width,
     max_height: Height,
-) -> Height {
-    let (_, downward_printer) = pretty_print(doc, width, path);
-    downward_printer.take(max_height as usize).count() as Height
+) -> Result<Height, PrintingError> {
+    let (_, downward_printer) = pretty_print(doc, width, path)?;
+    Ok(downward_printer.take(max_height as usize).count() as Height)
 }
 
 /// Determine how many columns a document would take to print, if given `height` lines. If it would
@@ -180,14 +209,65 @@ fn doc_width<'d>(
     path: &[usize],
     height: Height,
     max_width: Width,
-) -> Width {
-    let (_, downward_printer) = pretty_print(doc, max_width, path);
+) -> Result<Width, PrintingError> {
+    let (_, downward_printer) = pretty_print(doc, max_width, path)?;
     let lines = downward_printer.take(height as usize);
     let mut width = 0;
     for line in lines {
-        width = width.max(line.to_string().chars().count() as Width);
+        let line = line?;
+        width = width.max(line.width());
     }
-    width
+    Ok(width)
+}
+
+/// Displays LineContents in the given window, at the given position relative to the rect.
+/// Does not display anything that falls outside of the rect.
+fn print_line_contents<'d, D, W>(
+    window: &mut W,
+    contents: LineContents<'d, D>,
+    relative_pos: Pos,
+    rect: Rectangle,
+) -> Result<(), PaneError<W>>
+where
+    D: PrettyDoc<'d>,
+    W: PrettyWindow<Style = D::Style, Mark = D::Mark>,
+{
+    // Compute pos in absolute window coords
+    let mut pos = Pos {
+        row: rect.min_row + relative_pos.row,
+        col: rect.min_col + relative_pos.col,
+    };
+    if pos.row >= rect.max_row {
+        return Ok(());
+    }
+
+    // Print indentation
+    for _ in 0..contents.indentation.num_spaces {
+        if pos.col >= rect.max_col {
+            return Ok(());
+        }
+        let mark = contents.indentation.mark;
+        window
+            .print_char(' ', pos, mark, &D::Style::default(), false)
+            .map_err(PaneError::PrettyWindowError)?;
+        pos.col += 1;
+    }
+
+    // Print each piece
+    for piece in contents.pieces {
+        for ch in piece.str.chars() {
+            let is_full_width = is_char_full_width(ch);
+            let char_width = if is_full_width { 2 } else { 1 };
+            if pos.col + char_width > rect.max_col {
+                return Ok(());
+            }
+            window
+                .print_char(ch, pos, piece.mark, piece.style, is_full_width)
+                .map_err(PaneError::PrettyWindowError)?;
+            pos.col += char_width;
+        }
+    }
+    Ok(())
 }
 
 /// Divvy space ("cookies") up among various PaneSize demands. Some demands are fixed size, and
@@ -210,9 +290,9 @@ fn divvy<'d, W: PrettyWindow>(
     // Allocate remaining cookies among the dynamic demands.
     let mut dynamic_allocation = vec![];
     for func in dynamic_sizes {
-        let given_cookies = func(cookies)?;
-        cookies -= given_cookies;
-        dynamic_allocation.push(given_cookies);
+        let eaten_cookies = func(cookies)?;
+        cookies -= eaten_cookies;
+        dynamic_allocation.push(eaten_cookies);
     }
     let mut dynamic_allocation = dynamic_allocation.into_iter();
 

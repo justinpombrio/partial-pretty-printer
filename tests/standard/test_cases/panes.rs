@@ -2,7 +2,7 @@ use crate::standard::pretty_testing::SimpleDoc;
 use partial_pretty_printer::{
     examples::json::{json_list, json_string},
     pane::{pane_print, Label, PaneNotation, PaneSize, PlainText, RenderOptions, WidthStrategy},
-    PrettyDoc, Style,
+    PrettyDoc,
 };
 use std::fmt::Debug;
 use std::marker::PhantomData;

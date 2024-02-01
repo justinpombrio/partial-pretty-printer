@@ -48,6 +48,15 @@ impl Pos {
 }
 
 impl Rectangle {
+    pub fn from_size(size: Size) -> Rectangle {
+        Rectangle {
+            min_row: 0,
+            min_col: 0,
+            max_row: size.height,
+            max_col: size.width,
+        }
+    }
+
     pub fn width(self) -> Width {
         self.max_col - self.min_col
     }
@@ -79,7 +88,12 @@ impl Add<Size> for Pos {
 /// The width of a string in columns. May be an overestimate. Not to be confused with number of
 /// bytes, Unicode code points, or Unicode grapheme clusters.
 pub fn str_width(s: &str) -> Width {
-    unicode_width::UnicodeWidthStr::width_cjk(s) as Width
+    unicode_width::UnicodeWidthStr::width(s) as Width
+}
+
+/// Like [`str_width`] but for a single character.
+pub fn is_char_full_width(ch: char) -> bool {
+    unicode_width::UnicodeWidthChar::width(ch) == Some(2)
 }
 
 impl fmt::Display for Pos {

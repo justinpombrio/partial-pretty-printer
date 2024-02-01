@@ -23,7 +23,7 @@ impl<S> SimpleDoc<S> {
     }
 }
 
-impl<'a, S: fmt::Debug> PrettyDoc<'a> for &'a SimpleDoc<S> {
+impl<'a, S: fmt::Debug + Default> PrettyDoc<'a> for &'a SimpleDoc<S> {
     type Id = usize;
     type Style = S;
     type Mark = ();

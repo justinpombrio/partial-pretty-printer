@@ -101,9 +101,22 @@
 //! Secondly, notice that the iterators contain [`LineContents`] instead of strings:
 //!
 //! ```ignore
-//! struct LineContents<'d> {
-//!     spaces: (Width, Shade),
-//!     contents: Vec<(&'d str, Style, Shade)>,
+//! pub struct LineContents<'d, D: PrettyDoc<'d>> {
+//!     pub indentation: Indentation<'d, D>,
+//!     pub pieces: Vec<Piece<'d, D>>,
+//! }
+//!
+//! pub struct Indentation<'d, D: PrettyDoc<'d>> {
+//!     pub num_spaces: Width,
+//!     pub doc_id: D::Id,
+//!     pub mark: Option<&'d D::Mark>,
+//! }
+//!
+//! pub struct Piece<'d, D: PrettyDoc<'d>> {
+//!     pub str: &'d str,
+//!     pub style: &'d D::Style,
+//!     pub doc_id: D::Id,
+//!     pub mark: Option<&'d D::Mark>,
 //! }
 //! ```
 //!
@@ -153,8 +166,6 @@ pub mod testing {
     pub use super::pretty_printing::oracular_pretty_print;
 }
 
-/*
-
 pub mod pane {
     //! Print to multiple rectangular sub-panes of a window.
     //!
@@ -175,11 +186,16 @@ pub mod pane {
     //! With a pane notation and window, you can _pane print_:
     //!
     //! ```ignore
-    //! fn pane_print<L: Label, D: PrettyDoc, W: PrettyWindow>(
+    //! pub fn pane_print<'d, L, D, W>(
     //!     window: &mut W,
-    //!     note: &PaneNotation<L>,
+    //!     notation: &PaneNotation<L, D::Style>,
     //!     get_content: &impl Fn(L) -> Option<(D, Path)>,
-    //! ) -> Result<(), PaneError<W>>;
+    //! ) -> Result<(), PaneError<W>>
+    //! where
+    //!     L: Label,
+    //!     D: PrettyDoc<'d>,
+    //!     W: PrettyWindow<Style = D::Style, Mark = D::Mark>,
+    //! { ... }
     //! ```
     //!
     //! - `window` is the `PrettyWindow` to display to.
@@ -195,4 +211,3 @@ pub mod pane {
         RenderOptions, WidthStrategy,
     };
 }
-*/

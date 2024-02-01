@@ -1,4 +1,4 @@
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct BasicStyle {
     pub color: Color,
     pub bold: bool,
@@ -27,8 +27,9 @@ impl BasicStyle {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub enum Color {
+    #[default]
     White,
     Red,
     Green,

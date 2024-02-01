@@ -10,7 +10,7 @@ use std::hash::Hash;
 pub trait PrettyDoc<'d>: Copy {
     type Id: Eq + Hash + Copy + Default + fmt::Debug;
     /// The style used in this document's notation.
-    type Style: fmt::Debug + 'd;
+    type Style: fmt::Debug + Default + 'd;
     /// Arbitrary data associated with some nodes in the document. Returned as part of
     /// `LineContents` when pretty printing.
     type Mark: fmt::Debug + 'd;
