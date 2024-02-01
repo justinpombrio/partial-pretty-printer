@@ -1,7 +1,7 @@
 use super::pane_notation::{Label, PaneNotation, PaneSize};
 use super::pretty_window::PrettyWindow;
 use crate::geometry::{is_char_full_width, Height, Pos, Rectangle, Width};
-use crate::pretty_printing::{pretty_print, LineContents, Piece, PrettyDoc, PrintingError};
+use crate::pretty_printing::{pretty_print, LineContents, PrettyDoc, PrintingError};
 
 /// A list of child indices describing the path from the root to a node in the document.
 pub type Path = Vec<usize>;

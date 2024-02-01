@@ -30,7 +30,7 @@ pub trait PrettyDoc<'d>: Copy {
     /// Look up a mark that applies to only part of this node. Whenever `Notation::Mark(mark_name,
     /// notation)` is encountered while printing, `partial_node_mark(mark_name)` is invoked. If it
     /// returns `Some(mark)`, then that mark is applied to `notation`.
-    fn partial_node_mark(self, mark_name: &'static str) -> Option<&'d Self::Mark> {
+    fn partial_node_mark(self, _mark_name: &'static str) -> Option<&'d Self::Mark> {
         None
     }
 

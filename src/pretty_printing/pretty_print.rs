@@ -4,7 +4,6 @@ use super::consolidated_notation::{
 use super::pretty_doc::PrettyDoc;
 use crate::geometry::{str_width, Width};
 use crate::infra::span;
-use std::collections::HashSet;
 use std::iter::Iterator;
 
 /// Pretty print a document, focused at the node found by traversing `path` from the root.
@@ -166,8 +165,6 @@ impl<'d, D: PrettyDoc<'d>> Seeker<'d, D> {
         mut self,
         path: &[usize],
     ) -> Result<(UpwardPrinter<'d, D>, DownwardPrinter<'d, D>), PrintingError> {
-        use ConsolidatedNotation::*;
-
         span!("seek");
 
         // Seek to the descendant given by `path`.
@@ -280,7 +277,7 @@ impl<'d, D: PrettyDoc<'d>> Seeker<'d, D> {
 
                         return Ok(());
                     }
-                    Child(i, child) => {
+                    Child(_i, child) => {
                         self.next.push(chunk.sub_chunk(child)?);
                         break;
                     }
@@ -362,7 +359,7 @@ impl<'d, D: PrettyDoc<'d>> DownwardPrinter<'d, D> {
                     });
                     prefix_len += str_width(text);
                 }
-                Newline(indent) => {
+                Newline(_indent) => {
                     self.next.push(chunk);
                     return Ok(Some(LineContents {
                         indentation,
@@ -603,7 +600,7 @@ fn fits<'d, D: PrettyDoc<'d>>(
                 notations.push(note2.eval()?.0);
                 notations.push(note1.eval()?.0);
             }
-            Choice(opt1, opt2) => {
+            Choice(_opt1, opt2) => {
                 // This assumes that:
                 //     For every layout a in opt1 and b in opt2,
                 //     first_line_len(a) >= first_line_len(b)

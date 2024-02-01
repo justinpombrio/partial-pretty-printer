@@ -64,14 +64,6 @@ impl Rectangle {
     pub fn height(self) -> Height {
         self.max_row - self.min_row
     }
-
-    /// Does this rectangle completely cover the other rectangle?
-    pub fn covers(self, other: Rectangle) -> bool {
-        self.min_row <= other.min_row
-            && other.max_row <= self.max_row
-            && self.min_col <= other.min_col
-            && other.max_col <= self.max_col
-    }
 }
 
 impl Add<Size> for Pos {

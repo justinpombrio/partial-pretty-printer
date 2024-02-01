@@ -135,9 +135,7 @@ impl<'d, D: PrettyDoc<'d>> DelayedConsolidatedNotation<'d, D> {
     }
 
     /// Expand this node, to get a usable `ConsolidatedNotation` and its mark (if any).
-    pub fn eval(
-        mut self,
-    ) -> Result<(ConsolidatedNotation<'d, D>, Option<&'d D::Mark>), PrintingError> {
+    pub fn eval(self) -> Result<(ConsolidatedNotation<'d, D>, Option<&'d D::Mark>), PrintingError> {
         let notation = self.eval_notation()?;
         Ok((notation, self.mark))
     }
@@ -172,7 +170,7 @@ impl<'d, D: PrettyDoc<'d>> DelayedConsolidatedNotation<'d, D> {
                     cnote2.notation = note2;
                     return Ok(ConsolidatedNotation::Concat(cnote1, cnote2));
                 }
-                Choice(note1, note2) if self.flat => {
+                Choice(note1, _note2) if self.flat => {
                     self.notation = note1;
                 }
                 Choice(note1, note2) => {
@@ -197,7 +195,7 @@ impl<'d, D: PrettyDoc<'d>> DelayedConsolidatedNotation<'d, D> {
                     Some(n) if *i >= n => {
                         return Err(PrintingError::ChildIndexOutOfBounds { index: *i, len: n })
                     }
-                    Some(n) => {
+                    Some(_) => {
                         self.doc = self.doc.unwrap_child(*i);
                         self.notation = &self.doc.notation().0;
                         if let Some(mark) = self.doc.whole_node_mark() {

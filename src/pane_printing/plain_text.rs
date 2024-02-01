@@ -1,7 +1,6 @@
 use super::pretty_window::PrettyWindow;
 use crate::geometry::{Height, Pos, Size, Width};
 use std::fmt;
-use std::iter;
 
 /// Render a document in plain text.
 #[derive(Debug)]
@@ -20,7 +19,7 @@ impl fmt::Display for PlainText {
                     write!(f, "{}", ch)?;
                 }
             }
-            writeln!(f);
+            writeln!(f)?;
         }
         Ok(())
     }
@@ -38,13 +37,6 @@ impl PlainText {
     /// Construct a screen with the given width and unbounded height.
     pub fn new_unbounded_height(width: Width) -> PlainText {
         PlainText::new(width, Height::max_value())
-    }
-
-    fn get_mut_line(&mut self, line_num: usize) -> &mut Vec<char> {
-        if self.lines.len() < line_num + 1 {
-            self.lines.resize_with(line_num + 1, Vec::new);
-        }
-        &mut self.lines[line_num as usize]
     }
 }
 

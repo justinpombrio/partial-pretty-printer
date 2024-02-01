@@ -4,8 +4,6 @@ use partial_pretty_printer::{
 };
 use std::fmt;
 
-// TODO: temporary
-#[allow(unused)]
 pub fn punct(s: &'static str) -> Notation<()> {
     lit(s, ())
 }
@@ -77,7 +75,6 @@ fn print_above_and_below<'d, D: PrettyDoc<'d>>(
     (lines_above, lines_below)
 }
 
-#[allow(unused)]
 pub fn all_paths<'d, D: PrettyDoc<'d>>(doc: D) -> Vec<Vec<usize>> {
     fn recur<'d, D: PrettyDoc<'d>>(doc: D, path: &mut Vec<usize>, paths: &mut Vec<Vec<usize>>) {
         paths.push(path.clone());
@@ -92,7 +89,6 @@ pub fn all_paths<'d, D: PrettyDoc<'d>>(doc: D) -> Vec<Vec<usize>> {
     paths
 }
 
-#[allow(unused)]
 pub fn print_region<'d, D: PrettyDoc<'d>>(
     doc: D,
     width: Width,

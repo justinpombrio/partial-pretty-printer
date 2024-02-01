@@ -1,4 +1,4 @@
-use crate::geometry::{Pos, Size, Width};
+use crate::geometry::{Pos, Size};
 use std::fmt;
 
 /// A "window" that supports the methods necessary to render a set of

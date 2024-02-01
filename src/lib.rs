@@ -1,5 +1,3 @@
-// TODO: temporary
-#![allow(unused)]
 // TODO: After rewrite, ensure that these docs are up to date.
 //       Especially, e.g., referenced code like `PrettyDoc`.
 //! This is a pretty printing library for tree-shaped documents, such as ASTs. Given declarative
@@ -158,7 +156,9 @@ pub mod notation_constructors;
 
 pub use geometry::{Col, Height, Pos, Row, Size, Width};
 pub use notation::Notation;
-pub use pretty_printing::{pretty_print, pretty_print_to_string, LineContents, PrettyDoc};
+pub use pretty_printing::{
+    pretty_print, pretty_print_to_string, Indentation, LineContents, Piece, PrettyDoc,
+};
 pub use valid_notation::{NotationError, ValidNotation};
 
 pub mod testing {

@@ -9,7 +9,6 @@ use crate::pretty_printing::PrettyDoc;
 use crate::valid_notation::ValidNotation;
 use once_cell::sync::Lazy;
 use std::fmt::Debug;
-use std::ops::Deref;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 #[derive(Debug, Clone, PartialEq, Eq)]

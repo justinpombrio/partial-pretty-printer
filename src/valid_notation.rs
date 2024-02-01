@@ -1,5 +1,4 @@
 use crate::notation::Notation;
-use std::fmt;
 
 /// A Notation that has passed validation. Obtain one by constructing a [Notation] and then calling
 /// [`Notation::validate`].
@@ -96,7 +95,7 @@ impl<S> Notation<S> {
                 note1.validate_rec(flat, ctx)?;
                 note2.validate_rec(flat, ctx)?;
             }
-            IfEmptyText(note1, note2) if ctx.in_count() => return Err(IfEmptyTextInsideCount),
+            IfEmptyText(_, _) if ctx.in_count() => return Err(IfEmptyTextInsideCount),
             IfEmptyText(note1, note2) => {
                 note1.validate_rec(flat, InIfEmptyText)?;
                 note2.validate_rec(flat, InIfEmptyText)?;
