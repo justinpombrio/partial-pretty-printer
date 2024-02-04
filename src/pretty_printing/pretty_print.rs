@@ -78,17 +78,6 @@ impl<'d, D: PrettyDoc<'d>> Chunk<'d, D> {
         let (notation, mark) = notation.eval()?;
         Ok(Chunk { id, mark, notation })
     }
-
-    // TODO: This should be handled by ConsolidatedNotation instead
-    fn sub_chunk(
-        &self,
-        notation: DelayedConsolidatedNotation<'d, D>,
-    ) -> Result<Self, PrintingError> {
-        let id = notation.doc().id();
-        let (notation, mark) = notation.eval()?;
-        let mark = mark.or(self.mark);
-        Ok(Chunk { id, mark, notation })
-    }
 }
 
 // TODO: Remove D::Id from these? Seems redundant with marks.
@@ -224,8 +213,8 @@ impl<'d, D: PrettyDoc<'d>> Seeker<'d, D> {
                     Empty => (),
                     Textual(_, _, _) | Newline(_) => self.prev.push(chunk),
                     Concat(left, right) => {
-                        self.next.push(chunk.sub_chunk(right)?);
-                        self.next.push(chunk.sub_chunk(left)?);
+                        self.next.push(Chunk::new(right)?);
+                        self.next.push(Chunk::new(left)?);
                     }
                     Choice(_, _) if chunk.id == parent_doc_id => {
                         self.next.push(chunk);
@@ -269,17 +258,17 @@ impl<'d, D: PrettyDoc<'d>> Seeker<'d, D> {
                     }
                     Child(i, child) if chunk.id == parent_doc_id && i == child_index => {
                         // Found!
-                        self.next.push(chunk.sub_chunk(child)?);
+                        self.next.push(Chunk::new(child)?);
 
                         return Ok(());
                     }
                     Child(_i, child) => {
-                        self.next.push(chunk.sub_chunk(child)?);
+                        self.next.push(Chunk::new(child)?);
                         break;
                     }
                     Choice(opt1, opt2) => {
                         let choice = choose(self.width, prefix_len, opt1, opt2, &self.next)?;
-                        self.next.push(chunk.sub_chunk(choice)?);
+                        self.next.push(Chunk::new(choice)?);
                         break;
                     }
                 }
@@ -354,14 +343,14 @@ impl<'d, D: PrettyDoc<'d>> DownwardPrinter<'d, D> {
                     }));
                 }
                 Concat(left, right) => {
-                    self.next.push(chunk.sub_chunk(right)?);
-                    self.next.push(chunk.sub_chunk(left)?);
+                    self.next.push(Chunk::new(right)?);
+                    self.next.push(Chunk::new(left)?);
                 }
                 Choice(opt1, opt2) => {
                     let choice = choose(self.width, prefix_len, opt1, opt2, &self.next)?;
-                    self.next.push(chunk.sub_chunk(choice)?);
+                    self.next.push(Chunk::new(choice)?);
                 }
-                Child(_, child_note) => self.next.push(chunk.sub_chunk(child_note)?),
+                Child(_, child_note) => self.next.push(Chunk::new(child_note)?),
             }
         }
 
@@ -413,7 +402,7 @@ impl<'d, D: PrettyDoc<'d>> UpwardPrinter<'d, D> {
                 }
                 Choice(opt1, opt2) => {
                     let choice = choose(self.width, prefix_len, opt1, opt2, &self.next)?;
-                    self.prev.push(chunk.sub_chunk(choice)?);
+                    self.prev.push(Chunk::new(choice)?);
 
                     // Reset everything. This is equivalent to a recursive call.
                     self.seek_end();
@@ -482,11 +471,11 @@ impl<'d, D: PrettyDoc<'d>> UpwardPrinter<'d, D> {
                     return Ok(Some(indent));
                 }
                 Concat(left, right) => {
-                    self.prev.push(chunk.sub_chunk(left)?);
-                    self.prev.push(chunk.sub_chunk(right)?);
+                    self.prev.push(Chunk::new(left)?);
+                    self.prev.push(Chunk::new(right)?);
                 }
                 Choice(_, _) => self.next.push(chunk),
-                Child(_, note) => self.prev.push(chunk.sub_chunk(note)?),
+                Child(_, note) => self.prev.push(Chunk::new(note)?),
             }
         }
         Ok(None)
