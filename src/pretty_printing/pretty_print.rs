@@ -188,7 +188,7 @@ impl<'d, D: PrettyDoc<'d>> Seeker<'d, D> {
                 Empty | Concat(_, _) | Choice(_, _) | Child(_, _) => {
                     unreachable!()
                 }
-                Textual(_, _, _) => self.next.push(chunk),
+                Textual(_) => self.next.push(chunk),
                 Newline(_) => {
                     self.next.push(chunk);
                     break;
@@ -211,7 +211,7 @@ impl<'d, D: PrettyDoc<'d>> Seeker<'d, D> {
             while let Some(chunk) = self.next.pop() {
                 match chunk.notation {
                     Empty => (),
-                    Textual(_, _, _) | Newline(_) => self.prev.push(chunk),
+                    Textual(_) | Newline(_) => self.prev.push(chunk),
                     Concat(left, right) => {
                         self.next.push(Chunk::new(right)?);
                         self.next.push(Chunk::new(left)?);
@@ -237,7 +237,7 @@ impl<'d, D: PrettyDoc<'d>> Seeker<'d, D> {
             while let Some(chunk) = self.prev.pop() {
                 match chunk.notation {
                     Empty | Concat(_, _) => unreachable!(),
-                    Textual(_, _, _) | Choice(_, _) | Child(_, _) => self.next.push(chunk),
+                    Textual(_) | Choice(_, _) | Child(_, _) => self.next.push(chunk),
                     Newline(indent) => {
                         prefix_len = indent;
                         self.prev.push(chunk);
@@ -252,8 +252,8 @@ impl<'d, D: PrettyDoc<'d>> Seeker<'d, D> {
             while let Some(chunk) = self.next.pop() {
                 match chunk.notation {
                     Empty | Concat(_, _) | Newline(_) => unreachable!(),
-                    Textual(_str, width, _style) => {
-                        prefix_len += width;
+                    Textual(textual) => {
+                        prefix_len += textual.width;
                         self.prev.push(chunk);
                     }
                     Child(i, child) if chunk.id == parent_doc_id && i == child_index => {
@@ -326,14 +326,14 @@ impl<'d, D: PrettyDoc<'d>> DownwardPrinter<'d, D> {
         while let Some(chunk) = self.next.pop() {
             match chunk.notation {
                 Empty => (),
-                Textual(str, width, style) => {
+                Textual(textual) => {
                     pieces.push(Piece {
-                        str,
-                        style,
+                        str: textual.str,
+                        style: textual.style,
                         doc_id: chunk.id,
                         mark: chunk.mark,
                     });
-                    prefix_len += width;
+                    prefix_len += textual.width;
                 }
                 Newline(_indent) => {
                     self.next.push(chunk);
@@ -396,8 +396,8 @@ impl<'d, D: PrettyDoc<'d>> UpwardPrinter<'d, D> {
         //    the choice contained a newline.
         while let Some(chunk) = self.next.pop() {
             match chunk.notation {
-                Textual(_, width, _) => {
-                    prefix_len += width;
+                Textual(textual) => {
+                    prefix_len += textual.width;
                     self.prev.push(chunk);
                 }
                 Choice(opt1, opt2) => {
@@ -431,9 +431,9 @@ impl<'d, D: PrettyDoc<'d>> UpwardPrinter<'d, D> {
         let mut pieces = vec![];
         while let Some(chunk) = self.next.pop() {
             match chunk.notation {
-                Textual(str, _width, style) => pieces.push(Piece {
-                    str,
-                    style,
+                Textual(textual) => pieces.push(Piece {
+                    str: textual.str,
+                    style: textual.style,
                     doc_id: chunk.id,
                     mark: chunk.mark,
                 }),
@@ -465,7 +465,7 @@ impl<'d, D: PrettyDoc<'d>> UpwardPrinter<'d, D> {
         while let Some(chunk) = self.prev.pop() {
             match chunk.notation {
                 Empty => (),
-                Textual(_, _, _) => self.next.push(chunk),
+                Textual(_) => self.next.push(chunk),
                 Newline(indent) => {
                     self.prev.push(chunk);
                     return Ok(Some(indent));
@@ -544,9 +544,9 @@ fn fits<'d, D: PrettyDoc<'d>>(
 
         match notation {
             Empty => (),
-            Textual(_, width, _) => {
-                if width <= remaining {
-                    remaining -= width;
+            Textual(textual) => {
+                if textual.width <= remaining {
+                    remaining -= textual.width;
                 } else {
                     return Ok(false);
                 }

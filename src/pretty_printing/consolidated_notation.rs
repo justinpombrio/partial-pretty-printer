@@ -17,7 +17,7 @@ use std::fmt;
 pub enum ConsolidatedNotation<'d, D: PrettyDoc<'d>> {
     Empty,
     Newline(Width),
-    Textual(&'d str, Width, &'d D::Style),
+    Textual(Textual<'d, D>),
     Concat(
         DelayedConsolidatedNotation<'d, D>,
         DelayedConsolidatedNotation<'d, D>,
@@ -27,6 +27,13 @@ pub enum ConsolidatedNotation<'d, D: PrettyDoc<'d>> {
         DelayedConsolidatedNotation<'d, D>,
     ),
     Child(usize, DelayedConsolidatedNotation<'d, D>),
+}
+
+#[derive(Debug)]
+pub struct Textual<'d, D: PrettyDoc<'d>> {
+    pub str: &'d str,
+    pub width: Width,
+    pub style: &'d D::Style,
 }
 
 /// A `ConsolidatedNotation` that has not yet been evaluated, to prevent the entire notation tree
@@ -50,6 +57,17 @@ struct JoinPos<'d, D: PrettyDoc<'d>> {
     join: &'d Notation<D::Style>,
 }
 
+impl<'d, D: PrettyDoc<'d>> Clone for Textual<'d, D> {
+    fn clone(&self) -> Self {
+        Textual {
+            str: self.str,
+            width: self.width,
+            style: self.style,
+        }
+    }
+}
+impl<'d, D: PrettyDoc<'d>> Copy for Textual<'d, D> {}
+
 impl<'d, D: PrettyDoc<'d>> Clone for ConsolidatedNotation<'d, D> {
     fn clone(&self) -> Self {
         use ConsolidatedNotation::*;
@@ -57,7 +75,7 @@ impl<'d, D: PrettyDoc<'d>> Clone for ConsolidatedNotation<'d, D> {
         match self {
             Empty => Empty,
             Newline(ind) => Newline(*ind),
-            Textual(str, width, style) => Textual(*str, *width, *style),
+            Textual(textual) => Textual(*textual),
             Concat(note1, note2) => Concat(*note1, *note2),
             Choice(note1, note2) => Choice(*note1, *note2),
             Child(i, child) => Child(*i, *child),
@@ -146,18 +164,22 @@ impl<'d, D: PrettyDoc<'d>> DelayedConsolidatedNotation<'d, D> {
                 Empty => return Ok(ConsolidatedNotation::Empty),
                 Newline => return Ok(ConsolidatedNotation::Newline(self.indent)),
                 Literal(lit) => {
-                    return Ok(ConsolidatedNotation::Textual(
-                        lit.str(),
-                        lit.width(),
-                        lit.style(),
-                    ))
+                    return Ok(ConsolidatedNotation::Textual(Textual {
+                        str: lit.str(),
+                        width: lit.width(),
+                        style: lit.style(),
+                    }))
                 }
                 Text(style) => {
                     if self.doc.num_children().is_some() {
                         return Err(PrintingError::TextNotationOnTextlessDoc);
                     } else {
                         let text = self.doc.unwrap_text();
-                        return Ok(ConsolidatedNotation::Textual(text, str_width(text), style));
+                        return Ok(ConsolidatedNotation::Textual(Textual {
+                            str: text,
+                            width: str_width(text),
+                            style,
+                        }));
                     }
                 }
                 Flat(note) => {
@@ -284,7 +306,7 @@ impl<'d, D: PrettyDoc<'d>> fmt::Display for ConsolidatedNotation<'d, D> {
         match self {
             Empty => write!(f, "ε"),
             Newline(_) => write!(f, "↵"),
-            Textual(text, _, _) => write!(f, "'{}'", text),
+            Textual(textual) => write!(f, "'{}'", textual.str),
             Concat(left, right) => write!(f, "{} + {}", left, right),
             Choice(opt1, opt2) => write!(f, "({} | {})", opt1, opt2),
             Child(i, _) => write!(f, "${}", i),

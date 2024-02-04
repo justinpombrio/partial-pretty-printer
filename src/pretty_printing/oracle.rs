@@ -45,7 +45,7 @@ fn pp<'d, D: PrettyDoc<'d>>(
 
     match note {
         Empty => Ok(prefix),
-        Textual(text, _, _) => Ok(prefix.append(Layout::text(text))),
+        Textual(textual) => Ok(prefix.append(Layout::text(textual.str))),
         Newline(indent) => Ok(prefix.append(Layout::newline(indent))),
         Child(_, x) => pp(prefix, x.eval()?.0, suffix_len, width),
         Concat(x, y) => {
@@ -83,7 +83,7 @@ fn first_line_len<'d, D: PrettyDoc<'d>>(
 
     match note {
         Empty => Ok(suffix_len),
-        Textual(_, width, _) => Ok(width + suffix_len),
+        Textual(textual) => Ok(textual.width + suffix_len),
         Newline(_) => Ok(0),
         Child(_, x) => first_line_len(x.eval()?.0, suffix_len),
         Concat(x, y) => {
