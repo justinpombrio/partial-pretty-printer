@@ -1,8 +1,8 @@
 //! Walk along the notation tree, skipping the boring parts.
 
 use super::pretty_doc::PrettyDoc;
-use crate::geometry::Width;
-use crate::notation::{Literal, Notation};
+use crate::geometry::{str_width, Width};
+use crate::notation::Notation;
 use std::fmt;
 
 /// A `Notation` says how to print a _single_ node in a document. The _notation tree_ is what you
@@ -17,8 +17,7 @@ use std::fmt;
 pub enum ConsolidatedNotation<'d, D: PrettyDoc<'d>> {
     Empty,
     Newline(Width),
-    Literal(&'d Literal<D::Style>),
-    Text(&'d str, &'d D::Style),
+    Textual(&'d str, Width, &'d D::Style),
     Concat(
         DelayedConsolidatedNotation<'d, D>,
         DelayedConsolidatedNotation<'d, D>,
@@ -58,8 +57,7 @@ impl<'d, D: PrettyDoc<'d>> Clone for ConsolidatedNotation<'d, D> {
         match self {
             Empty => Empty,
             Newline(ind) => Newline(*ind),
-            Literal(lit) => Literal(*lit),
-            Text(str, style) => Text(*str, *style),
+            Textual(str, width, style) => Textual(*str, *width, *style),
             Concat(note1, note2) => Concat(*note1, *note2),
             Choice(note1, note2) => Choice(*note1, *note2),
             Child(i, child) => Child(*i, *child),
@@ -147,12 +145,19 @@ impl<'d, D: PrettyDoc<'d>> DelayedConsolidatedNotation<'d, D> {
             match self.notation {
                 Empty => return Ok(ConsolidatedNotation::Empty),
                 Newline => return Ok(ConsolidatedNotation::Newline(self.indent)),
-                Literal(lit) => return Ok(ConsolidatedNotation::Literal(lit)),
+                Literal(lit) => {
+                    return Ok(ConsolidatedNotation::Textual(
+                        lit.str(),
+                        lit.width(),
+                        lit.style(),
+                    ))
+                }
                 Text(style) => {
                     if self.doc.num_children().is_some() {
                         return Err(PrintingError::TextNotationOnTextlessDoc);
                     } else {
-                        return Ok(ConsolidatedNotation::Text(self.doc.unwrap_text(), style));
+                        let text = self.doc.unwrap_text();
+                        return Ok(ConsolidatedNotation::Textual(text, str_width(text), style));
                     }
                 }
                 Flat(note) => {
@@ -279,8 +284,7 @@ impl<'d, D: PrettyDoc<'d>> fmt::Display for ConsolidatedNotation<'d, D> {
         match self {
             Empty => write!(f, "ε"),
             Newline(_) => write!(f, "↵"),
-            Text(_, _) => write!(f, "TEXT"),
-            Literal(lit) => write!(f, "'{}'", lit.str()),
+            Textual(text, _, _) => write!(f, "'{}'", text),
             Concat(left, right) => write!(f, "{} + {}", left, right),
             Choice(opt1, opt2) => write!(f, "({} | {})", opt1, opt2),
             Child(i, _) => write!(f, "${}", i),

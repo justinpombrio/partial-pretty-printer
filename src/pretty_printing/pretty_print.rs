@@ -79,6 +79,7 @@ impl<'d, D: PrettyDoc<'d>> Chunk<'d, D> {
         Ok(Chunk { id, mark, notation })
     }
 
+    // TODO: This should be handled by ConsolidatedNotation instead
     fn sub_chunk(
         &self,
         notation: DelayedConsolidatedNotation<'d, D>,
@@ -198,8 +199,7 @@ impl<'d, D: PrettyDoc<'d>> Seeker<'d, D> {
                 Empty | Concat(_, _) | Choice(_, _) | Child(_, _) => {
                     unreachable!()
                 }
-                Literal(_) => self.next.push(chunk),
-                Text(_, _) => self.next.push(chunk),
+                Textual(_, _, _) => self.next.push(chunk),
                 Newline(_) => {
                     self.next.push(chunk);
                     break;
@@ -222,7 +222,7 @@ impl<'d, D: PrettyDoc<'d>> Seeker<'d, D> {
             while let Some(chunk) = self.next.pop() {
                 match chunk.notation {
                     Empty => (),
-                    Literal(_) | Newline(_) | Text(_, _) => self.prev.push(chunk),
+                    Textual(_, _, _) | Newline(_) => self.prev.push(chunk),
                     Concat(left, right) => {
                         self.next.push(chunk.sub_chunk(right)?);
                         self.next.push(chunk.sub_chunk(left)?);
@@ -248,7 +248,7 @@ impl<'d, D: PrettyDoc<'d>> Seeker<'d, D> {
             while let Some(chunk) = self.prev.pop() {
                 match chunk.notation {
                     Empty | Concat(_, _) => unreachable!(),
-                    Literal(_) | Text(_, _) | Choice(_, _) | Child(_, _) => self.next.push(chunk),
+                    Textual(_, _, _) | Choice(_, _) | Child(_, _) => self.next.push(chunk),
                     Newline(indent) => {
                         prefix_len = indent;
                         self.prev.push(chunk);
@@ -263,12 +263,8 @@ impl<'d, D: PrettyDoc<'d>> Seeker<'d, D> {
             while let Some(chunk) = self.next.pop() {
                 match chunk.notation {
                     Empty | Concat(_, _) | Newline(_) => unreachable!(),
-                    Literal(lit) => {
-                        prefix_len += lit.width();
-                        self.prev.push(chunk);
-                    }
-                    Text(text, _style) => {
-                        prefix_len += str_width(text);
+                    Textual(_str, width, _style) => {
+                        prefix_len += width;
                         self.prev.push(chunk);
                     }
                     Child(i, child) if chunk.id == parent_doc_id && i == child_index => {
@@ -341,23 +337,14 @@ impl<'d, D: PrettyDoc<'d>> DownwardPrinter<'d, D> {
         while let Some(chunk) = self.next.pop() {
             match chunk.notation {
                 Empty => (),
-                Literal(lit) => {
+                Textual(str, width, style) => {
                     pieces.push(Piece {
-                        str: lit.str(),
-                        style: lit.style(),
-                        doc_id: chunk.id,
-                        mark: chunk.mark,
-                    });
-                    prefix_len += lit.width();
-                }
-                Text(text, style) => {
-                    pieces.push(Piece {
-                        str: text,
+                        str,
                         style,
                         doc_id: chunk.id,
                         mark: chunk.mark,
                     });
-                    prefix_len += str_width(text);
+                    prefix_len += width;
                 }
                 Newline(_indent) => {
                     self.next.push(chunk);
@@ -395,7 +382,7 @@ impl<'d, D: PrettyDoc<'d>> DownwardPrinter<'d, D> {
 
 /// Constructed at an arbitrary position within the document. Prints lines from there one at a
 /// time, going up.
-// INVARIANT: `next` only ever contains `Literal`, `Text`, and `Choice` notations.
+// INVARIANT: `next` only ever contains `Textual`, and `Choice` notations.
 struct UpwardPrinter<'d, D: PrettyDoc<'d>> {
     width: Width,
     prev: Vec<Chunk<'d, D>>,
@@ -420,12 +407,8 @@ impl<'d, D: PrettyDoc<'d>> UpwardPrinter<'d, D> {
         //    the choice contained a newline.
         while let Some(chunk) = self.next.pop() {
             match chunk.notation {
-                Literal(lit) => {
-                    prefix_len += lit.width();
-                    self.prev.push(chunk);
-                }
-                Text(text, _style) => {
-                    prefix_len += str_width(text);
+                Textual(_, width, _) => {
+                    prefix_len += width;
                     self.prev.push(chunk);
                 }
                 Choice(opt1, opt2) => {
@@ -459,14 +442,8 @@ impl<'d, D: PrettyDoc<'d>> UpwardPrinter<'d, D> {
         let mut pieces = vec![];
         while let Some(chunk) = self.next.pop() {
             match chunk.notation {
-                Literal(lit) => pieces.push(Piece {
-                    str: lit.str(),
-                    style: lit.style(),
-                    doc_id: chunk.id,
-                    mark: chunk.mark,
-                }),
-                Text(text, style) => pieces.push(Piece {
-                    str: text,
+                Textual(str, _width, style) => pieces.push(Piece {
+                    str,
                     style,
                     doc_id: chunk.id,
                     mark: chunk.mark,
@@ -490,7 +467,7 @@ impl<'d, D: PrettyDoc<'d>> UpwardPrinter<'d, D> {
 
     /// Move the "printing cursor" to just after the previous newline. Returns None if there is
     /// no such newline, or Some of the newline's indentation if there is.
-    // Maintains the invariant that `next` only ever contains `Literal`, `Text`, and `Choice` notations.
+    // Maintains the invariant that `next` only ever contains `Textual`, and `Choice` notations.
     fn seek_start_of_line(&mut self) -> Result<Option<Width>, PrintingError> {
         use ConsolidatedNotation::*;
 
@@ -499,7 +476,7 @@ impl<'d, D: PrettyDoc<'d>> UpwardPrinter<'d, D> {
         while let Some(chunk) = self.prev.pop() {
             match chunk.notation {
                 Empty => (),
-                Text(_, _) | Literal(_) => self.next.push(chunk),
+                Textual(_, _, _) => self.next.push(chunk),
                 Newline(indent) => {
                     self.prev.push(chunk);
                     return Ok(Some(indent));
@@ -578,18 +555,9 @@ fn fits<'d, D: PrettyDoc<'d>>(
 
         match notation {
             Empty => (),
-            Literal(lit) => {
-                let lit_len = lit.width();
-                if lit_len <= remaining {
-                    remaining -= lit_len;
-                } else {
-                    return Ok(false);
-                }
-            }
-            Text(text, _) => {
-                let text_len = str_width(text);
-                if text_len <= remaining {
-                    remaining -= text_len;
+            Textual(_, width, _) => {
+                if width <= remaining {
+                    remaining -= width;
                 } else {
                     return Ok(false);
                 }
