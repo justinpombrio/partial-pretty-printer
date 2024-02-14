@@ -7,6 +7,10 @@ use partial_pretty_printer::{
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
+// TODO: Test render_options.cursor_at_end = true
+
+type NoStyle = ();
+
 #[derive(Debug, Clone)]
 struct SimpleLabel<'d, D: PrettyDoc<'d> + Clone + Debug>(
     Option<(D, Vec<usize>)>,
@@ -21,8 +25,8 @@ fn get_content<'d, D: PrettyDoc<'d> + Clone + Debug>(
 }
 
 #[track_caller]
-fn pane_test<'d, D: PrettyDoc<'d> + Clone + Debug>(
-    notation: PaneNotation<SimpleLabel<'d, D>>,
+fn pane_test<'d, S: Debug + Default, D: PrettyDoc<'d, Style = S> + Clone + Debug>(
+    notation: PaneNotation<SimpleLabel<'d, D>, S>,
     expected: &str,
 ) {
     let mut screen = PlainText::new(7, 7);
@@ -35,21 +39,21 @@ fn pane_test<'d, D: PrettyDoc<'d> + Clone + Debug>(
     assert_eq!(actual, expected);
 }
 
-fn fill<L: Label>(ch: char) -> PaneNotation<L> {
+fn fill<L: Label>(ch: char) -> PaneNotation<L, NoStyle> {
     PaneNotation::Fill {
         ch,
-        style: Style::default(),
+        style: NoStyle::default(),
     }
 }
 
 #[test]
 fn test_empty_pane() {
-    pane_test::<&SimpleDoc>(PaneNotation::Empty, "");
+    pane_test::<NoStyle, &SimpleDoc<NoStyle>>(PaneNotation::Empty, "");
 }
 
 #[test]
 fn test_fill_pane() {
-    pane_test::<&SimpleDoc>(
+    pane_test::<NoStyle, &SimpleDoc<NoStyle>>(
         fill('a'),
         "aaaaaaa\n\
          aaaaaaa\n\
@@ -62,10 +66,24 @@ fn test_fill_pane() {
 }
 
 #[test]
+fn test_fill_pane_with_full_width() {
+    pane_test::<NoStyle, &SimpleDoc<NoStyle>>(
+        fill('信'),
+        "信信信\n\
+         信信信\n\
+         信信信\n\
+         信信信\n\
+         信信信\n\
+         信信信\n\
+         信信信\n",
+    );
+}
+
+#[test]
 fn test_horz_split_pane() {
     use PaneSize::{Fixed, Proportional};
 
-    pane_test::<&SimpleDoc>(
+    pane_test::<NoStyle, &SimpleDoc<NoStyle>>(
         PaneNotation::Horz(vec![
             (Proportional(2), fill('a')),
             (Proportional(3), fill('b')),
@@ -88,7 +106,7 @@ fn test_horz_split_pane() {
 fn test_vert_split_pane() {
     use PaneSize::{Fixed, Proportional};
 
-    pane_test::<&SimpleDoc>(
+    pane_test::<NoStyle, &SimpleDoc<NoStyle>>(
         PaneNotation::Vert(vec![
             (Proportional(2), fill('a')),
             (Proportional(3), fill('b')),
@@ -111,7 +129,7 @@ fn test_vert_split_pane() {
 fn test_mixed_split_pane() {
     use PaneSize::{Fixed, Proportional};
 
-    pane_test::<&SimpleDoc>(
+    pane_test::<NoStyle, &SimpleDoc<NoStyle>>(
         PaneNotation::Horz(vec![
             (Proportional(2), fill('|')),
             (
@@ -152,12 +170,12 @@ fn test_mixed_split_pane() {
 #[test]
 fn test_doc_pane() {
     let render_options = RenderOptions {
-        highlight_cursor: false,
         cursor_height: 1.0,
         width_strategy: WidthStrategy::Full,
+        cursor_at_end: false,
     };
     let doc = json_list(vec![json_string("Hello"), json_string("world")]);
-    let contents = SimpleLabel(Some((&doc, vec![])), PhantomData);
+    let contents = SimpleLabel(Some((doc.as_ref(), vec![])), PhantomData);
     pane_test(
         PaneNotation::Doc {
             label: contents,
@@ -172,12 +190,12 @@ fn test_pane_cursor_heights() {
     #[track_caller]
     fn test_at_height(cursor_height: f32, expected: &str) {
         let render_options = RenderOptions {
-            highlight_cursor: false,
             cursor_height,
             width_strategy: WidthStrategy::Full,
+            cursor_at_end: false,
         };
         let doc = json_string("Hi");
-        let contents = SimpleLabel(Some((&doc, vec![])), PhantomData);
+        let contents = SimpleLabel(Some((doc.as_ref(), vec![])), PhantomData);
         pane_test(
             PaneNotation::Doc {
                 label: contents,
@@ -201,12 +219,12 @@ fn test_pane_widths() {
     #[track_caller]
     fn test_with_width(width_strategy: WidthStrategy, expected: &str) {
         let render_options = RenderOptions {
-            highlight_cursor: false,
             cursor_height: 1.0,
             width_strategy,
+            cursor_at_end: false,
         };
         let doc = json_list(vec![json_string("Hello"), json_string("world")]);
-        let contents = SimpleLabel(Some((&doc, vec![])), PhantomData);
+        let contents = SimpleLabel(Some((doc.as_ref(), vec![])), PhantomData);
         pane_test(
             PaneNotation::Doc {
                 label: contents,

@@ -63,8 +63,9 @@ fn print_above_and_below<'d, D: PrettyDoc<'d>>(
     doc: D,
     width: Width,
     path: &[usize],
+    seek_end: bool,
 ) -> (Vec<String>, Vec<String>) {
-    let (upward_printer, downward_printer) = pretty_print(doc, width, path).unwrap();
+    let (upward_printer, downward_printer) = pretty_print(doc, width, path, seek_end).unwrap();
     let mut lines_above = upward_printer
         .map(|line| line.unwrap().to_string())
         .collect::<Vec<_>>();
@@ -93,9 +94,10 @@ pub fn print_region<'d, D: PrettyDoc<'d>>(
     doc: D,
     width: Width,
     path: &[usize],
+    seek_end: bool,
     rows: usize,
 ) -> Vec<String> {
-    let (upward_printer, downward_printer) = pretty_print(doc, width, path).unwrap();
+    let (upward_printer, downward_printer) = pretty_print(doc, width, path, seek_end).unwrap();
     let mut lines = upward_printer
         .map(|line| line.unwrap().to_string())
         .take(rows / 2)
@@ -140,14 +142,19 @@ fn assert_pp_impl<'d, D: PrettyDoc<'d>>(doc: D, width: Width, expected_lines: Op
         ("ACTUAL", lines.join("\n")),
     );
     for path in all_paths(doc) {
-        let (lines_above, mut lines_below) = print_above_and_below(doc, width, &path);
-        let mut lines = lines_above;
-        lines.append(&mut lines_below);
-        compare_lines(
-            &format!("IN PRETTY PRINTING AT PATH {:?}", path),
-            ("EXPECTED", oracle_result.clone()),
-            ("ACTUAL", lines.join("\n")),
-        );
+        for seek_end in [false, true] {
+            let (lines_above, mut lines_below) = print_above_and_below(doc, width, &path, seek_end);
+            let mut lines = lines_above;
+            lines.append(&mut lines_below);
+            compare_lines(
+                &format!(
+                    "IN PRETTY PRINTING AT PATH {:?} (seek_end={})",
+                    path, seek_end
+                ),
+                ("EXPECTED", oracle_result.clone()),
+                ("ACTUAL", lines.join("\n")),
+            );
+        }
     }
 }
 
@@ -156,10 +163,11 @@ pub fn assert_pp_seek<'d, D: PrettyDoc<'d>>(
     doc: D,
     width: Width,
     path: &[usize],
+    seek_end: bool,
     expected_lines_above: &[&str],
     expected_lines_below: &[&str],
 ) {
-    let (lines_above, lines_below) = print_above_and_below(doc, width, path);
+    let (lines_above, lines_below) = print_above_and_below(doc, width, path, seek_end);
     compare_lines(
         &format!("IN DOWNWARD PRINTING AT PATH {:?}", path),
         ("EXPECTED", expected_lines_below.join("\n")),
@@ -177,10 +185,11 @@ pub fn assert_pp_region<'d, D: PrettyDoc<'d>>(
     doc: D,
     width: Width,
     path: &[usize],
+    seek_end: bool,
     rows: usize,
     expected_lines: &[&str],
 ) {
-    let lines = print_region(doc, width, path, rows);
+    let lines = print_region(doc, width, path, seek_end, rows);
     compare_lines(
         &format!("IN PRINTING {} ROWS AT PATH {:?}", rows, path),
         ("EXPECTED", expected_lines.join("\n")),

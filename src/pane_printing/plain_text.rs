@@ -1,17 +1,20 @@
 use super::pretty_window::PrettyWindow;
 use crate::geometry::{Height, Pos, Size, Width};
+use std::convert::Infallible;
 use std::fmt;
+use std::marker::PhantomData;
 
 /// Render a document in plain text.
 #[derive(Debug)]
-pub struct PlainText {
+pub struct PlainText<S: fmt::Debug + Default, M: fmt::Debug> {
     lines: Vec<Vec<char>>,
     size: Size,
+    phantom: PhantomData<(S, M)>,
 }
 
 const SENTINEL: char = '\0';
 
-impl fmt::Display for PlainText {
+impl<S: fmt::Debug + Default, M: fmt::Debug> fmt::Display for PlainText<S, M> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for line in &self.lines {
             for ch in line {
@@ -25,25 +28,26 @@ impl fmt::Display for PlainText {
     }
 }
 
-impl PlainText {
+impl<S: fmt::Debug + Default, M: fmt::Debug> PlainText<S, M> {
     /// Construct a screen with the given width and height.
-    pub fn new(width: Width, height: Height) -> PlainText {
-        PlainText {
+    pub fn new(width: Width, height: Height) -> PlainText<S, M> {
+        PlainText::<S, M> {
             lines: vec![],
             size: Size { width, height },
+            phantom: PhantomData,
         }
     }
 
     /// Construct a screen with the given width and unbounded height.
-    pub fn new_unbounded_height(width: Width) -> PlainText {
-        PlainText::new(width, Height::max_value())
+    pub fn new_unbounded_height(width: Width) -> PlainText<S, M> {
+        PlainText::<S, M>::new(width, Height::max_value())
     }
 }
 
-impl PrettyWindow for PlainText {
-    type Error = fmt::Error;
-    type Style = ();
-    type Mark = ();
+impl<S: fmt::Debug + Default, M: fmt::Debug> PrettyWindow for PlainText<S, M> {
+    type Error = Infallible;
+    type Style = S;
+    type Mark = M;
 
     fn size(&self) -> Result<Size, Self::Error> {
         Ok(self.size)

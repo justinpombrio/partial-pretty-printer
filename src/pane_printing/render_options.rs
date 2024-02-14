@@ -6,6 +6,9 @@ pub struct RenderOptions {
     /// Position the document such that the top of the cursor is at this height,
     /// where 1.0 is the top line of the Pane and 0.0 is the bottom line.
     pub cursor_height: f32,
+    /// Whether the put the cursor at the beginning (false) or the end (true) of the focused
+    /// document node.
+    pub cursor_at_end: bool,
     /// How to choose the document width.
     pub width_strategy: WidthStrategy,
 }

@@ -3,6 +3,8 @@ use partial_pretty_printer::examples::json::{
     json_bool, json_dict, json_list, json_null, json_number, json_string, Json,
 };
 
+// TODO: test seek_end = true
+
 static NUMERALS: &[&str] = &[
     "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven",
     "twelve", "thirteen", "fourteen", "fifteen", "sixteen",
@@ -54,6 +56,7 @@ fn json_seek() {
         refn,
         27,
         &[],
+        false,
         &[],
         &[
             // force rustfmt
@@ -67,6 +70,7 @@ fn json_seek() {
         refn,
         27,
         &[0],
+        false,
         &[
             // force rustfmt
             "{",
@@ -82,6 +86,7 @@ fn json_seek() {
         refn,
         27,
         &[0, 0],
+        false,
         &[
             // force rustfmt
             "{",
@@ -97,6 +102,7 @@ fn json_seek() {
         refn,
         27,
         &[1],
+        false,
         &[
             // force rustfmt
             "{",
@@ -112,6 +118,7 @@ fn json_seek() {
         refn,
         27,
         &[1, 0],
+        false,
         &[
             // force rustfmt
             "{",
@@ -140,7 +147,7 @@ fn json_seek() {
 #[should_panic(expected = "InvalidPath")]
 fn json_invalid_path() {
     let doc = json_dict(vec![("x", json_number(1.0)), ("y", json_number(2.0))]);
-    assert_pp_seek(doc.as_ref(), 80, &[0, 2], &[], &[]);
+    assert_pp_seek(doc.as_ref(), 80, &[0, 2], false, &[], &[]);
 }
 
 fn favorites_list() -> Json {
@@ -296,6 +303,7 @@ fn big_json_tree() {
         120,
         // 3,1,15 means "child 15"
         &[3, 1, 15, 3, 1, 10],
+        false,
         10,
         &[
             "                                }",
@@ -323,7 +331,7 @@ fn time_json() {
     let big_tree = make_json_tree(0, 16);
 
     let start = Instant::now();
-    print_region(big_tree.as_ref(), 120, &[3, 1, 15, 3, 1, 10], 80);
+    print_region(big_tree.as_ref(), 120, &[3, 1, 15, 3, 1, 10], false, 80);
     println!(
         "Time to print middle 80 lines of ~480k line doc at width 120: {}μs",
         start.elapsed().as_micros()

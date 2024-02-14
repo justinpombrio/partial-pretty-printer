@@ -6,6 +6,8 @@ use partial_pretty_printer::notation_constructors::{
 use partial_pretty_printer::{PrettyDoc, ValidNotation};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+// TODO: test seek_end = true
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct FlowWrap {
     id: usize,
@@ -241,6 +243,7 @@ fn flow_wrap() {
         &doc,
         19,
         &[0, 2],
+        false,
         &[],
         &[
             // force rustfmt
@@ -254,6 +257,7 @@ fn flow_wrap() {
         &doc,
         19,
         &[0, 3],
+        false,
         &[
             // force rustfmt
             "始    Oh, woe, is,",
@@ -269,6 +273,7 @@ fn flow_wrap() {
         &doc,
         19,
         &[0, 4],
+        false,
         &[
             // force rustfmt
             "始    Oh, woe, is,",
@@ -284,6 +289,7 @@ fn flow_wrap() {
         &doc,
         19,
         &[0, 5],
+        false,
         &[
             // force rustfmt
             "始    Oh, woe, is,",
@@ -299,6 +305,7 @@ fn flow_wrap() {
         &doc,
         19,
         &[0, 6],
+        false,
         &[
             // force rustfmt
             "始    Oh, woe, is,",
@@ -314,6 +321,7 @@ fn flow_wrap() {
         &doc,
         19,
         &[0, 7],
+        false,
         &[
             // force rustfmt
             "始    Oh, woe, is,",

@@ -83,7 +83,9 @@ where
                 .ok_or_else(|| PaneError::MissingLabel(format!("{:?}", label)))?;
             let doc_width = render_options.choose_width(rect.width());
             let focal_line = render_options.focal_line(rect.height());
-            let (mut upward_printer, mut downward_printer) = pretty_print(doc, doc_width, &path)?;
+            let at_end = render_options.cursor_at_end;
+            let (mut upward_printer, mut downward_printer) =
+                pretty_print(doc, doc_width, &path, at_end)?;
             for row in (0..focal_line).into_iter().rev() {
                 if let Some(contents) = upward_printer.next() {
                     print_line_contents(window, contents?, Pos { row, col: 0 }, rect)?;
@@ -103,8 +105,13 @@ where
             let mut dynamic_sizes: Vec<DynSizeFn<W>> = vec![];
             for (size, notation) in panes {
                 if let PaneSize::Dynamic = size {
-                    let label = if let PaneNotation::Doc { label, .. } = notation {
-                        label.clone()
+                    let (label, at_end) = if let PaneNotation::Doc {
+                        label,
+                        render_options,
+                        ..
+                    } = notation
+                    {
+                        (label.clone(), render_options.cursor_at_end)
                     } else {
                         return Err(PaneError::InvalidUseOfDynamic);
                     };
@@ -112,7 +119,10 @@ where
                     let func = move |available_width: usize| {
                         let (doc, path) = get_content(label.clone())
                             .ok_or_else(|| PaneError::MissingLabel(format!("{:?}", label)))?;
-                        Ok(doc_width(doc, &path, height, available_width as Width)? as usize)
+                        Ok(
+                            doc_width(doc, &path, at_end, height, available_width as Width)?
+                                as usize,
+                        )
                     };
                     dynamic_sizes.push(Box::new(func) as DynSizeFn<W>);
                 }
@@ -153,9 +163,9 @@ where
                     };
                     let width = rect.width();
                     let func = move |available_height: usize| {
-                        let (doc, path) = get_content(label.clone())
+                        let (doc, _path) = get_content(label.clone())
                             .ok_or_else(|| PaneError::MissingLabel(format!("{:?}", label)))?;
-                        Ok(doc_height(doc, &path, width, available_height as Height)? as usize)
+                        Ok(doc_height(doc, width, available_height as Height)? as usize)
                     };
                     dynamic_sizes.push(Box::new(func) as DynSizeFn<W>);
                 }
@@ -194,23 +204,24 @@ where
 /// `max_height` lines, stops and returns `max_height` instead.
 fn doc_height<'d>(
     doc: impl PrettyDoc<'d>,
-    path: &[usize],
     width: Width,
     max_height: Height,
 ) -> Result<Height, PrintingError> {
-    let (_, downward_printer) = pretty_print(doc, width, path)?;
+    let (_, downward_printer) = pretty_print(doc, width, &[], false)?;
     Ok(downward_printer.take(max_height as usize).count() as Height)
 }
 
+// TODO: This needs to take into account focal_line!
 /// Determine how many columns a document would take to print, if given `height` lines. If it would
 /// use more than `max_width` columns, returns `max_width` instead.
 fn doc_width<'d>(
     doc: impl PrettyDoc<'d>,
     path: &[usize],
+    cursor_at_end: bool,
     height: Height,
     max_width: Width,
 ) -> Result<Width, PrintingError> {
-    let (_, downward_printer) = pretty_print(doc, max_width, path)?;
+    let (_, downward_printer) = pretty_print(doc, max_width, path, cursor_at_end)?;
     let lines = downward_printer.take(height as usize);
     let mut width = 0;
     for line in lines {

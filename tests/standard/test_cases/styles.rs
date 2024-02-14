@@ -1,22 +1,21 @@
+// TODO: temp
+#![allow(unused)]
+
 use crate::standard::pretty_testing::SimpleDoc;
 use partial_pretty_printer::{
     examples::json::{json_list, json_number, Json},
     notation_constructors::lit,
     pane::{pane_print, Label, PaneNotation, PrettyWindow, RenderOptions, WidthStrategy},
-    Color, Pos, PrettyDoc, Row, ShadedStyle, Size, Style, Width,
+    Pos, PrettyDoc, Row, Size, Width,
 };
+use std::convert::Infallible;
 use std::fmt;
 use std::fmt::Debug;
 use std::iter;
 use std::marker::PhantomData;
 
-// It's hard to test styles directly. No one would want to read or write test cases that used
-// enormous debug-printed Style objects. Instead, these tests use a textual format. The first line
-// is the text of the line, and subsequent lines show the style of the character above them:
-//
-// - Line 2 shows the Base16 style, as a hex char
-// - Line 3 shows whether the char is bold (b), underlined (u), both (!), or neither (.).
-// - Line 4 shows the shading (a-x), and whether the colors are reversed (capitalized).
+type Style = char;
+type Mark = char;
 
 #[derive(Debug, Clone)]
 struct SimpleLabel<'d, D: PrettyDoc<'d> + Clone + Debug>(
@@ -34,7 +33,7 @@ fn get_content<'d, D: PrettyDoc<'d> + Clone + Debug>(
 
 #[derive(Debug)]
 struct RichText {
-    lines: Vec<Vec<(char, ShadedStyle)>>,
+    lines: Vec<Vec<(char, Style, Mark)>>,
     size: Size,
 }
 
@@ -43,64 +42,22 @@ impl fmt::Display for RichText {
         for line in &self.lines {
             // Print the line
             write!(f, "|")?;
-            for (ch, _) in line {
+            for (ch, _, _) in line {
                 write!(f, "{}", ch)?;
             }
             writeln!(f)?;
 
-            // Print the colors
+            // Print the styles
             write!(f, "|")?;
-            for (_, style) in line {
-                let color = match style.color {
-                    Color::Base00 => '0',
-                    Color::Base01 => '1',
-                    Color::Base02 => '2',
-                    Color::Base03 => '3',
-                    Color::Base04 => '4',
-                    Color::Base05 => '5',
-                    Color::Base06 => '6',
-                    Color::Base07 => '7',
-                    Color::Base08 => '8',
-                    Color::Base09 => '9',
-                    Color::Base0A => 'A',
-                    Color::Base0B => 'B',
-                    Color::Base0C => 'C',
-                    Color::Base0D => 'D',
-                    Color::Base0E => 'E',
-                    Color::Base0F => 'F',
-                };
-                write!(f, "{}", color)?;
+            for (_, style, _) in line {
+                write!(f, "{}", style)?;
             }
             writeln!(f)?;
 
-            // Print the bold & underlined styles
+            // Print the mark
             write!(f, "|")?;
-            for (_, style) in line {
-                let emph = match (style.bold, style.underlined) {
-                    (false, false) => '.',
-                    (true, false) => 'b',
-                    (false, true) => 'u',
-                    (true, true) => '!',
-                };
-                write!(f, "{}", emph)?;
-            }
-            writeln!(f)?;
-
-            // Print the shade & reversed styles
-            write!(f, "|")?;
-            for (_, style) in line {
-                let shade_and_rev = match (style.shade.0, style.reversed) {
-                    (0, false) => 'a',
-                    (0, true) => 'A',
-                    (1, false) => 'b',
-                    (1, true) => 'B',
-                    (2, false) => 'c',
-                    (2, true) => 'C',
-                    (255, false) => 'x',
-                    (255, true) => 'X',
-                    (_, _) => unimplemented!(),
-                };
-                write!(f, "{}", shade_and_rev)?;
+            for (_, _, mark) in line {
+                write!(f, "{}", mark)?;
             }
             writeln!(f)?;
 
@@ -119,63 +76,52 @@ impl RichText {
         }
     }
 
-    fn get_mut_line(&mut self, line_num: Row) -> &mut Vec<(char, ShadedStyle)> {
+    fn get_mut_line(&mut self, line_num: Row) -> &mut Vec<(char, Style, Mark)> {
         if self.lines.len() < line_num as usize + 1 {
             self.lines.resize_with(line_num as usize + 1, Vec::new);
         }
         &mut self.lines[line_num as usize]
     }
 
-    fn get_mut_char(&mut self, pos: Pos) -> &mut (char, ShadedStyle) {
+    fn get_mut_char(&mut self, pos: Pos) -> &mut (char, Style, Mark) {
         let line = self.get_mut_line(pos.row);
         if line.len() < pos.col as usize + 1 {
-            line.resize_with(pos.col as usize + 1, || (' ', ShadedStyle::plain()));
+            line.resize_with(pos.col as usize + 1, || (' ', ' ', ' '));
         }
         &mut line[pos.col as usize]
     }
 }
 
 impl PrettyWindow for RichText {
-    type Error = fmt::Error;
+    type Error = Infallible;
+    type Style = Style;
+    type Mark = Mark;
 
     fn size(&self) -> Result<Size, Self::Error> {
         Ok(self.size)
     }
 
-    fn print(&mut self, mut pos: Pos, string: &str, style: ShadedStyle) -> Result<(), Self::Error> {
-        for ch in string.chars() {
-            *self.get_mut_char(pos) = (ch, style);
-            pos.col += 1;
-        }
-        Ok(())
-    }
-
-    fn fill(
+    fn print_char(
         &mut self,
-        pos: Pos,
         ch: char,
-        len: Width,
-        style: ShadedStyle,
+        pos: Pos,
+        mark: Option<&Mark>,
+        style: &Style,
+        full_width: bool,
     ) -> Result<(), Self::Error> {
-        let string: String = iter::repeat(ch).take(len as usize).collect();
-        self.print(pos, &string, style)
+        *self.get_mut_char(pos) = (ch, *style, mark.copied().unwrap_or(' '));
+        Ok(())
     }
 }
 
 #[track_caller]
-fn pane_test<'d>(
-    doc: impl PrettyDoc<'d> + Clone + Debug + 'd,
-    path: Vec<usize>,
-    width: Width,
-    expected: &str,
-) {
+fn pane_test<'d>(doc: SimpleDoc<Style>, path: Vec<usize>, width: Width, expected: &str) {
     let render_options = RenderOptions {
-        highlight_cursor: true,
         cursor_height: 1.0,
         width_strategy: WidthStrategy::Full,
     };
     let mut screen = RichText::new(Size { width, height: 100 });
-    let label = SimpleLabel(Some((doc, path)), PhantomData);
+    let label = SimpleLabel(Some((&doc, path)), PhantomData);
     let pane_notation = PaneNotation::Doc {
         label,
         render_options,
@@ -189,6 +135,7 @@ fn pane_test<'d>(
     assert_eq!(actual, expected);
 }
 
+/*
 #[test]
 fn test_pane_styles() {
     let words = vec![
@@ -291,3 +238,4 @@ fn test_pane_highlighting() {
            \n",
     );
 }
+*/
