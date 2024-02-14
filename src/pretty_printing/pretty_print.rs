@@ -30,8 +30,8 @@ pub fn pretty_print<'d, D: PrettyDoc<'d>>(
     seek_end: bool,
 ) -> Result<
     (
-        impl Iterator<Item = Result<LineContents<'d, D>, PrintingError>>,
-        impl Iterator<Item = Result<LineContents<'d, D>, PrintingError>>,
+        impl Iterator<Item = Result<Line<'d, D>, PrintingError>>,
+        impl Iterator<Item = Result<Line<'d, D>, PrintingError>>,
     ),
     PrintingError,
 > {
@@ -94,15 +94,15 @@ impl<'d, D: PrettyDoc<'d>> Chunk<'d, D> {
     }
 }
 
-// TODO: Lots of overlap between LineContents and Block. Merge them.
+// TODO: Lots of overlap between Line and Block. Merge them.
 // TODO: Remove D::Id from these? Seems redundant with marks.
 /// The contents of a single pretty printed line.
-pub struct LineContents<'d, D: PrettyDoc<'d>> {
+pub struct Line<'d, D: PrettyDoc<'d>> {
     /// The indentation of this line, together with its id and mark.
     pub indentation: Indentation<'d, D>,
     /// A sequence of pieces of text to be displayed after `spaces`, in order from left to right,
     /// with no spacing in between.
-    pub pieces: Vec<Piece<'d, D>>,
+    pub segments: Vec<Segment<'d, D>>,
 }
 
 #[derive(Debug)]
@@ -124,51 +124,51 @@ impl<'d, D: PrettyDoc<'d>> Clone for Indentation<'d, D> {
 impl<'d, D: PrettyDoc<'d>> Copy for Indentation<'d, D> {}
 
 #[derive(Debug)]
-pub struct Piece<'d, D: PrettyDoc<'d>> {
+pub struct Segment<'d, D: PrettyDoc<'d>> {
     pub str: &'d str,
     pub style: &'d D::Style,
     pub doc_id: D::Id,
     pub mark: Option<&'d D::Mark>,
 }
 
-impl<'d, D: PrettyDoc<'d>> LineContents<'d, D> {
+impl<'d, D: PrettyDoc<'d>> Line<'d, D> {
     pub fn width(&self) -> Width {
         let mut width = self.indentation.num_spaces;
-        for piece in &self.pieces {
-            width += str_width(piece.str);
+        for segment in &self.segments {
+            width += str_width(segment.str);
         }
         width
     }
 }
 
-impl<'d, D: PrettyDoc<'d>> ToString for LineContents<'d, D> {
+impl<'d, D: PrettyDoc<'d>> ToString for Line<'d, D> {
     fn to_string(&self) -> String {
-        span!("LineContents::to_string");
+        span!("Line::to_string");
 
         let mut string = format!(
             "{:spaces$}",
             "",
             spaces = self.indentation.num_spaces as usize
         );
-        for piece in &self.pieces {
-            string.push_str(piece.str);
+        for segment in &self.segments {
+            string.push_str(segment.str);
         }
         string
     }
 }
 
 /// INVARIANTS:
-/// - prefix_len is always indentation.num_spaces + sum(piece width)
+/// - prefix_len is always indentation.num_spaces + sum(segment width)
 /// - chunks only contains Textual, Choice, Child
 ///
-/// | indentation | pieces ->|<- chunks |
-/// ^^^^^^^^^^^^^^^^^^^^^^^^^^
+/// | indentation | segments ->|<- chunks |
+/// ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 ///   prefix_len
 struct Block<'d, D: PrettyDoc<'d>> {
     indentation: Indentation<'d, D>,
     prefix_len: Width,
     /// Resolved text. Last element is the rightmost text.
-    pieces: Vec<Piece<'d, D>>,
+    segments: Vec<Segment<'d, D>>,
     /// Unresolved notations. Last element is the _leftmost_ chunk.
     chunks: Vec<Chunk<'d, D>>,
 }
@@ -178,13 +178,13 @@ impl<'d, D: PrettyDoc<'d>> Block<'d, D> {
         Block {
             indentation,
             prefix_len: indentation.num_spaces,
-            pieces: Vec::new(),
+            segments: Vec::new(),
             chunks,
         }
     }
 
     fn push_text(&mut self, doc_id: D::Id, mark: Option<&'d D::Mark>, textual: Textual<'d, D>) {
-        self.pieces.push(Piece {
+        self.segments.push(Segment {
             str: textual.str,
             style: textual.style,
             doc_id,
@@ -193,12 +193,12 @@ impl<'d, D: PrettyDoc<'d>> Block<'d, D> {
         self.prefix_len += str_width(textual.str);
     }
 
-    fn print(self) -> LineContents<'d, D> {
+    fn print(self) -> Line<'d, D> {
         assert!(self.chunks.is_empty());
 
-        LineContents {
+        Line {
             indentation: self.indentation,
-            pieces: self.pieces,
+            segments: self.segments,
         }
     }
 }
@@ -231,7 +231,7 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
         Ok(printer)
     }
 
-    fn print_next_line(&mut self) -> Result<Option<LineContents<'d, D>>, PrintingError> {
+    fn print_next_line(&mut self) -> Result<Option<Line<'d, D>>, PrintingError> {
         use ConsolidatedNotation::*;
         span!("print_next_line");
 
@@ -255,7 +255,7 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
         Ok(Some(block.print()))
     }
 
-    fn print_prev_line(&mut self) -> Result<Option<LineContents<'d, D>>, PrintingError> {
+    fn print_prev_line(&mut self) -> Result<Option<Line<'d, D>>, PrintingError> {
         use ConsolidatedNotation::*;
         span!("print_next_line");
 
@@ -389,7 +389,7 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
         use ConsolidatedNotation::*;
         span!("expand_first");
 
-        // | block.indent | block.pieces ->| stack ->|<- block.chunks |
+        // | block.indent | block.segments ->| stack ->|<- block.chunks |
         let mut stack = vec![chunk];
         while let Some(chunk) = stack.pop() {
             match chunk.notation {
@@ -427,7 +427,7 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
         use ConsolidatedNotation::*;
         span!("expand_last");
 
-        // | block.indent | block.pieces ->| chunks ->|<- stack |<- block.chunks |
+        // | block.indent | block.segments ->| chunks ->|<- stack |<- block.chunks |
         let mut chunks = Vec::new();
         let mut stack = vec![chunk];
         while let Some(chunk) = stack.pop() {
@@ -439,7 +439,7 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
                     let prev_block = Block {
                         indentation: block.indentation,
                         prefix_len: block.prefix_len,
-                        pieces: mem::take(&mut block.pieces),
+                        segments: mem::take(&mut block.segments),
                         chunks: mem::take(&mut chunks),
                     };
                     self.prev_blocks.push(prev_block);
@@ -486,8 +486,8 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
     #[allow(unused)]
     fn display(&self) {
         for block in &self.prev_blocks {
-            for piece in &block.pieces {
-                print!("'{}' ", piece.str);
+            for segment in &block.segments {
+                print!("'{}' ", segment.str);
             }
             for chunk in &block.chunks {
                 print!("{} ", chunk.notation);
@@ -495,8 +495,8 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
         }
         print!(" / ");
         for block in self.next_blocks.iter().rev() {
-            for piece in &block.pieces {
-                print!("'{}' ", piece.str);
+            for segment in &block.segments {
+                print!("'{}' ", segment.str);
             }
             for chunk in &block.chunks {
                 print!("{} ", chunk.notation);
@@ -562,9 +562,9 @@ fn fits<'d, D: PrettyDoc<'d>>(
 struct UpwardPrinter<'d, D: PrettyDoc<'d>>(Printer<'d, D>);
 
 impl<'d, D: PrettyDoc<'d>> Iterator for UpwardPrinter<'d, D> {
-    type Item = Result<LineContents<'d, D>, PrintingError>;
+    type Item = Result<Line<'d, D>, PrintingError>;
 
-    fn next(&mut self) -> Option<Result<LineContents<'d, D>, PrintingError>> {
+    fn next(&mut self) -> Option<Result<Line<'d, D>, PrintingError>> {
         self.0.print_prev_line().transpose()
     }
 }
@@ -572,9 +572,9 @@ impl<'d, D: PrettyDoc<'d>> Iterator for UpwardPrinter<'d, D> {
 struct DownwardPrinter<'d, D: PrettyDoc<'d>>(Printer<'d, D>);
 
 impl<'d, D: PrettyDoc<'d>> Iterator for DownwardPrinter<'d, D> {
-    type Item = Result<LineContents<'d, D>, PrintingError>;
+    type Item = Result<Line<'d, D>, PrintingError>;
 
-    fn next(&mut self) -> Option<Result<LineContents<'d, D>, PrintingError>> {
+    fn next(&mut self) -> Option<Result<Line<'d, D>, PrintingError>> {
         self.0.print_next_line().transpose()
     }
 }

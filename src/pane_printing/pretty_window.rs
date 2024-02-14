@@ -12,7 +12,7 @@ pub trait PrettyWindow: Sized {
     type Style: fmt::Debug + Default;
 
     /// Arbitrary data associated with some nodes in the document. Returned as part of
-    /// `LineContents` when pretty printing.
+    /// `Line` when pretty printing.
     type Mark;
 
     /// Get the size of this window.

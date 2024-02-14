@@ -12,7 +12,7 @@ pub trait PrettyDoc<'d>: Copy {
     /// The style used in this document's notation.
     type Style: fmt::Debug + Default + 'd;
     /// Arbitrary data associated with some nodes in the document. Returned as part of
-    /// `LineContents` when pretty printing.
+    /// `Line` when pretty printing.
     type Mark: fmt::Debug + 'd;
 
     /// An id that uniquely identifies this node. It should not be `Id::default()`.

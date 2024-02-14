@@ -1,7 +1,7 @@
 use super::pane_notation::{Label, PaneNotation, PaneSize};
 use super::pretty_window::PrettyWindow;
 use crate::geometry::{is_char_full_width, Height, Pos, Rectangle, Width};
-use crate::pretty_printing::{pretty_print, LineContents, PrettyDoc, PrintingError};
+use crate::pretty_printing::{pretty_print, Line, PrettyDoc, PrintingError};
 
 /// A list of child indices describing the path from the root to a node in the document.
 pub type Path = Vec<usize>;
@@ -88,14 +88,14 @@ where
                 pretty_print(doc, doc_width, &path, at_end)?;
             for row in (0..focal_line).into_iter().rev() {
                 if let Some(contents) = upward_printer.next() {
-                    print_line_contents(window, contents?, Pos { row, col: 0 }, rect)?;
+                    print_line(window, contents?, Pos { row, col: 0 }, rect)?;
                 } else {
                     break;
                 }
             }
             for row in focal_line..rect.height() {
                 if let Some(contents) = downward_printer.next() {
-                    print_line_contents(window, contents?, Pos { row, col: 0 }, rect)?;
+                    print_line(window, contents?, Pos { row, col: 0 }, rect)?;
                 } else {
                     break;
                 }
@@ -231,11 +231,11 @@ fn doc_width<'d>(
     Ok(width)
 }
 
-/// Displays LineContents in the given window, at the given position relative to the rect.
+/// Displays the Line in the given window, at the given position relative to the rect.
 /// Does not display anything that falls outside of the rect.
-fn print_line_contents<'d, D, W>(
+fn print_line<'d, D, W>(
     window: &mut W,
-    contents: LineContents<'d, D>,
+    contents: Line<'d, D>,
     relative_pos: Pos,
     rect: Rectangle,
 ) -> Result<(), PaneError<W>>
@@ -264,16 +264,16 @@ where
         pos.col += 1;
     }
 
-    // Print each piece
-    for piece in contents.pieces {
-        for ch in piece.str.chars() {
+    // Print each segment
+    for segment in contents.segments {
+        for ch in segment.str.chars() {
             let is_full_width = is_char_full_width(ch);
             let char_width = if is_full_width { 2 } else { 1 };
             if pos.col + char_width > rect.max_col {
                 return Ok(());
             }
             window
-                .print_char(ch, pos, piece.mark, piece.style, is_full_width)
+                .print_char(ch, pos, segment.mark, segment.style, is_full_width)
                 .map_err(PaneError::PrettyWindowError)?;
             pos.col += char_width;
         }

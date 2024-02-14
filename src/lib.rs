@@ -26,7 +26,7 @@
 //! You can:
 //!
 //! - Print a [`PrettyDoc`] to a `String` using [`pretty_print_to_string`].
-//! - Print a node in a [`PrettyDoc`] to get lazy iterators over [`LineContents`] using
+//! - Print a node in a [`PrettyDoc`] to get lazy iterators over [`Line`] using
 //! [`pretty_print`].  This lets you (i) use colors and (ii) print just part of a document for
 //! efficiency.
 //! - Make a character-grid based UI with nested panes, using the [`pane`] module.
@@ -82,8 +82,8 @@
 //!     width: Width,
 //!     path: &[usize],
 //! ) -> (
-//!     impl Iterator<Item = LineContents<'d>> + 'd,
-//!     impl Iterator<Item = LineContents<'d>> + 'd,
+//!     impl Iterator<Item = Line<'d>> + 'd,
+//!     impl Iterator<Item = Line<'d>> + 'd,
 //! );
 //! ```
 //!
@@ -96,12 +96,12 @@
 //! you exhaust both iterators, you will print the entire document, but if you take fewer you can
 //! save the pretty printer some work.
 //!
-//! Secondly, notice that the iterators contain [`LineContents`] instead of strings:
+//! Secondly, notice that the iterators contain [`Line`] instead of strings:
 //!
 //! ```ignore
-//! pub struct LineContents<'d, D: PrettyDoc<'d>> {
+//! pub struct Line<'d, D: PrettyDoc<'d>> {
 //!     pub indentation: Indentation<'d, D>,
-//!     pub pieces: Vec<Piece<'d, D>>,
+//!     pub segments: Vec<Segment<'d, D>>,
 //! }
 //!
 //! pub struct Indentation<'d, D: PrettyDoc<'d>> {
@@ -110,7 +110,7 @@
 //!     pub mark: Option<&'d D::Mark>,
 //! }
 //!
-//! pub struct Piece<'d, D: PrettyDoc<'d>> {
+//! pub struct Segment<'d, D: PrettyDoc<'d>> {
 //!     pub str: &'d str,
 //!     pub style: &'d D::Style,
 //!     pub doc_id: D::Id,
@@ -157,7 +157,7 @@ pub mod notation_constructors;
 pub use geometry::{Col, Height, Pos, Row, Size, Width};
 pub use notation::Notation;
 pub use pretty_printing::{
-    pretty_print, pretty_print_to_string, Indentation, LineContents, Piece, PrettyDoc,
+    pretty_print, pretty_print_to_string, Indentation, Line, PrettyDoc, Segment,
 };
 pub use valid_notation::{NotationError, ValidNotation};
 
