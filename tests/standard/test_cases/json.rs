@@ -3,8 +3,6 @@ use partial_pretty_printer::examples::json::{
     json_bool, json_dict, json_list, json_null, json_number, json_string, Json,
 };
 
-// TODO: test seek_end = true
-
 static NUMERALS: &[&str] = &[
     "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven",
     "twelve", "thirteen", "fourteen", "fifteen", "sixteen",

@@ -6,8 +6,6 @@ use partial_pretty_printer::notation_constructors::{
 use partial_pretty_printer::{PrettyDoc, ValidNotation};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-// TODO: test seek_end = true
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct FlowWrap {
     id: usize,

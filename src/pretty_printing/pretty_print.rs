@@ -8,8 +8,9 @@ use std::convert::From;
 use std::iter::Iterator;
 use std::mem;
 
-// TODO: document seek_end
-/// Pretty print a document, focused at the node found by traversing `path` from the root.
+/// Pretty print a document, focused to the left or right of the node found by traversing `path`
+/// from the root. If `seek_end` is true, focus will be to the right of the node, otherwise to the
+/// left.
 ///
 /// `width` is the desired line width. The algorithm will attempt to, but is not guaranteed to,
 /// find a layout that fits within that width.
@@ -20,7 +21,7 @@ use std::mem;
 /// Returns a tuple with three things:
 ///
 /// - an iterator that prints lines above the focused line going up
-/// - the focused line
+/// - the line containing the focus point
 /// - an iterator that prints lines below the focused line going down
 ///
 /// It is expected that you will take only as many lines as you need from the iterators; doing so
@@ -108,7 +109,6 @@ impl<'d, D: PrettyDoc<'d>> Chunk<'d, D> {
     }
 }
 
-// TODO: Remove D::Id from these? Seems redundant with marks.
 /// The contents of a single pretty printed line.
 pub struct Line<'d, D: PrettyDoc<'d>> {
     /// The indentation of this line, together with its id and mark.
