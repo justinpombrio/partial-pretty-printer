@@ -172,6 +172,26 @@ impl<'d, D: PrettyDoc<'d>> FocusedLine<'d, D> {
         }
         width
     }
+
+    pub fn to_left_string(&self) -> String {
+        let mut string = format!(
+            "{:spaces$}",
+            "",
+            spaces = self.indentation.num_spaces as usize
+        );
+        for segment in &self.left_segments {
+            string.push_str(segment.str);
+        }
+        string
+    }
+
+    pub fn to_right_string(&self) -> String {
+        let mut string = String::new();
+        for segment in &self.right_segments {
+            string.push_str(segment.str);
+        }
+        string
+    }
 }
 
 impl<'d, D: PrettyDoc<'d>> From<FocusedLine<'d, D>> for Line<'d, D> {
@@ -347,9 +367,10 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
     fn seek(&mut self, path: &[usize], seek_end: bool) -> Result<(), PrintingError> {
         use ConsolidatedNotation::*;
         span!("seek");
+        println!("seek! ({})", seek_end);
 
-        for child_index in path {
-            self.seek_child(*child_index)?;
+        for (i, child_index) in path.iter().enumerate() {
+            self.seek_child(*child_index, i + 1 < path.len())?;
         }
         if seek_end && path.is_empty() {
             while self.next_blocks.len() > 1 {
@@ -383,9 +404,11 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
         Ok(())
     }
 
+    // 1. A B C
+
     /// Moves the focus to the left of the i'th child of the chunk that is immediately to the right
     /// of the current focus.
-    fn seek_child(&mut self, child_index: usize) -> Result<(), PrintingError> {
+    fn seek_child(&mut self, child_index: usize, expand_child: bool) -> Result<(), PrintingError> {
         use ConsolidatedNotation::*;
         span!("seek_child");
 
@@ -427,7 +450,11 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
                     Textual(textual) => block.push_text(chunk.id, chunk.mark, textual),
                     Child(i, child) if chunk.id == parent_id && i == child_index => {
                         // Found!
-                        self.expand_focusing_first_block(&mut block, Chunk::new(child)?)?;
+                        if expand_child {
+                            self.expand_focusing_first_block(&mut block, Chunk::new(child)?)?;
+                        } else {
+                            block.chunks.push(chunk);
+                        }
                         self.next_blocks.push(block);
                         return Ok(());
                     }
@@ -556,7 +583,7 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
     }
 
     #[allow(unused)]
-    fn display(&self) {
+    fn debug_long(&self) {
         for block in &self.prev_blocks {
             for segment in &block.segments {
                 print!("'{}' ", segment.str);
@@ -573,6 +600,36 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
             for chunk in &block.chunks {
                 print!("{} ", chunk.notation);
             }
+        }
+        println!();
+    }
+
+    #[allow(unused)]
+    pub fn debug_short(&self) {
+        fn print_block<'d, D: PrettyDoc<'d>>(block: &Block<'d, D>) {
+            println!(
+                "{:spaces$}{}|{}",
+                "",
+                block
+                    .segments
+                    .iter()
+                    .map(|seg| seg.str)
+                    .fold(String::new(), |a, b| a + b),
+                block.chunks.len(),
+                spaces = block.indentation.num_spaces as usize,
+            );
+        }
+
+        for block in &self.prev_blocks {
+            print_block(block);
+        }
+        println!("---focus---");
+        if let Some(focused_block) = self.next_blocks.last() {
+            print_block(focused_block);
+        }
+        println!("-----------");
+        for block in self.next_blocks.iter().rev().skip(1) {
+            print_block(block);
         }
         println!();
     }

@@ -242,12 +242,58 @@ fn flow_wrap() {
     assert_pp_seek(
         &doc,
         19,
-        &[0, 2],
-        false,
         &[],
         &[
             // force rustfmt
-            "始    Oh, woe, is,",
+            "(始    Oh, woe, is,",
+            "me, the, turbofish,",
+            "remains,",
+            "undefeated端)",
+        ],
+    );
+    assert_pp_seek(
+        &doc,
+        19,
+        &[0],
+        &[
+            // force rustfmt
+            "始(    Oh, woe, is,",
+            "me, the, turbofish,",
+            "remains,",
+            "undefeated)端",
+        ],
+    );
+    assert_pp_seek(
+        &doc,
+        19,
+        &[0, 0],
+        &[
+            // force rustfmt
+            "始    (Oh), woe, is,",
+            "me, the, turbofish,",
+            "remains,",
+            "undefeated端",
+        ],
+    );
+    assert_pp_seek(
+        &doc,
+        19,
+        &[0, 1],
+        &[
+            // force rustfmt
+            "始    Oh, (woe), is,",
+            "me, the, turbofish,",
+            "remains,",
+            "undefeated端",
+        ],
+    );
+    assert_pp_seek(
+        &doc,
+        19,
+        &[0, 2],
+        &[
+            // force rustfmt
+            "始    Oh, woe, (is),",
             "me, the, turbofish,",
             "remains,",
             "undefeated端",
@@ -257,14 +303,10 @@ fn flow_wrap() {
         &doc,
         19,
         &[0, 3],
-        false,
         &[
             // force rustfmt
             "始    Oh, woe, is,",
-        ],
-        &[
-            // force rustfmt
-            "me, the, turbofish,",
+            "(me), the, turbofish,",
             "remains,",
             "undefeated端",
         ],
@@ -273,14 +315,10 @@ fn flow_wrap() {
         &doc,
         19,
         &[0, 4],
-        false,
         &[
             // force rustfmt
             "始    Oh, woe, is,",
-        ],
-        &[
-            // force rustfmt
-            "me, the, turbofish,",
+            "me, (the), turbofish,",
             "remains,",
             "undefeated端",
         ],
@@ -289,14 +327,10 @@ fn flow_wrap() {
         &doc,
         19,
         &[0, 5],
-        false,
         &[
             // force rustfmt
             "始    Oh, woe, is,",
-        ],
-        &[
-            // force rustfmt
-            "me, the, turbofish,",
+            "me, the, (turbofish),",
             "remains,",
             "undefeated端",
         ],
@@ -305,15 +339,11 @@ fn flow_wrap() {
         &doc,
         19,
         &[0, 6],
-        false,
         &[
             // force rustfmt
             "始    Oh, woe, is,",
             "me, the, turbofish,",
-        ],
-        &[
-            // force rustfmt
-            "remains,",
+            "(remains),",
             "undefeated端",
         ],
     );
@@ -321,16 +351,12 @@ fn flow_wrap() {
         &doc,
         19,
         &[0, 7],
-        false,
         &[
             // force rustfmt
             "始    Oh, woe, is,",
             "me, the, turbofish,",
             "remains,",
-        ],
-        &[
-            // force rustfmt
-            "undefeated端",
+            "(undefeated)端",
         ],
     );
 }

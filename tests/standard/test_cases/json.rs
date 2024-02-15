@@ -42,7 +42,6 @@ fn json_seek() {
         ("Age", json_number(42.0)),
     ]);
     let refn = doc.as_ref();
-
     assert_pp(
         refn,
         28,
@@ -51,85 +50,6 @@ fn json_seek() {
             r#"{"Name": "Alice", "Age": 42}"#,
         ],
     );
-
-    assert_pp_seek(
-        refn,
-        27,
-        &[],
-        false,
-        &[],
-        &[
-            // force rustfmt
-            "{",
-            "    \"Name\": \"Alice\",",
-            "    \"Age\": 42",
-            "}",
-        ],
-    );
-    assert_pp_seek(
-        refn,
-        27,
-        &[0],
-        false,
-        &[
-            // force rustfmt
-            "{",
-        ],
-        &[
-            // force rustfmt
-            "    \"Name\": \"Alice\",",
-            "    \"Age\": 42",
-            "}",
-        ],
-    );
-    assert_pp_seek(
-        refn,
-        27,
-        &[0, 0],
-        false,
-        &[
-            // force rustfmt
-            "{",
-        ],
-        &[
-            // force rustfmt
-            "    \"Name\": \"Alice\",",
-            "    \"Age\": 42",
-            "}",
-        ],
-    );
-    assert_pp_seek(
-        refn,
-        27,
-        &[1],
-        false,
-        &[
-            // force rustfmt
-            "{",
-            "    \"Name\": \"Alice\",",
-        ],
-        &[
-            // force rustfmt
-            "    \"Age\": 42",
-            "}",
-        ],
-    );
-    assert_pp_seek(
-        refn,
-        27,
-        &[1, 0],
-        false,
-        &[
-            // force rustfmt
-            "{",
-            "    \"Name\": \"Alice\",",
-        ],
-        &[
-            // force rustfmt
-            "    \"Age\": 42",
-            "}",
-        ],
-    );
     assert_pp(
         refn,
         27,
@@ -138,6 +58,67 @@ fn json_seek() {
             "{",
             "    \"Name\": \"Alice\",",
             "    \"Age\": 42",
+            "}",
+        ],
+    );
+
+    assert_pp_seek(
+        refn,
+        27,
+        &[],
+        &[
+            // force rustfmt
+            "({",
+            "    \"Name\": \"Alice\",",
+            "    \"Age\": 42",
+            "})",
+        ],
+    );
+    assert_pp_seek(
+        refn,
+        27,
+        &[0],
+        &[
+            // force rustfmt
+            "{",
+            "    (\"Name\": \"Alice\"),",
+            "    \"Age\": 42",
+            "}",
+        ],
+    );
+    assert_pp_seek(
+        refn,
+        27,
+        &[0, 0],
+        &[
+            // force rustfmt
+            "{",
+            "    (\"Name\"): \"Alice\",",
+            "    \"Age\": 42",
+            "}",
+        ],
+    );
+    assert_pp_seek(
+        refn,
+        27,
+        &[1],
+        &[
+            // force rustfmt
+            "{",
+            "    \"Name\": \"Alice\",",
+            "    (\"Age\": 42)",
+            "}",
+        ],
+    );
+    assert_pp_seek(
+        refn,
+        27,
+        &[1, 1],
+        &[
+            // force rustfmt
+            "{",
+            "    \"Name\": \"Alice\",",
+            "    \"Age\": (42)",
             "}",
         ],
     );
@@ -147,7 +128,7 @@ fn json_seek() {
 #[should_panic(expected = "InvalidPath")]
 fn json_invalid_path() {
     let doc = json_dict(vec![("x", json_number(1.0)), ("y", json_number(2.0))]);
-    assert_pp_seek(doc.as_ref(), 80, &[0, 2], false, &[], &[]);
+    assert_pp_seek(doc.as_ref(), 80, &[0, 2], &[]);
 }
 
 fn favorites_list() -> Json {

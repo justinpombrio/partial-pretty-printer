@@ -64,16 +64,19 @@ fn print_above_and_below<'d, D: PrettyDoc<'d>>(
     width: Width,
     path: &[usize],
     seek_end: bool,
-) -> (Vec<String>, Vec<String>) {
+) -> (Vec<String>, String, String, Vec<String>) {
     let (upward_printer, focused_line, downward_printer) =
         pretty_print(doc, width, path, seek_end).unwrap();
     let mut lines_above = upward_printer
         .map(|line| line.unwrap().to_string())
         .collect::<Vec<_>>();
     lines_above.reverse();
-    let mut lines_below = vec![focused_line.to_string()];
-    lines_below.extend(downward_printer.map(|line| line.unwrap().to_string()));
-    (lines_above, lines_below)
+    let left_string = focused_line.to_left_string();
+    let right_string = focused_line.to_right_string();
+    let lines_below = downward_printer
+        .map(|line| line.unwrap().to_string())
+        .collect::<Vec<_>>();
+    (lines_above, left_string, right_string, lines_below)
 }
 
 pub fn all_paths<'d, D: PrettyDoc<'d>>(doc: D) -> Vec<Vec<usize>> {
@@ -145,9 +148,9 @@ fn assert_pp_impl<'d, D: PrettyDoc<'d>>(doc: D, width: Width, expected_lines: Op
     );
     for path in all_paths(doc) {
         for seek_end in [false, true] {
-            let (lines_above, mut lines_below) = print_above_and_below(doc, width, &path, seek_end);
-            let mut lines = lines_above;
-            lines.append(&mut lines_below);
+            let (lines_above, left_string, right_string, lines_below) =
+                print_above_and_below(doc, width, &path, seek_end);
+            let lines = concat_lines(lines_above, left_string, right_string, lines_below);
             compare_lines(
                 &format!(
                     "IN PRETTY PRINTING AT PATH {:?} (seek_end={})",
@@ -160,25 +163,51 @@ fn assert_pp_impl<'d, D: PrettyDoc<'d>>(doc: D, width: Width, expected_lines: Op
     }
 }
 
+fn concat_lines(
+    lines_above: Vec<String>,
+    left_string: String,
+    right_string: String,
+    lines_below: Vec<String>,
+) -> Vec<String> {
+    let mut lines = lines_above;
+    let mut center_line = left_string;
+    center_line.push_str(&right_string);
+    lines.push(center_line);
+    lines.extend(lines_below);
+    lines
+}
+
 #[track_caller]
 pub fn assert_pp_seek<'d, D: PrettyDoc<'d>>(
     doc: D,
     width: Width,
     path: &[usize],
-    seek_end: bool,
-    expected_lines_above: &[&str],
-    expected_lines_below: &[&str],
+    expected_lines: &[&str],
 ) {
-    let (lines_above, lines_below) = print_above_and_below(doc, width, path, seek_end);
+    let (lines_above_1, left_string_1, right_string_1, lines_below_1) =
+        print_above_and_below(doc, width, path, false);
+    let (lines_above_2, left_string_2, right_string_2, lines_below_2) =
+        print_above_and_below(doc, width, path, true);
+    let start_row = lines_above_1.len();
+    let end_row = lines_above_2.len();
+    let start_col = left_string_1.len();
+    let end_col = left_string_2.len();
+
+    let lines_1 = concat_lines(lines_above_1, left_string_1, right_string_1, lines_below_1);
+    let lines_2 = concat_lines(lines_above_2, left_string_2, right_string_2, lines_below_2);
     compare_lines(
-        &format!("IN DOWNWARD PRINTING AT PATH {:?}", path),
-        ("EXPECTED", expected_lines_below.join("\n")),
-        ("ACTUAL", lines_below.join("\n")),
+        &format!("IN PRINTING AT PATH {:?}", path),
+        ("SEEK_START", lines_1.join("\n")),
+        ("SEEK_END", lines_2.join("\n")),
     );
+
+    let mut lines_with_focus = lines_1;
+    lines_with_focus[end_row].insert(end_col, ')');
+    lines_with_focus[start_row].insert(start_col, '(');
     compare_lines(
-        &format!("IN UPWARD PRINTING AT PATH {:?}", path),
-        ("EXPECTED", expected_lines_above.join("\n")),
-        ("ACTUAL", lines_above.join("\n")),
+        &format!("IN PRINTING AT PATH {:?}", path),
+        ("EXPECTED", expected_lines.join("\n")),
+        ("ACTUAL", lines_with_focus.join("\n")),
     );
 }
 
