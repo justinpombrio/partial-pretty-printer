@@ -65,14 +65,14 @@ fn print_above_and_below<'d, D: PrettyDoc<'d>>(
     path: &[usize],
     seek_end: bool,
 ) -> (Vec<String>, Vec<String>) {
-    let (upward_printer, downward_printer) = pretty_print(doc, width, path, seek_end).unwrap();
+    let (upward_printer, focused_line, downward_printer) =
+        pretty_print(doc, width, path, seek_end).unwrap();
     let mut lines_above = upward_printer
         .map(|line| line.unwrap().to_string())
         .collect::<Vec<_>>();
     lines_above.reverse();
-    let lines_below = downward_printer
-        .map(|line| line.unwrap().to_string())
-        .collect::<Vec<_>>();
+    let mut lines_below = vec![focused_line.to_string()];
+    lines_below.extend(downward_printer.map(|line| line.unwrap().to_string()));
     (lines_above, lines_below)
 }
 
@@ -97,15 +97,17 @@ pub fn print_region<'d, D: PrettyDoc<'d>>(
     seek_end: bool,
     rows: usize,
 ) -> Vec<String> {
-    let (upward_printer, downward_printer) = pretty_print(doc, width, path, seek_end).unwrap();
+    let (upward_printer, focused_line, downward_printer) =
+        pretty_print(doc, width, path, seek_end).unwrap();
     let mut lines = upward_printer
         .map(|line| line.unwrap().to_string())
         .take(rows / 2)
         .collect::<Vec<_>>();
     lines.reverse();
+    lines.push(focused_line.to_string());
     let mut lines_below = downward_printer
         .map(|line| line.unwrap().to_string())
-        .take(rows / 2)
+        .take(rows / 2 - 1)
         .collect::<Vec<_>>();
     lines.append(&mut lines_below);
     lines

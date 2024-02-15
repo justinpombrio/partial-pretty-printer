@@ -4,6 +4,7 @@ use super::consolidated_notation::{
 use super::pretty_doc::PrettyDoc;
 use crate::geometry::{str_width, Width};
 use crate::infra::span;
+use std::convert::From;
 use std::iter::Iterator;
 use std::mem;
 
@@ -16,10 +17,11 @@ use std::mem;
 /// `marks` is a set of document node ids to mark. Each chunk of text in the output will say which,
 /// if any, marked id it is part of.
 ///
-/// Returns a pair of iterators:
+/// Returns a tuple with three things:
 ///
-/// - the first prints lines above the focused node going up
-/// - the second prints lines from the first line of the focused node going down
+/// - an iterator that prints lines above the focused line going up
+/// - the focused line
+/// - an iterator that prints lines below the focused line going down
 ///
 /// It is expected that you will take only as many lines as you need from the iterators; doing so
 /// will save computation time.
@@ -31,6 +33,7 @@ pub fn pretty_print<'d, D: PrettyDoc<'d>>(
 ) -> Result<
     (
         impl Iterator<Item = Result<Line<'d, D>, PrintingError>>,
+        FocusedLine<'d, D>,
         impl Iterator<Item = Result<Line<'d, D>, PrintingError>>,
     ),
     PrintingError,
@@ -39,17 +42,28 @@ pub fn pretty_print<'d, D: PrettyDoc<'d>>(
 
     let mut printer = Printer::new(doc, width)?;
     printer.seek(path, seek_end)?;
+
+    let num_left_segs = printer.next_blocks.last().unwrap().segments.len();
+    let mut line = printer.print_next_line()?.unwrap();
+    let focused_line = FocusedLine {
+        indentation: line.indentation,
+        right_segments: line.segments.split_off(num_left_segs),
+        left_segments: line.segments,
+    };
+
     let upward_printer = UpwardPrinter(Printer {
         width,
         prev_blocks: printer.prev_blocks,
         next_blocks: Vec::new(),
     });
+
     let downward_printer = DownwardPrinter(Printer {
         width,
         prev_blocks: Vec::new(),
         next_blocks: printer.next_blocks,
     });
-    Ok((upward_printer, downward_printer))
+
+    Ok((upward_printer, focused_line, downward_printer))
 }
 
 /// Print the entirety of the document to a single string, ignoring styles and shading.
@@ -60,8 +74,8 @@ pub fn pretty_print_to_string<'d, D: PrettyDoc<'d>>(
     doc: D,
     width: Width,
 ) -> Result<String, PrintingError> {
-    let (_, mut lines_iter) = pretty_print(doc, width, &[], false)?;
-    let mut string = lines_iter.next().unwrap()?.to_string();
+    let (_, focused_line, lines_iter) = pretty_print(doc, width, &[], false)?;
+    let mut string = focused_line.to_string();
     for line in lines_iter {
         string.push('\n');
         string.push_str(&line?.to_string());
@@ -94,15 +108,24 @@ impl<'d, D: PrettyDoc<'d>> Chunk<'d, D> {
     }
 }
 
-// TODO: Lots of overlap between Line and Block. Merge them.
 // TODO: Remove D::Id from these? Seems redundant with marks.
 /// The contents of a single pretty printed line.
 pub struct Line<'d, D: PrettyDoc<'d>> {
     /// The indentation of this line, together with its id and mark.
     pub indentation: Indentation<'d, D>,
-    /// A sequence of pieces of text to be displayed after `spaces`, in order from left to right,
-    /// with no spacing in between.
+    /// A sequence of pieces of text to be displayed after `indentation`, in order from left to
+    /// right, with no spacing in between.
     pub segments: Vec<Segment<'d, D>>,
+}
+
+/// The contents of the line containing the focus point.
+pub struct FocusedLine<'d, D: PrettyDoc<'d>> {
+    /// The indentation of this line, together with its id and mark.
+    pub indentation: Indentation<'d, D>,
+    /// Pieces of text that appear after the indentation but before the focus point.
+    pub left_segments: Vec<Segment<'d, D>>,
+    /// Pieces of text that appear after the focus point.
+    pub right_segments: Vec<Segment<'d, D>>,
 }
 
 #[derive(Debug)]
@@ -141,6 +164,27 @@ impl<'d, D: PrettyDoc<'d>> Line<'d, D> {
     }
 }
 
+impl<'d, D: PrettyDoc<'d>> FocusedLine<'d, D> {
+    pub fn width(&self) -> Width {
+        let mut width = self.indentation.num_spaces;
+        for segment in self.left_segments.iter().chain(self.right_segments.iter()) {
+            width += str_width(segment.str);
+        }
+        width
+    }
+}
+
+impl<'d, D: PrettyDoc<'d>> From<FocusedLine<'d, D>> for Line<'d, D> {
+    fn from(focused_line: FocusedLine<'d, D>) -> Line<'d, D> {
+        let mut segments = focused_line.left_segments;
+        segments.extend(focused_line.right_segments);
+        Line {
+            indentation: focused_line.indentation,
+            segments,
+        }
+    }
+}
+
 impl<'d, D: PrettyDoc<'d>> ToString for Line<'d, D> {
     fn to_string(&self) -> String {
         span!("Line::to_string");
@@ -151,6 +195,22 @@ impl<'d, D: PrettyDoc<'d>> ToString for Line<'d, D> {
             spaces = self.indentation.num_spaces as usize
         );
         for segment in &self.segments {
+            string.push_str(segment.str);
+        }
+        string
+    }
+}
+
+impl<'d, D: PrettyDoc<'d>> ToString for FocusedLine<'d, D> {
+    fn to_string(&self) -> String {
+        span!("FocusedLine::to_string");
+
+        let mut string = format!(
+            "{:spaces$}",
+            "",
+            spaces = self.indentation.num_spaces as usize
+        );
+        for segment in self.left_segments.iter().chain(self.right_segments.iter()) {
             string.push_str(segment.str);
         }
         string
@@ -203,6 +263,10 @@ impl<'d, D: PrettyDoc<'d>> Block<'d, D> {
     }
 }
 
+/// While seeking, the Printer has a "focus" at some position in the text.
+/// This focus is defined as the boundary between `segments` and `chunks`
+/// of the top Block in `next_blocks`. The focus is only defined while
+/// seeking, not during calls to `print_prev_line` and `print_next_line`.
 struct Printer<'d, D: PrettyDoc<'d>> {
     /// Printing width
     width: Width,
@@ -277,6 +341,9 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
         Ok(Some(block.print()))
     }
 
+    /// Moves the focus to the left or right of the node at the given path,
+    /// relative to the node to the right of the current focus.
+    /// (You don't want to seek twice.)
     fn seek(&mut self, path: &[usize], seek_end: bool) -> Result<(), PrintingError> {
         use ConsolidatedNotation::*;
         span!("seek");
@@ -285,12 +352,18 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
             self.seek_child(*child_index)?;
         }
         if seek_end && path.is_empty() {
-            while let Some(block) = self.next_blocks.pop() {
+            while self.next_blocks.len() > 1 {
+                let block = self.next_blocks.pop().unwrap();
                 self.prev_blocks.push(block);
             }
-        } else if seek_end {
+        }
+        if seek_end {
             let mut block = self.next_blocks.pop().unwrap();
-            let num_chunks_after = block.chunks.len() - 1;
+            let num_chunks_after = if path.is_empty() {
+                0
+            } else {
+                block.chunks.len() - 1
+            };
             while block.chunks.len() > num_chunks_after {
                 let chunk = block.chunks.pop().unwrap();
                 match chunk.notation {
@@ -305,14 +378,13 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
                     }
                 }
             }
-            self.prev_blocks.push(block);
+            self.next_blocks.push(block);
         }
         Ok(())
     }
 
-    /// Moves the focus point to the i'th child of the chunk that is immediately to the right of
-    /// the current focus point. The new focus point will be immediately to the left of the
-    /// i'th child.
+    /// Moves the focus to the left of the i'th child of the chunk that is immediately to the right
+    /// of the current focus.
     fn seek_child(&mut self, child_index: usize) -> Result<(), PrintingError> {
         use ConsolidatedNotation::*;
         span!("seek_child");

@@ -84,7 +84,7 @@ where
             let doc_width = render_options.choose_width(rect.width());
             let focal_line = render_options.focal_line(rect.height());
             let at_end = render_options.cursor_at_end;
-            let (mut upward_printer, mut downward_printer) =
+            let (mut upward_printer, focused_line, mut downward_printer) =
                 pretty_print(doc, doc_width, &path, at_end)?;
             for row in (0..focal_line).into_iter().rev() {
                 if let Some(contents) = upward_printer.next() {
@@ -93,7 +93,12 @@ where
                     break;
                 }
             }
-            for row in focal_line..rect.height() {
+            let focal_pos = Pos {
+                row: focal_line,
+                col: 0,
+            };
+            print_line(window, Line::from(focused_line), focal_pos, rect)?;
+            for row in (focal_line + 1)..rect.height() {
                 if let Some(contents) = downward_printer.next() {
                     print_line(window, contents?, Pos { row, col: 0 }, rect)?;
                 } else {
@@ -207,8 +212,8 @@ fn doc_height<'d>(
     width: Width,
     max_height: Height,
 ) -> Result<Height, PrintingError> {
-    let (_, downward_printer) = pretty_print(doc, width, &[], false)?;
-    Ok(downward_printer.take(max_height as usize).count() as Height)
+    let (_, _focused_line, downward_printer) = pretty_print(doc, width, &[], false)?;
+    Ok(downward_printer.take(max_height as usize - 1).count() as Height + 1)
 }
 
 // TODO: This needs to take into account focal_line!
@@ -221,12 +226,10 @@ fn doc_width<'d>(
     height: Height,
     max_width: Width,
 ) -> Result<Width, PrintingError> {
-    let (_, downward_printer) = pretty_print(doc, max_width, path, cursor_at_end)?;
-    let lines = downward_printer.take(height as usize);
-    let mut width = 0;
-    for line in lines {
-        let line = line?;
-        width = width.max(line.width());
+    let (_, focused_line, downward_printer) = pretty_print(doc, max_width, path, cursor_at_end)?;
+    let mut width = focused_line.width();
+    for line in downward_printer.take(height as usize - 1) {
+        width = width.max(line?.width());
     }
     Ok(width)
 }
