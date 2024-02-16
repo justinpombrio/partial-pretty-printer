@@ -367,7 +367,6 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
     fn seek(&mut self, path: &[usize], seek_end: bool) -> Result<(), PrintingError> {
         use ConsolidatedNotation::*;
         span!("seek");
-        println!("seek! ({})", seek_end);
 
         for (i, child_index) in path.iter().enumerate() {
             self.seek_child(*child_index, i + 1 < path.len())?;

@@ -4,13 +4,23 @@ use super::tree::Tree;
 use super::{BasicStyle, Color};
 use crate::notation::Notation;
 use crate::notation_constructors::{
-    child, count, empty, flat, fold, left, lit, nl, right, text, Count, Fold,
+    child, count, empty, flat, fold, left, lit, mark, nl, right, text, Count, Fold,
 };
 use crate::valid_notation::ValidNotation;
 use once_cell::sync::Lazy;
 
 fn punct(s: &'static str) -> Notation<BasicStyle> {
     lit(s, BasicStyle::new())
+}
+
+fn open(s: &'static str) -> Notation<BasicStyle> {
+    // For testing partial node marks; doesn't really effect printing
+    mark("open", lit(s, BasicStyle::new()))
+}
+
+fn close(s: &'static str) -> Notation<BasicStyle> {
+    // For testing partial node marks; doesn't really effect printing
+    mark("close", lit(s, BasicStyle::new()))
 }
 
 fn constant(s: &'static str) -> Notation<BasicStyle> {
@@ -28,7 +38,7 @@ static JSON_FALSE_NOTATION: Lazy<ValidNotation<BasicStyle>> =
 
 static JSON_STRING_NOTATION: Lazy<ValidNotation<BasicStyle>> = Lazy::new(|| {
     let style = BasicStyle::new().color(Color::Magenta);
-    (punct("\"") + text(style) + punct("\""))
+    (lit("\"", style) + text(style) + lit("\"", style))
         .validate()
         .unwrap()
 });
@@ -43,19 +53,19 @@ static JSON_LIST_NOTATION: Lazy<ValidNotation<BasicStyle>> = Lazy::new(|| {
         first: flat(child(0)),
         join: left() + punct(", ") + flat(right()),
     });
-    let single = punct("[") + single_seq + punct("]");
+    let single = open("[") + single_seq + close("]");
 
     let multi_seq = 4
         >> fold(Fold {
             first: child(0),
             join: left() + punct(",") ^ right(),
         });
-    let multi = punct("[") + multi_seq ^ punct("]");
+    let multi = open("[") + multi_seq ^ close("]");
 
     let list = single | multi;
 
     count(Count {
-        zero: punct("[]"),
+        zero: open("[") + close("]"),
         one: list.clone(),
         many: list,
     })
@@ -71,18 +81,18 @@ static JSON_DICT_NOTATION: Lazy<ValidNotation<BasicStyle>> = Lazy::new(|| {
         first: flat(child(0)),
         join: left() + punct(", ") + flat(right()),
     });
-    let single = punct("{") + single_seq + punct("}");
+    let single = open("{") + single_seq + close("}");
 
     let multi_seq = fold(Fold {
         first: child(0),
         join: left() + punct(",") ^ right(),
     });
-    let multi = punct("{") + (4 >> multi_seq) ^ punct("}");
+    let multi = open("{") + (4 >> multi_seq) ^ close("}");
 
     let dict = single | multi;
 
     count(Count {
-        zero: punct("{}"),
+        zero: open("{") + close("}"),
         one: dict.clone(),
         many: dict,
     })

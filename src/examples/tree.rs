@@ -1,12 +1,18 @@
 use crate::pretty_printing::PrettyDoc;
 use crate::valid_notation::ValidNotation;
+use std::cell::Cell;
 use std::fmt;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::thread_local;
 
-static ID_COUNTER: AtomicU32 = AtomicU32::new(1); // id 0 reserved for Default
+thread_local! {
+    // id 0 reserved for Default
+    static ID_COUNTER: Cell<u32> = Cell::new(1);
+}
 
 fn next_id() -> u32 {
-    ID_COUNTER.fetch_add(1, Ordering::SeqCst)
+    let id = ID_COUNTER.get();
+    ID_COUNTER.set(id + 1);
+    id
 }
 
 #[derive(Debug)]
@@ -66,6 +72,11 @@ where
         self.partial_node_marks.push((name.to_owned(), mark));
         self
     }
+
+    /// Must only be called between constructions of distinct Json docs.
+    pub fn reset_id() {
+        ID_COUNTER.set(1);
+    }
 }
 
 impl<'d, Style, Mark> PrettyDoc<'d> for &'d Tree<Style, Mark>
@@ -83,6 +94,19 @@ where
 
     fn notation(self) -> &'d ValidNotation<Style> {
         self.notation
+    }
+
+    fn whole_node_mark(self) -> Option<&'d Self::Mark> {
+        self.whole_node_mark.as_ref()
+    }
+
+    fn partial_node_mark(self, mark_name: &'static str) -> Option<&'d Self::Mark> {
+        for (name, mark) in &self.partial_node_marks {
+            if name == mark_name {
+                return Some(mark);
+            }
+        }
+        None
     }
 
     fn num_children(self) -> Option<usize> {

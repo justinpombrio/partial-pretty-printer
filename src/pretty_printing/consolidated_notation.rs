@@ -151,149 +151,172 @@ impl<'d, D: PrettyDoc<'d>> DelayedConsolidatedNotation<'d, D> {
     }
 
     /// Expand this node, to get a usable `ConsolidatedNotation` and its mark (if any).
-    pub fn eval(self) -> Result<(ConsolidatedNotation<'d, D>, Option<&'d D::Mark>), PrintingError> {
-        let notation = self.eval_notation()?;
-        Ok((notation, self.mark))
-    }
-
-    fn eval_notation(mut self) -> Result<ConsolidatedNotation<'d, D>, PrintingError> {
+    pub fn eval(
+        mut self,
+    ) -> Result<(ConsolidatedNotation<'d, D>, Option<&'d D::Mark>), PrintingError> {
         use Notation::*;
 
-        loop {
-            match self.notation {
-                Empty => return Ok(ConsolidatedNotation::Empty),
-                Newline => return Ok(ConsolidatedNotation::Newline(self.indent)),
-                Literal(lit) => {
-                    return Ok(ConsolidatedNotation::Textual(Textual {
-                        str: lit.str(),
-                        width: lit.width(),
-                        style: lit.style(),
-                    }))
-                }
-                Text(style) => {
-                    if self.doc.num_children().is_some() {
-                        return Err(PrintingError::TextNotationOnTextlessDoc);
-                    } else {
-                        let text = self.doc.unwrap_text();
-                        return Ok(ConsolidatedNotation::Textual(Textual {
+        match self.notation {
+            Empty => Ok((ConsolidatedNotation::Empty, self.mark)),
+            Newline => Ok((ConsolidatedNotation::Newline(self.indent), self.mark)),
+            Literal(lit) => Ok((
+                ConsolidatedNotation::Textual(Textual {
+                    str: lit.str(),
+                    width: lit.width(),
+                    style: lit.style(),
+                }),
+                self.mark,
+            )),
+            Text(style) => {
+                if self.doc.num_children().is_some() {
+                    Err(PrintingError::TextNotationOnTextlessDoc)
+                } else {
+                    let text = self.doc.unwrap_text();
+                    Ok((
+                        ConsolidatedNotation::Textual(Textual {
                             str: text,
                             width: str_width(text),
                             style,
-                        }));
-                    }
+                        }),
+                        self.mark,
+                    ))
                 }
-                Flat(note) => {
-                    self.flat = true;
-                    self.notation = note;
-                }
-                Indent(indent, note) => {
-                    self.indent += indent;
-                    self.notation = note;
-                }
-                Concat(note1, note2) => {
-                    let mut cnote1 = self;
-                    cnote1.notation = note1;
-                    let mut cnote2 = self;
-                    cnote2.notation = note2;
-                    return Ok(ConsolidatedNotation::Concat(cnote1, cnote2));
-                }
-                Choice(note1, _note2) if self.flat => {
-                    self.notation = note1;
-                }
-                Choice(note1, note2) => {
-                    let mut cnote1 = self;
-                    cnote1.notation = note1;
-                    let mut cnote2 = self;
-                    cnote2.notation = note2;
-                    return Ok(ConsolidatedNotation::Choice(cnote1, cnote2));
-                }
-                IfEmptyText(note1, note2) => {
-                    if self.doc.num_children().is_some() {
-                        return Err(PrintingError::IfEmptyTextNotationOnTextlessDoc);
-                    }
-                    if self.doc.unwrap_text().is_empty() {
-                        self.notation = note1;
-                    } else {
-                        self.notation = note2;
-                    }
-                }
-                Child(i) => match self.doc.num_children() {
-                    None => return Err(PrintingError::ChildNotationOnChildlessDoc),
-                    Some(n) if *i >= n => {
-                        return Err(PrintingError::ChildIndexOutOfBounds { index: *i, len: n })
-                    }
-                    Some(_) => {
-                        self.doc = self.doc.unwrap_child(*i);
-                        self.notation = &self.doc.notation().0;
-                        if let Some(mark) = self.doc.whole_node_mark() {
-                            self.mark = Some(mark);
-                        }
-                        return Ok(ConsolidatedNotation::Child(*i, self));
-                    }
-                },
-                Mark(mark_name, note) => {
-                    if let Some(mark) = self.doc.partial_node_mark(mark_name) {
-                        self.mark = Some(mark);
-                    }
-                    self.notation = note;
-                }
-                Count { zero, one, many } => match self.doc.num_children() {
-                    None => return Err(PrintingError::CountNotationOnChildlessDoc),
-                    Some(0) => self.notation = zero,
-                    Some(1) => self.notation = one,
-                    Some(_) => self.notation = many,
-                },
-                Fold { first, join } => match self.doc.num_children() {
-                    None => return Err(PrintingError::NumChildrenChanged),
-                    Some(0) => return Err(PrintingError::FoldNotationOnChildlessDoc),
-                    Some(1) => self.notation = first,
-                    Some(n) => {
-                        self.join_pos = Some(JoinPos {
-                            parent: self.doc,
-                            child: self.doc.unwrap_last_child(),
-                            index: n - 1,
-                            first,
-                            join,
-                        });
-                        self.notation = join;
-                    }
-                },
-                Left => {
-                    match &mut self.join_pos {
-                        None => {
-                            panic!("Bug: Left used outside of fold; should have been caught by validation")
-                        }
-                        Some(JoinPos {
-                            parent,
-                            child,
-                            index,
-                            first,
-                            join,
-                        }) => {
-                            if *index == 1 {
-                                self.notation = *first;
-                                self.join_pos = None;
-                            } else {
-                                *child = child.unwrap_prev_sibling(*parent, *index - 1);
-                                *index -= 1;
-                                self.notation = *join;
-                            }
-                        }
-                    }
-                }
-                Right => match &mut self.join_pos {
-                    None => {
-                        panic!("Bug: Right used outside of fold; should have been caught by validation")
-                    }
-                    Some(JoinPos { child, index, .. }) => {
-                        let index = *index;
-                        self.doc = *child;
-                        self.notation = &child.notation().0;
-                        self.join_pos = None;
-                        return Ok(ConsolidatedNotation::Child(index, self));
-                    }
-                },
             }
+            Flat(note) => {
+                self.flat = true;
+                self.notation = note;
+                self.eval()
+            }
+            Indent(indent, note) => {
+                self.indent += indent;
+                self.notation = note;
+                self.eval()
+            }
+            Concat(note1, note2) => {
+                let mut cnote1 = self;
+                cnote1.notation = note1;
+                let mut cnote2 = self;
+                cnote2.notation = note2;
+                Ok((ConsolidatedNotation::Concat(cnote1, cnote2), self.mark))
+            }
+            Choice(note1, _note2) if self.flat => {
+                self.notation = note1;
+                self.eval()
+            }
+            Choice(note1, note2) => {
+                let mut cnote1 = self;
+                cnote1.notation = note1;
+                let mut cnote2 = self;
+                cnote2.notation = note2;
+                Ok((ConsolidatedNotation::Choice(cnote1, cnote2), self.mark))
+            }
+            IfEmptyText(note1, note2) => {
+                if self.doc.num_children().is_some() {
+                    return Err(PrintingError::IfEmptyTextNotationOnTextlessDoc);
+                }
+                if self.doc.unwrap_text().is_empty() {
+                    self.notation = note1;
+                    self.eval()
+                } else {
+                    self.notation = note2;
+                    self.eval()
+                }
+            }
+            Child(i) => match self.doc.num_children() {
+                None => Err(PrintingError::ChildNotationOnChildlessDoc),
+                Some(n) if *i >= n => {
+                    Err(PrintingError::ChildIndexOutOfBounds { index: *i, len: n })
+                }
+                Some(_) => {
+                    let parent_mark = self.mark;
+                    self.doc = self.doc.unwrap_child(*i);
+                    self.notation = &self.doc.notation().0;
+                    if let Some(child_mark) = self.doc.whole_node_mark() {
+                        self.mark = Some(child_mark);
+                    }
+                    Ok((ConsolidatedNotation::Child(*i, self), parent_mark))
+                }
+            },
+            Mark(mark_name, note) => {
+                if let Some(mark) = self.doc.partial_node_mark(mark_name) {
+                    self.mark = Some(mark);
+                }
+                self.notation = note;
+                self.eval()
+            }
+            Count { zero, one, many } => match self.doc.num_children() {
+                None => Err(PrintingError::CountNotationOnChildlessDoc),
+                Some(0) => {
+                    self.notation = zero;
+                    self.eval()
+                }
+                Some(1) => {
+                    self.notation = one;
+                    self.eval()
+                }
+                Some(_) => {
+                    self.notation = many;
+                    self.eval()
+                }
+            },
+            Fold { first, join } => match self.doc.num_children() {
+                None => Err(PrintingError::NumChildrenChanged),
+                Some(0) => Err(PrintingError::FoldNotationOnChildlessDoc),
+                Some(1) => {
+                    self.notation = first;
+                    self.eval()
+                }
+                Some(n) => {
+                    self.join_pos = Some(JoinPos {
+                        parent: self.doc,
+                        child: self.doc.unwrap_last_child(),
+                        index: n - 1,
+                        first,
+                        join,
+                    });
+                    self.notation = join;
+                    self.eval()
+                }
+            },
+            Left => match &mut self.join_pos {
+                None => {
+                    panic!("Bug: Left used outside of fold; should have been caught by validation")
+                }
+                Some(JoinPos {
+                    parent,
+                    child,
+                    index,
+                    first,
+                    join,
+                }) => {
+                    if *index == 1 {
+                        self.notation = *first;
+                        self.join_pos = None;
+                        self.eval()
+                    } else {
+                        *child = child.unwrap_prev_sibling(*parent, *index - 1);
+                        *index -= 1;
+                        self.notation = *join;
+                        self.eval()
+                    }
+                }
+            },
+            Right => match &mut self.join_pos {
+                None => {
+                    panic!("Bug: Right used outside of fold; should have been caught by validation")
+                }
+                Some(JoinPos { child, index, .. }) => {
+                    let index = *index;
+                    let parent_mark = self.mark;
+                    self.doc = *child;
+                    self.notation = &child.notation().0;
+                    if let Some(child_mark) = self.doc.whole_node_mark() {
+                        self.mark = Some(child_mark);
+                    }
+                    self.join_pos = None;
+                    Ok((ConsolidatedNotation::Child(index, self), parent_mark))
+                }
+            },
         }
     }
 }
