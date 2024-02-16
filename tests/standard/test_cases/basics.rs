@@ -57,7 +57,7 @@ fn test_all_paths_fn() {
         ]),
     ]);
     assert_eq!(
-        all_paths(doc.as_ref()),
+        all_paths(&doc),
         vec![
             vec![],
             vec![0],

@@ -1,6 +1,6 @@
 use crate::standard::pretty_testing::{assert_pp, assert_pp_region, assert_pp_seek};
 use partial_pretty_printer::examples::json::{
-    json_bool, json_dict, json_list, json_null, json_number, json_string, Json,
+    json_bool, json_comment, json_dict, json_list, json_null, json_number, json_string, Json,
 };
 
 static NUMERALS: &[&str] = &[
@@ -11,17 +11,17 @@ static NUMERALS: &[&str] = &[
 #[test]
 fn json_constants() {
     let doc = json_list(vec![json_bool(true), json_null(), json_bool(false)]);
-    assert_pp(doc.as_ref(), 80, &["[true, null, false]"]);
+    assert_pp(&doc, 80, &["[true, null, false]"]);
 }
 
 #[test]
 fn json_flow() {
-    let doc = json_list(vec![json_bool(true), json_bool(false)]).with_comment(
-        "Truth is much too complicated to allow anything but approximations. — John Von Neumann"
-            .to_owned(),
+    let doc = json_comment(
+        "Truth is much too complicated to allow anything but approximations. — John Von Neumann",
+        json_list(vec![json_bool(true), json_bool(false)]),
     );
     assert_pp(
-        doc.as_ref(),
+        &doc,
         40,
         &[
             //   5   10   15   20   25   30   35   40
@@ -39,7 +39,7 @@ fn json_seek() {
         ("Name", json_string("Alice")),
         ("Age", json_number(42.0)),
     ]);
-    let refn = doc.as_ref();
+    let refn = &doc;
     assert_pp(
         refn,
         28,
@@ -126,7 +126,7 @@ fn json_seek() {
 #[should_panic(expected = "InvalidPath")]
 fn json_invalid_path() {
     let doc = json_dict(vec![("x", json_number(1.0)), ("y", json_number(2.0))]);
-    assert_pp_seek(doc.as_ref(), 80, &[0, 2], &[]);
+    assert_pp_seek(&doc, 80, &[0, 2], &[]);
 }
 
 fn favorites_list() -> Json {
@@ -148,7 +148,7 @@ fn dictionary() -> Json {
 #[test]
 fn json_flow_wrapped_list() {
     assert_pp(
-        favorites_list().as_ref(),
+        &favorites_list(),
         24,
         &[
             // force rustfmt
@@ -164,7 +164,7 @@ fn json_flow_wrapped_list() {
 #[test]
 fn json_list_of_dicts() {
     assert_pp(
-        json_list(vec![dictionary(), dictionary()]).as_ref(),
+        &json_list(vec![dictionary(), dictionary()]),
         40,
         &[
             "[",
@@ -194,7 +194,7 @@ fn json_list_of_dicts() {
 #[test]
 fn json_big_dict() {
     assert_pp(
-        dictionary().as_ref(),
+        &dictionary(),
         27,
         &[
             "{",
@@ -210,7 +210,7 @@ fn json_big_dict() {
     );
 
     assert_pp(
-        dictionary().as_ref(),
+        &dictionary(),
         60,
         &[
             "{",
@@ -241,7 +241,7 @@ fn make_json_tree(id: u32, size: usize) -> Json {
 fn big_json_tree() {
     let little_tree = make_json_tree(0, 2);
     assert_pp(
-        little_tree.as_ref(),
+        &little_tree,
         80,
         &[
             "{",
@@ -278,7 +278,7 @@ fn big_json_tree() {
 
     // Print the middle of the doc
     assert_pp_region(
-        big_tree.as_ref(),
+        &big_tree,
         120,
         // 3,1,15 means "child 15"
         &[3, 1, 15, 3, 1, 10],
@@ -310,7 +310,7 @@ fn time_json() {
     let big_tree = make_json_tree(0, 16);
 
     let start = Instant::now();
-    print_region(big_tree.as_ref(), 120, &[3, 1, 15, 3, 1, 10], false, 80);
+    print_region(&big_tree, 120, &[3, 1, 15, 3, 1, 10], false, 80);
     println!(
         "Time to print middle 80 lines of ~480k line doc at width 120: {}μs",
         start.elapsed().as_micros()

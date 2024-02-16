@@ -175,7 +175,7 @@ fn test_doc_pane() {
         cursor_at_end: false,
     };
     let doc = json_list(vec![json_string("Hello"), json_string("world")]);
-    let contents = SimpleLabel(Some((doc.as_ref(), vec![])), PhantomData);
+    let contents = SimpleLabel(Some((&doc, vec![])), PhantomData);
     pane_test(
         PaneNotation::Doc {
             label: contents,
@@ -195,7 +195,7 @@ fn test_pane_cursor_heights() {
             cursor_at_end: false,
         };
         let doc = json_string("Hi");
-        let contents = SimpleLabel(Some((doc.as_ref(), vec![])), PhantomData);
+        let contents = SimpleLabel(Some((&doc, vec![])), PhantomData);
         pane_test(
             PaneNotation::Doc {
                 label: contents,
@@ -224,7 +224,7 @@ fn test_pane_widths() {
             cursor_at_end: false,
         };
         let doc = json_list(vec![json_string("Hello"), json_string("world")]);
-        let contents = SimpleLabel(Some((doc.as_ref(), vec![])), PhantomData);
+        let contents = SimpleLabel(Some((&doc, vec![])), PhantomData);
         pane_test(
             PaneNotation::Doc {
                 label: contents,
