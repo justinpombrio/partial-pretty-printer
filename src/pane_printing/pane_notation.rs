@@ -32,7 +32,7 @@ pub enum PaneNotation<L: Label, S> {
 /// 1. `Fixed`
 /// 2. `Dynamic`
 /// 3. `Proportional`
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PaneSize {
     /// Give the subpane exactly this number of rows of height (for
     /// `PaneNotation::Vert`) or columns of width (for `PaneNotation::Horz`).
@@ -55,20 +55,4 @@ pub enum PaneSize {
     /// given weights. For example, a subpane with weight 2 will be twice as large as one with
     /// weight 1.
     Proportional(usize),
-}
-
-impl PaneSize {
-    pub(super) fn get_fixed(&self) -> Option<usize> {
-        match self {
-            PaneSize::Fixed(n) => Some(*n),
-            _ => None,
-        }
-    }
-
-    pub(super) fn get_proportional(&self) -> Option<usize> {
-        match self {
-            PaneSize::Proportional(n) => Some(*n),
-            _ => None,
-        }
-    }
 }

@@ -12,6 +12,7 @@ pub struct PlainText<S: fmt::Debug + Default, M: fmt::Debug> {
     phantom: PhantomData<(S, M)>,
 }
 
+// Follows each full-width char
 const SENTINEL: char = '\0';
 
 impl<S: fmt::Debug + Default, M: fmt::Debug> fmt::Display for PlainText<S, M> {

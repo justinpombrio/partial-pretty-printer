@@ -64,6 +64,13 @@ impl Rectangle {
     pub fn height(self) -> Height {
         self.max_row - self.min_row
     }
+
+    pub fn size(self) -> Size {
+        Size {
+            height: self.height(),
+            width: self.width(),
+        }
+    }
 }
 
 impl Add<Size> for Pos {

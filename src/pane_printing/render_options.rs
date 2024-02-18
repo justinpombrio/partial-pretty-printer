@@ -1,5 +1,6 @@
 use crate::geometry::{Height, Row, Width};
 
+// TODO store path in here, rename cursor fields?
 /// Options for how to display a document within a `Pane`.
 #[derive(Debug, Clone, Copy)]
 pub struct RenderOptions {
@@ -25,6 +26,7 @@ pub enum WidthStrategy {
 }
 
 impl RenderOptions {
+    // TODO rename to focal_row?
     pub(crate) fn focal_line(self, available_height: Height) -> Row {
         assert!(self.cursor_height >= 0.0);
         assert!(self.cursor_height <= 1.0);

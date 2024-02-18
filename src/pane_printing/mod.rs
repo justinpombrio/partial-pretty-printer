@@ -1,3 +1,4 @@
+mod divvy;
 mod pane_notation;
 mod pane_print;
 mod plain_text;
