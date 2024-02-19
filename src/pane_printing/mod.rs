@@ -9,4 +9,4 @@ pub use pane_notation::{Label, PaneNotation, PaneSize};
 pub use pane_print::{pane_print, PaneError, Path};
 pub use plain_text::PlainText;
 pub use pretty_window::PrettyWindow;
-pub use render_options::{RenderOptions, WidthStrategy};
+pub use render_options::{FocusSide, RenderOptions, WidthStrategy};

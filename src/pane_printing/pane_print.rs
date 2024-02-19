@@ -1,7 +1,7 @@
 use super::divvy::Divvier;
 use super::pane_notation::{Label, PaneNotation, PaneSize};
 use super::pretty_window::PrettyWindow;
-use super::render_options::RenderOptions;
+use super::render_options::{FocusSide, RenderOptions};
 use crate::geometry::{is_char_full_width, Height, Pos, Rectangle, Row, Size, Width};
 use crate::pretty_printing::{pretty_print, Line, PrettyDoc, PrintingError};
 
@@ -36,7 +36,7 @@ pub enum PaneError<W: PrettyWindow> {
 pub fn pane_print<'d, L, D, W>(
     window: &mut W,
     notation: &PaneNotation<L, D::Style>,
-    get_content: &impl Fn(L) -> Option<(D, Path)>,
+    get_content: &impl Fn(L) -> Option<(D, RenderOptions)>,
 ) -> Result<(), PaneError<W>>
 where
     L: Label,
@@ -51,7 +51,7 @@ where
 fn pane_print_rec<'d, L, D, W>(
     window: &mut W,
     notation: &PaneNotation<L, D::Style>,
-    get_content: &impl Fn(L) -> Option<(D, Path)>,
+    get_content: &impl Fn(L) -> Option<(D, RenderOptions)>,
     rect: Rectangle,
 ) -> Result<(), PaneError<W>>
 where
@@ -75,13 +75,10 @@ where
                 }
             }
         }
-        PaneNotation::Doc {
-            label,
-            render_options,
-        } => {
-            let (doc, path) = get_content(label.clone())
+        PaneNotation::Doc { label } => {
+            let (doc, render_options) = get_content(label.clone())
                 .ok_or_else(|| PaneError::MissingLabel(format!("{:?}", label)))?;
-            let printed_doc = PrintedDoc::new(doc, &path, render_options, rect.size())?;
+            let printed_doc = PrintedDoc::new(doc, &render_options, rect.size())?;
             printed_doc.render(window, rect)?;
         }
         PaneNotation::Horz(panes) => {
@@ -100,19 +97,15 @@ where
                 if *size != PaneSize::Dynamic {
                     continue;
                 }
-                let (label, render_options) = if let PaneNotation::Doc {
-                    label,
-                    render_options,
-                } = child_note
-                {
-                    (label.clone(), render_options)
+                let label = if let PaneNotation::Doc { label } = child_note {
+                    label.clone()
                 } else {
                     return Err(PaneError::InvalidUseOfDynamic);
                 };
-                let (doc, path) = get_content(label.clone())
+                let (doc, render_options) = get_content(label.clone())
                     .ok_or_else(|| PaneError::MissingLabel(format!("{:?}", label)))?;
 
-                let printed_doc = PrintedDoc::new(doc, &path, render_options, available_size)?;
+                let printed_doc = PrintedDoc::new(doc, &render_options, available_size)?;
                 let width = printed_doc.width().min(available_size.width);
                 available_size.width -= width;
                 dynamic_widths.push(width as usize);
@@ -157,19 +150,15 @@ where
                 if *size != PaneSize::Dynamic {
                     continue;
                 }
-                let (label, render_options) = if let PaneNotation::Doc {
-                    label,
-                    render_options,
-                } = child_note
-                {
-                    (label.clone(), render_options)
+                let label = if let PaneNotation::Doc { label } = child_note {
+                    label.clone()
                 } else {
                     return Err(PaneError::InvalidUseOfDynamic);
                 };
-                let (doc, path) = get_content(label.clone())
+                let (doc, render_options) = get_content(label.clone())
                     .ok_or_else(|| PaneError::MissingLabel(format!("{:?}", label)))?;
 
-                let printed_doc = PrintedDoc::new(doc, &path, render_options, available_size)?;
+                let printed_doc = PrintedDoc::new(doc, &render_options, available_size)?;
                 let height = printed_doc.height();
                 available_size.height -= height;
                 dynamic_heights.push(height as usize);
@@ -204,49 +193,44 @@ where
 
 struct PrintedDoc<'d, D: PrettyDoc<'d>> {
     lines: Vec<Line<'d, D>>,
-    focal_line_index: usize,
-    focal_line_row: Row,
+    focus_line_index: usize,
+    focus_line_row: Row,
 }
 
 impl<'d, D: PrettyDoc<'d>> PrintedDoc<'d, D> {
-    fn new(
-        doc: D,
-        path: &[usize],
-        render_options: &RenderOptions,
-        size: Size,
-    ) -> Result<Self, PrintingError> {
+    fn new(doc: D, render_options: &RenderOptions, size: Size) -> Result<Self, PrintingError> {
         if size.height == 0 || size.width == 0 {
             return Ok(PrintedDoc {
                 lines: Vec::new(),
-                focal_line_index: 0,
-                focal_line_row: 0,
+                focus_line_index: 0,
+                focus_line_row: 0,
             });
         }
 
         let printing_width = render_options.choose_width(size.width);
-        let focal_line_row = render_options.focal_line(size.height);
-        let at_end = render_options.cursor_at_end;
+        let focus_line_row = render_options.choose_focus_line_row(size.height);
+        let at_end = render_options.focus_side == FocusSide::End;
         let (mut upward_printer, focused_line, mut downward_printer) =
-            pretty_print(doc, printing_width, &path, at_end)?;
+            pretty_print(doc, printing_width, &render_options.focus_path, at_end)?;
 
         let mut lines = Vec::new();
-        for _ in 0..focal_line_row {
+        for _ in 0..focus_line_row {
             if let Some(line) = upward_printer.next() {
                 lines.push(line?);
             }
         }
         lines.reverse();
-        let focal_line_index = lines.len();
+        let focus_line_index = lines.len();
         lines.push(Line::from(focused_line));
-        for _ in (focal_line_row + 1)..size.height {
+        for _ in (focus_line_row + 1)..size.height {
             if let Some(line) = downward_printer.next() {
                 lines.push(line?);
             }
         }
         Ok(PrintedDoc {
             lines,
-            focal_line_index,
-            focal_line_row,
+            focus_line_index,
+            focus_line_row,
         })
     }
 
@@ -269,7 +253,7 @@ impl<'d, D: PrettyDoc<'d>> PrintedDoc<'d, D> {
     {
         let mut relative_pos = Pos {
             col: 0,
-            row: self.focal_line_row - (self.focal_line_index as Row),
+            row: self.focus_line_row - (self.focus_line_index as Row),
         };
         for line in self.lines {
             render_line(window, line, relative_pos, rect)?;

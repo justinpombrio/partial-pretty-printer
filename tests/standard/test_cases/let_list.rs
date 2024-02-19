@@ -129,7 +129,6 @@ fn make_let(var_name: &str, defn: LetList) -> LetList {
     new_node(LetListData::Let(Box::new([var(var_name), defn])))
 }
 
-// TODO: Add a way to get this to not share lines
 fn phi() -> LetList {
     new_node(LetListData::Phi)
 }

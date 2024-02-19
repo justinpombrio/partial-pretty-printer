@@ -1,6 +1,3 @@
-// TODO
-#![allow(unused)]
-
 use super::pane_notation::PaneSize;
 
 pub struct Divvier {
@@ -99,7 +96,7 @@ impl Divvier {
         // Set the maximally-fair cookie allocation.
         let mut cookie_allocation = cookie_allocation.into_iter();
         for (i, pane_size) in self.pane_sizes.iter().enumerate() {
-            if let PaneSize::Proportional(hunger) = pane_size {
+            if let PaneSize::Proportional(_) = pane_size {
                 let cookies = cookie_allocation.next().unwrap();
                 self.allocations[i] = cookies;
                 self.cookies -= cookies;
@@ -111,7 +108,7 @@ impl Divvier {
 #[test]
 fn test_proportional_division() {
     fn proportionally_divide(cookies: usize, hungers: &[usize]) -> Vec<usize> {
-        let mut pane_sizes = hungers
+        let pane_sizes = hungers
             .iter()
             .copied()
             .map(PaneSize::Proportional)

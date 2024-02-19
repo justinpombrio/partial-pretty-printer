@@ -1,4 +1,3 @@
-use super::render_options::RenderOptions;
 use std::fmt;
 
 /// Document ids, used to look up documents.
@@ -15,10 +14,7 @@ pub enum PaneNotation<L: Label, S> {
     Vert(Vec<(PaneSize, PaneNotation<L, S>)>),
     /// Render a `PrettyDocument` into this `Pane`. The given `DocLabel` will be used to
     /// dynamically look up a `PrettyDocument` when the `Pane` is rendered.
-    Doc {
-        label: L,
-        render_options: RenderOptions,
-    },
+    Doc { label: L },
     /// Fill the entire `Pane` by repeating the given character and style.
     Fill { ch: char, style: S },
     /// Leave the entire `Pane` empty.
