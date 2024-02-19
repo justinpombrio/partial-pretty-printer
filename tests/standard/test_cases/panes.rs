@@ -1,6 +1,9 @@
 use crate::standard::pretty_testing::SimpleDoc;
 use partial_pretty_printer::{
-    examples::json::{json_list, json_string},
+    examples::{
+        json::{json_list, json_number, json_string, Json},
+        BasicStyle,
+    },
     pane::{pane_print, Label, PaneNotation, PaneSize, PlainText, RenderOptions, WidthStrategy},
     PrettyDoc,
 };
@@ -239,4 +242,154 @@ fn test_pane_widths() {
     test_with_width(WidthStrategy::Fixed(10), "[\n    \"He\n    \"wo\n]\n");
     test_with_width(WidthStrategy::NoMoreThan(80), "[\n    \"He\n    \"wo\n]\n");
     test_with_width(WidthStrategy::NoMoreThan(5), "[\n    \"He\n    \"wo\n]\n");
+}
+
+fn make_list(start: usize, end: usize) -> Json {
+    json_list(
+        (start..end)
+            .into_iter()
+            .map(|x| json_number(x as f64))
+            .collect(),
+    )
+}
+
+#[test]
+fn test_seek() {
+    fn make_note<'a>(
+        doc: &'a Json,
+        path: &[usize],
+        cursor_at_end: bool,
+    ) -> PaneNotation<SimpleLabel<'a, &'a Json>, BasicStyle> {
+        let render_options = RenderOptions {
+            cursor_height: 0.5,
+            width_strategy: WidthStrategy::Full,
+            cursor_at_end,
+        };
+
+        PaneNotation::Doc {
+            label: SimpleLabel(Some((&doc, path.to_owned())), PhantomData),
+            render_options,
+        }
+    }
+    let doc10 = make_list(0, 8);
+    pane_test(
+        make_note(&doc10, &[], false),
+        &[
+            "",         // force rustfmt
+            "",         // force rustfmt
+            "",         // force rustfmt
+            "[",        // force rustfmt
+            "    0,",   // force rustfmt
+            "    1,",   // force rustfmt
+            "    2,\n", // force rustfmt
+        ]
+        .join("\n"),
+    );
+    pane_test(
+        make_note(&doc10, &[], true),
+        &[
+            "    5,", // force rustfmt
+            "    6,", // force rustfmt
+            "    7",  // force rustfmt
+            "]\n",    // force rustfmt
+        ]
+        .join("\n"),
+    );
+    pane_test(
+        make_note(&doc10, &[1], false),
+        &[
+            "",         // force rustfmt
+            "[",        // force rustfmt
+            "    0,",   // force rustfmt
+            "    1,",   // force rustfmt
+            "    2,",   // force rustfmt
+            "    3,",   // force rustfmt
+            "    4,\n", // force rustfmt
+        ]
+        .join("\n"),
+    );
+    pane_test(
+        make_note(&doc10, &[1], true),
+        &[
+            "",         // force rustfmt
+            "[",        // force rustfmt
+            "    0,",   // force rustfmt
+            "    1,",   // force rustfmt
+            "    2,",   // force rustfmt
+            "    3,",   // force rustfmt
+            "    4,\n", // force rustfmt
+        ]
+        .join("\n"),
+    );
+}
+
+#[test]
+fn test_dynamic() {
+    fn make_note<'a>(doc: &'a Json) -> PaneNotation<SimpleLabel<'a, &'a Json>, BasicStyle> {
+        let render_options = RenderOptions {
+            cursor_height: 1.0,
+            width_strategy: WidthStrategy::Full,
+            cursor_at_end: false,
+        };
+
+        PaneNotation::Doc {
+            label: SimpleLabel(Some((&doc, vec![])), PhantomData),
+            render_options,
+        }
+    }
+
+    let doc8 = make_list(0, 6);
+    let doc5 = make_list(6, 9);
+    let doc_num = json_number(42.0);
+
+    pane_test(
+        PaneNotation::Vert(vec![
+            (PaneSize::Proportional(1), make_note(&doc8)),
+            (PaneSize::Dynamic, make_note(&doc5)),
+        ]),
+        &[
+            "[",      // force rustfmt
+            "    0,", // force rustfmt
+            "[",      // force rustfmt
+            "    6,", // force rustfmt
+            "    7,", // force rustfmt
+            "    8",  // force rustfmt
+            "]\n",
+        ]
+        .join("\n"),
+    );
+
+    pane_test(
+        PaneNotation::Vert(vec![
+            (PaneSize::Proportional(1), make_note(&doc5)),
+            (PaneSize::Dynamic, make_note(&doc8)),
+        ]),
+        &[
+            "[",      // force rustfmt
+            "    0,", // force rustfmt
+            "    1,", // force rustfmt
+            "    2,", // force rustfmt
+            "    3,", // force rustfmt
+            "    4,", // force rustfmt
+            "    5\n",
+        ]
+        .join("\n"),
+    );
+
+    pane_test(
+        PaneNotation::Horz(vec![
+            (PaneSize::Proportional(1), make_note(&doc8)),
+            (PaneSize::Dynamic, make_note(&doc_num)),
+        ]),
+        &[
+            "[    42", // force rustfmt
+            "    0",   // force rustfmt
+            "    1",   // force rustfmt
+            "    2",   // force rustfmt
+            "    3",   // force rustfmt
+            "    4",   // force rustfmt
+            "    5\n",
+        ]
+        .join("\n"),
+    );
 }
