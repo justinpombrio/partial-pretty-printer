@@ -8,7 +8,7 @@ use partial_pretty_printer::{
         pane_print, FocusSide, Label, PaneNotation, PaneSize, PlainText, RenderOptions,
         WidthStrategy,
     },
-    PrettyDoc,
+    PrettyDoc, Size,
 };
 use std::fmt::Debug;
 use std::marker::PhantomData;
@@ -33,7 +33,23 @@ fn pane_test<'d, S: Debug + Default, D: PrettyDoc<'d, Style = S> + Clone + Debug
     notation: PaneNotation<SimpleLabel<'d, D>, S>,
     expected: &str,
 ) {
-    let mut screen = PlainText::new(7, 7);
+    pane_test_with_size(
+        Size {
+            width: 7,
+            height: 7,
+        },
+        notation,
+        expected,
+    )
+}
+
+#[track_caller]
+fn pane_test_with_size<'d, S: Debug + Default, D: PrettyDoc<'d, Style = S> + Clone + Debug>(
+    size: Size,
+    notation: PaneNotation<SimpleLabel<'d, D>, S>,
+    expected: &str,
+) {
+    let mut screen = PlainText::new(size.width, size.height);
     pane_print(&mut screen, &notation, &get_content).unwrap();
     let actual = screen.to_string();
     if actual != expected {
@@ -71,15 +87,35 @@ fn test_fill_pane() {
 
 #[test]
 fn test_fill_pane_with_full_width() {
-    pane_test::<NoStyle, &SimpleDoc<NoStyle>>(
+    pane_test_with_size::<NoStyle, &SimpleDoc<NoStyle>>(
+        Size {
+            width: 7,
+            height: 3,
+        },
         fill('信'),
         "信信信\n\
          信信信\n\
-         信信信\n\
-         信信信\n\
-         信信信\n\
+         信信信\n",
+    );
+
+    pane_test_with_size::<NoStyle, &SimpleDoc<NoStyle>>(
+        Size {
+            width: 6,
+            height: 3,
+        },
+        fill('信'),
+        "信信信\n\
          信信信\n\
          信信信\n",
+    );
+
+    pane_test_with_size::<NoStyle, &SimpleDoc<NoStyle>>(
+        Size {
+            width: 1,
+            height: 3,
+        },
+        fill('信'),
+        "",
     );
 }
 
@@ -184,6 +220,52 @@ fn test_doc_pane() {
     pane_test(
         PaneNotation::Doc { label: contents },
         "[\n    \"He\n    \"wo\n]\n",
+    );
+}
+
+#[test]
+fn test_doc_pane_full_width_cutoff() {
+    let render_options = RenderOptions {
+        focus_path: Vec::new(),
+        focus_height: 0.0,
+        width_strategy: WidthStrategy::Full,
+        focus_side: FocusSide::Start,
+    };
+    let doc = json_string("一二三");
+    let contents = SimpleLabel(Some((&doc, render_options)), PhantomData);
+    let note = PaneNotation::Doc { label: contents };
+
+    pane_test_with_size(
+        Size {
+            width: 8,
+            height: 3,
+        },
+        note.clone(),
+        "\"一二三\"\n",
+    );
+    pane_test_with_size(
+        Size {
+            width: 7,
+            height: 3,
+        },
+        note.clone(),
+        "\"一二三\n",
+    );
+    pane_test_with_size(
+        Size {
+            width: 6,
+            height: 3,
+        },
+        note.clone(),
+        "\"一二\n",
+    );
+    pane_test_with_size(
+        Size {
+            width: 5,
+            height: 3,
+        },
+        note.clone(),
+        "\"一二\n",
     );
 }
 
@@ -330,6 +412,7 @@ fn test_dynamic() {
     let doc8 = make_list(0, 6);
     let doc5 = make_list(6, 9);
     let doc_num = json_number(42.0);
+    let doc_unicode = json_string("一1");
 
     pane_test(
         PaneNotation::Vert(vec![
@@ -377,6 +460,48 @@ fn test_dynamic() {
             "    2",   // force rustfmt
             "    3",   // force rustfmt
             "    4",   // force rustfmt
+            "    5\n",
+        ]
+        .join("\n"),
+    );
+
+    pane_test_with_size(
+        Size {
+            width: 11,
+            height: 7,
+        },
+        PaneNotation::Horz(vec![
+            (PaneSize::Proportional(1), make_note(&doc8)),
+            (PaneSize::Dynamic, make_note(&doc_unicode)),
+        ]),
+        &[
+            "[     \"一1\"", // force rustfmt
+            "    0,",        // force rustfmt
+            "    1,",        // force rustfmt
+            "    2,",        // force rustfmt
+            "    3,",        // force rustfmt
+            "    4,",        // force rustfmt
+            "    5\n",
+        ]
+        .join("\n"),
+    );
+
+    pane_test_with_size(
+        Size {
+            width: 10,
+            height: 7,
+        },
+        PaneNotation::Horz(vec![
+            (PaneSize::Proportional(1), make_note(&doc8)),
+            (PaneSize::Dynamic, make_note(&doc_unicode)),
+        ]),
+        &[
+            "[    \"一1\"", // force rustfmt
+            "    0",        // force rustfmt
+            "    1",        // force rustfmt
+            "    2",        // force rustfmt
+            "    3",        // force rustfmt
+            "    4",        // force rustfmt
             "    5\n",
         ]
         .join("\n"),
