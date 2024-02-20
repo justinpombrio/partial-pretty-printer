@@ -1,3 +1,5 @@
+// TODO: After rewrite, ensure that these docs are up to date.
+//       Especially, e.g., referenced code like `PrettyDoc`.
 //! This is a pretty printing library for tree-shaped documents, such as ASTs. Given declarative
 //! rules for how to display each sort of node in a document, it prints the document with a
 //! desired line width.
@@ -24,12 +26,12 @@
 //! You can:
 //!
 //! - Print a [`PrettyDoc`] to a `String` using [`pretty_print_to_string`].
-//! - Print a node in a [`PrettyDoc`] to get lazy iterators over [`LineContents`] using
+//! - Print a node in a [`PrettyDoc`] to get lazy iterators over [`Line`] using
 //! [`pretty_print`].  This lets you (i) use colors and (ii) print just part of a document for
 //! efficiency.
 //! - Make a character-grid based UI with nested panes, using the [`pane`] module.
 //!
-//! Continue reading for details.
+//! Keep reading for details.
 //!
 //! # Usage
 //!
@@ -51,8 +53,8 @@
 //!
 //! - a unique id for that node,
 //! - a notation for displaying that sort of node, and
-//! - accessors for the contents of that node, which is either a sequence of ccontained nodes, or a
-//! string.
+//! - accessors for the contents of that node, which is either a sequence of contained nodes
+//!   (children), or a string (text).
 //!
 //! [Read more](trait.PrettyDoc.html)
 //!
@@ -80,8 +82,8 @@
 //!     width: Width,
 //!     path: &[usize],
 //! ) -> (
-//!     impl Iterator<Item = LineContents<'d>> + 'd,
-//!     impl Iterator<Item = LineContents<'d>> + 'd,
+//!     impl Iterator<Item = Line<'d>> + 'd,
+//!     impl Iterator<Item = Line<'d>> + 'd,
 //! );
 //! ```
 //!
@@ -94,12 +96,25 @@
 //! you exhaust both iterators, you will print the entire document, but if you take fewer you can
 //! save the pretty printer some work.
 //!
-//! Secondly, notice that the iterators contain [`LineContents`] instead of strings:
+//! Secondly, notice that the iterators contain [`Line`] instead of strings:
 //!
 //! ```ignore
-//! struct LineContents<'d> {
-//!     spaces: (Width, Shade),
-//!     contents: Vec<(&'d str, Style, Shade)>,
+//! pub struct Line<'d, D: PrettyDoc<'d>> {
+//!     pub indentation: Indentation<'d, D>,
+//!     pub segments: Vec<Segment<'d, D>>,
+//! }
+//!
+//! pub struct Indentation<'d, D: PrettyDoc<'d>> {
+//!     pub num_spaces: Width,
+//!     pub doc_id: D::Id,
+//!     pub mark: Option<&'d D::Mark>,
+//! }
+//!
+//! pub struct Segment<'d, D: PrettyDoc<'d>> {
+//!     pub str: &'d str,
+//!     pub style: &'d D::Style,
+//!     pub doc_id: D::Id,
+//!     pub mark: Option<&'d D::Mark>,
 //! }
 //! ```
 //!
@@ -134,19 +149,20 @@ mod infra;
 mod notation;
 mod pane_printing;
 mod pretty_printing;
-mod style;
 mod valid_notation;
 
 pub mod examples;
 pub mod notation_constructors;
 
 pub use geometry::{Col, Height, Pos, Row, Size, Width};
-pub use notation::{Notation, RepeatInner};
-pub use pretty_printing::{pretty_print, pretty_print_to_string, LineContents, PrettyDoc};
-pub use style::{Color, Shade, ShadedStyle, Style};
+pub use notation::Notation;
+pub use pretty_printing::{
+    pretty_print, pretty_print_to_string, Indentation, Line, PrettyDoc, Segment,
+};
 pub use valid_notation::{NotationError, ValidNotation};
 
 pub mod testing {
+    pub use super::geometry::str_width;
     pub use super::pretty_printing::oracular_pretty_print;
 }
 
@@ -170,11 +186,16 @@ pub mod pane {
     //! With a pane notation and window, you can _pane print_:
     //!
     //! ```ignore
-    //! fn pane_print<L: Label, D: PrettyDoc, W: PrettyWindow>(
+    //! pub fn pane_print<'d, L, D, W>(
     //!     window: &mut W,
-    //!     note: &PaneNotation<L>,
+    //!     notation: &PaneNotation<L, D::Style>,
     //!     get_content: &impl Fn(L) -> Option<(D, Path)>,
-    //! ) -> Result<(), PaneError<W>>;
+    //! ) -> Result<(), PaneError<W>>
+    //! where
+    //!     L: Label,
+    //!     D: PrettyDoc<'d>,
+    //!     W: PrettyWindow<Style = D::Style, Mark = D::Mark>,
+    //! { ... }
     //! ```
     //!
     //! - `window` is the `PrettyWindow` to display to.
@@ -186,7 +207,7 @@ pub mod pane {
     //!   the [Path] to the node in the document to focus on. (The empty path `vec![]` will focus on the
     //!   top of the document.)
     pub use super::pane_printing::{
-        pane_print, Label, PaneError, PaneNotation, PaneSize, Path, PlainText, PrettyWindow,
-        RenderOptions, WidthStrategy,
+        pane_print, FocusSide, Label, PaneError, PaneNotation, PaneSize, Path, PlainText,
+        PrettyWindow, RenderOptions, WidthStrategy,
     };
 }

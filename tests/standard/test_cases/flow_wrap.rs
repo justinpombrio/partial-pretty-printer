@@ -1,9 +1,9 @@
 use crate::standard::pretty_testing::{assert_pp, assert_pp_seek, punct};
 use once_cell::sync::Lazy;
 use partial_pretty_printer::notation_constructors::{
-    child, left, nl, repeat, right, surrounded, text,
+    child, count, fold, left, nl, right, text, Count, Fold,
 };
-use partial_pretty_printer::{PrettyDoc, RepeatInner, Style, ValidNotation};
+use partial_pretty_printer::{PrettyDoc, ValidNotation};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -19,20 +19,26 @@ enum FlowWrapData {
     Paragraph(Box<[FlowWrap; 1]>),
 }
 
-static WORD_NOTATION: Lazy<ValidNotation> = Lazy::new(|| text(Style::plain()).validate().unwrap());
-static WORDS_NOTATION: Lazy<ValidNotation> = Lazy::new(|| {
-    let soft_break = || punct(" ") | nl();
-    repeat(RepeatInner {
-        empty: punct(""),
-        lone: punct("    ") + child(0),
-        join: left() + punct(",") + soft_break() + right(),
-        surround: punct("    ") + surrounded(),
+const START: &str = "始";
+const END: &str = "端";
+
+static WORD_NOTATION: Lazy<ValidNotation<()>> = Lazy::new(|| text(()).validate().unwrap());
+static WORDS_NOTATION: Lazy<ValidNotation<()>> = Lazy::new(|| {
+    let soft_break = punct(" ") | nl();
+    count(Count {
+        zero: punct(""),
+        one: punct("    ") + child(0),
+        many: punct("    ")
+            + fold(Fold {
+                first: child(0),
+                join: left() + punct(",") + soft_break + right(),
+            }),
     })
     .validate()
     .unwrap()
 });
-static PARAGRAPH_NOTATION: Lazy<ValidNotation> =
-    Lazy::new(|| (punct("¶") + child(0) + punct("□")).validate().unwrap());
+static PARAGRAPH_NOTATION: Lazy<ValidNotation<()>> =
+    Lazy::new(|| (punct(START) + child(0) + punct(END)).validate().unwrap());
 
 enum Contents<'d> {
     Text(&'d str),
@@ -41,25 +47,26 @@ enum Contents<'d> {
 
 impl FlowWrap {
     fn contents(&self) -> Contents {
-        use Contents::{Children, Text};
         use FlowWrapData::*;
 
         match &self.data {
-            Word(txt) => Text(txt),
-            Words(words) => Children(words),
-            Paragraph(para) => Children(&**para),
+            Word(txt) => Contents::Text(txt),
+            Words(words) => Contents::Children(words),
+            Paragraph(para) => Contents::Children(&**para),
         }
     }
 }
 
 impl<'d> PrettyDoc<'d> for &'d FlowWrap {
     type Id = usize;
+    type Style = ();
+    type Mark = ();
 
     fn id(self) -> usize {
         self.id
     }
 
-    fn notation(self) -> &'d ValidNotation {
+    fn notation(self) -> &'d ValidNotation<()> {
         use FlowWrapData::*;
 
         match &self.data {
@@ -125,25 +132,38 @@ fn flow_wrap() {
         "undefeated",
     ]);
 
+    use partial_pretty_printer::testing::str_width;
+    assert_eq!(str_width("始"), 2);
+    assert_eq!(str_width("端"), 2);
+
     assert_pp(
         &doc,
         80,
         //0    5   10   15   20   25   30   35   40   45   50   55   60
-        &["¶    Oh, woe, is, me, the, turbofish, remains, undefeated□"],
+        &["始    Oh, woe, is, me, the, turbofish, remains, undefeated端"],
+    );
+    assert_pp(
+        &doc,
+        60,
+        //0    5   10   15   20   25   30   35   40   45   50   55   60
+        &["始    Oh, woe, is, me, the, turbofish, remains, undefeated端"],
     );
     assert_pp(
         &doc,
         59,
         //0    5   10   15   20   25   30   35   40   45   50   55   60
-        &["¶    Oh, woe, is, me, the, turbofish, remains, undefeated□"],
+        &[
+            "始    Oh, woe, is, me, the, turbofish, remains,",
+            "undefeated端",
+        ],
     );
     assert_pp(
         &doc,
-        46,
+        47,
         //  0    5   10   15   20   25   30   35   40   45   50   55   60
         &[
-            "¶    Oh, woe, is, me, the, turbofish, remains,",
-            "undefeated□",
+            "始    Oh, woe, is, me, the, turbofish, remains,",
+            "undefeated端",
         ],
     );
     assert_pp(
@@ -151,18 +171,18 @@ fn flow_wrap() {
         45,
         //  0    5   10   15   20   25   30   35   40   45   50   55   60
         &[
-            "¶    Oh, woe, is, me, the, turbofish,",
-            "remains, undefeated□",
+            "始    Oh, woe, is, me, the, turbofish,",
+            "remains, undefeated端",
         ],
     );
     assert_pp(
         &doc,
-        20,
+        21,
         //  0    5   10   15   20   25   30   35   40   45   50   55   60
         &[
-            "¶    Oh, woe, is,",
+            "始    Oh, woe, is,",
             "me, the, turbofish,",
-            "remains, undefeated□",
+            "remains, undefeated端",
         ],
     );
     assert_pp(
@@ -170,10 +190,10 @@ fn flow_wrap() {
         19,
         //  0    5   10   15   20   25   30   35   40   45   50   55   60
         &[
-            "¶    Oh, woe, is,",
+            "始    Oh, woe, is,",
             "me, the, turbofish,",
             "remains,",
-            "undefeated□",
+            "undefeated端",
         ],
     );
     assert_pp(
@@ -181,23 +201,23 @@ fn flow_wrap() {
         18,
         //  0    5   10   15   20   25   30   35   40   45   50   55   60
         &[
-            "¶    Oh, woe, is,",
+            "始    Oh, woe, is,",
             "me, the,",
             "turbofish,",
             "remains,",
-            "undefeated□",
+            "undefeated端",
         ],
     );
     assert_pp(
         &doc,
-        15,
+        14,
         //  0    5   10   15   20   25   30   35   40   45   50   55   60
         &[
-            "¶    Oh, woe,",
+            "始    Oh, woe,",
             "is, me, the,",
             "turbofish,",
             "remains,",
-            "undefeated□",
+            "undefeated端",
         ],
     );
     assert_pp(
@@ -205,14 +225,14 @@ fn flow_wrap() {
         0,
         //  0    5   10   15   20   25   30   35   40   45   50   55   60
         &[
-            "¶    Oh,",
+            "始    Oh,",
             "woe,",
             "is,",
             "me,",
             "the,",
             "turbofish,",
             "remains,",
-            "undefeated□",
+            "undefeated端",
         ],
     );
 
@@ -220,14 +240,61 @@ fn flow_wrap() {
     assert_pp_seek(
         &doc,
         19,
-        &[0, 2],
         &[],
         &[
             // force rustfmt
-            "¶    Oh, woe, is,",
+            "(始    Oh, woe, is,",
             "me, the, turbofish,",
             "remains,",
-            "undefeated□",
+            "undefeated端)",
+        ],
+    );
+    assert_pp_seek(
+        &doc,
+        19,
+        &[0],
+        &[
+            // force rustfmt
+            "始(    Oh, woe, is,",
+            "me, the, turbofish,",
+            "remains,",
+            "undefeated)端",
+        ],
+    );
+    assert_pp_seek(
+        &doc,
+        19,
+        &[0, 0],
+        &[
+            // force rustfmt
+            "始    (Oh), woe, is,",
+            "me, the, turbofish,",
+            "remains,",
+            "undefeated端",
+        ],
+    );
+    assert_pp_seek(
+        &doc,
+        19,
+        &[0, 1],
+        &[
+            // force rustfmt
+            "始    Oh, (woe), is,",
+            "me, the, turbofish,",
+            "remains,",
+            "undefeated端",
+        ],
+    );
+    assert_pp_seek(
+        &doc,
+        19,
+        &[0, 2],
+        &[
+            // force rustfmt
+            "始    Oh, woe, (is),",
+            "me, the, turbofish,",
+            "remains,",
+            "undefeated端",
         ],
     );
     assert_pp_seek(
@@ -236,13 +303,10 @@ fn flow_wrap() {
         &[0, 3],
         &[
             // force rustfmt
-            "¶    Oh, woe, is,",
-        ],
-        &[
-            // force rustfmt
-            "me, the, turbofish,",
+            "始    Oh, woe, is,",
+            "(me), the, turbofish,",
             "remains,",
-            "undefeated□",
+            "undefeated端",
         ],
     );
     assert_pp_seek(
@@ -251,13 +315,10 @@ fn flow_wrap() {
         &[0, 4],
         &[
             // force rustfmt
-            "¶    Oh, woe, is,",
-        ],
-        &[
-            // force rustfmt
-            "me, the, turbofish,",
+            "始    Oh, woe, is,",
+            "me, (the), turbofish,",
             "remains,",
-            "undefeated□",
+            "undefeated端",
         ],
     );
     assert_pp_seek(
@@ -266,13 +327,10 @@ fn flow_wrap() {
         &[0, 5],
         &[
             // force rustfmt
-            "¶    Oh, woe, is,",
-        ],
-        &[
-            // force rustfmt
-            "me, the, turbofish,",
+            "始    Oh, woe, is,",
+            "me, the, (turbofish),",
             "remains,",
-            "undefeated□",
+            "undefeated端",
         ],
     );
     assert_pp_seek(
@@ -281,13 +339,10 @@ fn flow_wrap() {
         &[0, 6],
         &[
             // force rustfmt
-            "¶    Oh, woe, is,",
+            "始    Oh, woe, is,",
             "me, the, turbofish,",
-        ],
-        &[
-            // force rustfmt
-            "remains,",
-            "undefeated□",
+            "(remains),",
+            "undefeated端",
         ],
     );
     assert_pp_seek(
@@ -296,13 +351,10 @@ fn flow_wrap() {
         &[0, 7],
         &[
             // force rustfmt
-            "¶    Oh, woe, is,",
+            "始    Oh, woe, is,",
             "me, the, turbofish,",
             "remains,",
-        ],
-        &[
-            // force rustfmt
-            "undefeated□",
+            "(undefeated)端",
         ],
     );
 }

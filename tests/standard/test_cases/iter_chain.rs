@@ -1,7 +1,7 @@
 use crate::standard::pretty_testing::{assert_pp, punct};
 use once_cell::sync::Lazy;
 use partial_pretty_printer::notation_constructors::{child, flat, text};
-use partial_pretty_printer::{PrettyDoc, Style, ValidNotation};
+use partial_pretty_printer::{PrettyDoc, ValidNotation};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -18,8 +18,8 @@ enum IterChainData {
     Times(Box<[IterChain; 2]>),
 }
 
-static VAR_NOTATION: Lazy<ValidNotation> = Lazy::new(|| text(Style::plain()).validate().unwrap());
-static METHOD_CALL_NOTATION: Lazy<ValidNotation> = Lazy::new(|| {
+static VAR_NOTATION: Lazy<ValidNotation<()>> = Lazy::new(|| text(()).validate().unwrap());
+static METHOD_CALL_NOTATION: Lazy<ValidNotation<()>> = Lazy::new(|| {
     // foobaxxle.bar(arg)
     //
     // -- Disallowing this layout:
@@ -41,12 +41,12 @@ static METHOD_CALL_NOTATION: Lazy<ValidNotation> = Lazy::new(|| {
         .validate()
         .unwrap()
 });
-static CLOSURE_NOTATION: Lazy<ValidNotation> = Lazy::new(|| {
+static CLOSURE_NOTATION: Lazy<ValidNotation<()>> = Lazy::new(|| {
     let single = punct("|") + child(0) + punct("| { ") + child(1) + punct(" }");
     let multi = (punct("|") + child(0) + punct("| {") + (4 >> child(1))) ^ punct("}");
     (single | multi).validate().unwrap()
 });
-static TIMES_NOTATION: Lazy<ValidNotation> =
+static TIMES_NOTATION: Lazy<ValidNotation<()>> =
     Lazy::new(|| (child(0) + punct(" * ") + child(1)).validate().unwrap());
 
 enum Contents<'d> {
@@ -70,12 +70,14 @@ impl IterChain {
 
 impl<'d> PrettyDoc<'d> for &'d IterChain {
     type Id = usize;
+    type Style = ();
+    type Mark = ();
 
     fn id(self) -> usize {
         self.id
     }
 
-    fn notation(self) -> &'d ValidNotation {
+    fn notation(self) -> &'d ValidNotation<()> {
         use IterChainData::*;
 
         match self.data {

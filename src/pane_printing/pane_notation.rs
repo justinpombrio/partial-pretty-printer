@@ -1,5 +1,3 @@
-use super::render_options::RenderOptions;
-use crate::style::Style;
 use std::fmt;
 
 /// Document ids, used to look up documents.
@@ -7,21 +5,18 @@ pub trait Label: Clone + fmt::Debug {}
 
 /// Specify the content of a `Pane`.
 #[derive(Clone, Debug)]
-pub enum PaneNotation<L: Label> {
+pub enum PaneNotation<L: Label, S> {
     /// Split the pane into multiple subpanes from left to right, each with its own `PaneNotation`.
     /// Each subpane has the same height as this `Pane`, and a width determined by its [`PaneSize`].
-    Horz(Vec<(PaneSize, PaneNotation<L>)>),
+    Horz(Vec<(PaneSize, PaneNotation<L, S>)>),
     /// Split the pane into multiple subpanes from top to bottom, each with its own `PaneNotation`.
     /// Each subpane has the same width as this `Pane`, and a height determined by its [`PaneSize`].
-    Vert(Vec<(PaneSize, PaneNotation<L>)>),
+    Vert(Vec<(PaneSize, PaneNotation<L, S>)>),
     /// Render a `PrettyDocument` into this `Pane`. The given `DocLabel` will be used to
-    /// dynamically look up a `PrettyDocument` every time the `Pane` is rendered.
-    Doc {
-        label: L,
-        render_options: RenderOptions,
-    },
+    /// dynamically look up a `PrettyDocument` when the `Pane` is rendered.
+    Doc { label: L },
     /// Fill the entire `Pane` by repeating the given character and style.
-    Fill { ch: char, style: Style },
+    Fill { ch: char, style: S },
     /// Leave the entire `Pane` empty.
     Empty,
 }
@@ -33,7 +28,7 @@ pub enum PaneNotation<L: Label> {
 /// 1. `Fixed`
 /// 2. `Dynamic`
 /// 3. `Proportional`
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PaneSize {
     /// Give the subpane exactly this number of rows of height (for
     /// `PaneNotation::Vert`) or columns of width (for `PaneNotation::Horz`).
@@ -51,26 +46,9 @@ pub enum PaneSize {
     /// A `Dynamic` subpane can only contain a `PaneNotation::Doc`, not more nested subpanes.
     Dynamic,
 
-    /// After `Fixed` and `Dynamic` subpanes have been assigned a
-    /// width/height, divide up the remaining available width/height between the
-    /// `Proportional` subpanes according to their given weights. The size of
-    /// each subpane will be proportional to its weight, so that a subpane with
-    /// weight 2 will be twice as large as one with weight 1, etc.
+    /// After `Fixed` and `Dynamic` subpanes have been assigned a width/height, divide up the
+    /// remaining available width/height between the `Proportional` subpanes according to their
+    /// given weights. For example, a subpane with weight 2 will be twice as large as one with
+    /// weight 1.
     Proportional(usize),
-}
-
-impl PaneSize {
-    pub(super) fn get_fixed(&self) -> Option<usize> {
-        match self {
-            PaneSize::Fixed(n) => Some(*n),
-            _ => None,
-        }
-    }
-
-    pub(super) fn get_proportional(&self) -> Option<usize> {
-        match self {
-            PaneSize::Proportional(n) => Some(*n),
-            _ => None,
-        }
-    }
 }

@@ -1,9 +1,9 @@
 use crate::standard::pretty_testing::{assert_pp, punct};
 use once_cell::sync::Lazy;
 use partial_pretty_printer::notation_constructors::{
-    child, left, nl, repeat, right, surrounded, text,
+    child, count, fold, left, nl, right, text, Count, Fold,
 };
-use partial_pretty_printer::{PrettyDoc, RepeatInner, Style, ValidNotation};
+use partial_pretty_printer::{PrettyDoc, ValidNotation};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -21,26 +21,29 @@ enum LetListData {
     List(Vec<LetList>),
 }
 
-static NUM_NOTATION: Lazy<ValidNotation> = Lazy::new(|| text(Style::plain()).validate().unwrap());
-static VAR_NOTATION: Lazy<ValidNotation> = Lazy::new(|| text(Style::plain()).validate().unwrap());
-static PHI_NOTATION: Lazy<ValidNotation> = Lazy::new(|| {
+static NUM_NOTATION: Lazy<ValidNotation<()>> = Lazy::new(|| text(()).validate().unwrap());
+static VAR_NOTATION: Lazy<ValidNotation<()>> = Lazy::new(|| text(()).validate().unwrap());
+static PHI_NOTATION: Lazy<ValidNotation<()>> = Lazy::new(|| {
     (punct("1 + sqrt(5)") ^ punct("-----------") ^ punct("     2"))
         .validate()
         .unwrap()
 });
-static LET_NOTATION: Lazy<ValidNotation> = Lazy::new(|| {
+static LET_NOTATION: Lazy<ValidNotation<()>> = Lazy::new(|| {
     (punct("let ") + child(0) + punct(" =") + (punct(" ") | nl()) + child(1) + punct(";"))
         .validate()
         .unwrap()
 });
-static LIST_NOTATION: Lazy<ValidNotation> = Lazy::new(|| {
-    repeat(RepeatInner {
-        empty: punct("[]"),
-        lone: punct("[") + child(0) + punct("]"),
-        join: left() + punct(",") + (punct(" ") | nl()) + right(),
-        surround: {
-            let single = punct("[") + surrounded() + punct("]");
-            let multi = (punct("[") + (4 >> surrounded())) ^ punct("]");
+static LIST_NOTATION: Lazy<ValidNotation<()>> = Lazy::new(|| {
+    count(Count {
+        zero: punct("[]"),
+        one: punct("[") + child(0) + punct("]"),
+        many: {
+            let seq = fold(Fold {
+                first: child(0),
+                join: left() + punct(",") + (punct(" ") | nl()) + right(),
+            });
+            let single = punct("[") + seq.clone() + punct("]");
+            let multi = (punct("[") + (4 >> seq)) ^ punct("]");
             single | multi
         },
     })
@@ -68,14 +71,14 @@ impl LetList {
     }
 }
 
-impl<'d> PrettyDoc<'d> for &'d LetList {
+impl<'d> PrettyDoc<'d, ()> for &'d LetList {
     type Id = usize;
 
     fn id(self) -> usize {
         self.id
     }
 
-    fn notation(self) -> &'d ValidNotation {
+    fn notation(self) -> &'d ValidNotation<()> {
         use LetListData::*;
 
         match &self.data {
@@ -126,7 +129,6 @@ fn make_let(var_name: &str, defn: LetList) -> LetList {
     new_node(LetListData::Let(Box::new([var(var_name), defn])))
 }
 
-// TODO: Add a way to get this to not share lines
 fn phi() -> LetList {
     new_node(LetListData::Phi)
 }

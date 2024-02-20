@@ -67,7 +67,7 @@ impl<G: Generator> Iterator for GenRandom<G> {
  * Deterministic Generation *
  ****************************/
 
-/// Construct a finite stream of all values of type `A` of the given size.
+/// Construct a finite stream of all values of type `G::Value` of the given size.
 pub fn generate_all<G: Generator>(generator: G, size: u32) -> impl Iterator<Item = G::Value> {
     GenAll::new(generator, size)
 }
@@ -186,7 +186,7 @@ fn test_generative_testing() {
 
     let trees = generate_all(TreeGenerator, 5).collect::<Vec<_>>();
     // for tree in &trees {
-    //     println!("{}", tree);
+    // println!("{}", tree);
     // }
     assert_eq!(trees.len(), 14);
 }

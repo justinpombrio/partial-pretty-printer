@@ -1,19 +1,21 @@
 use std::fmt;
 use std::ops::Add;
 
-/// Line number
+/// Line number. 0-indexed.
 pub type Row = u32;
 
-/// Column, measured in characters
+/// Zero-indexed column number. A typical ascii character is half-width and takes up one column.
+/// Some Unicode characters, especially in East-Asian languages, are full-width and take up two
+/// columns.
 pub type Col = u16;
 
-/// Height, measured in lines
+/// Height, measured in lines.
 pub type Height = u32;
 
-/// Width, measured in characters
+/// Width, measured in columns.
 pub type Width = u16;
 
-/// A character position, relative to the screen or the document.
+/// A position relative to the screen or the document.
 ///
 /// The origin is in the upper left, and is `(0, 0)`. I.e., this is 0-indexed.
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Ord, PartialOrd)]
@@ -22,7 +24,7 @@ pub struct Pos {
     pub col: Col,
 }
 
-/// A size, in characters.
+/// The size of a two-dimensional rectangular region.
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Ord, PartialOrd)]
 pub struct Size {
     pub height: Height,
@@ -46,6 +48,15 @@ impl Pos {
 }
 
 impl Rectangle {
+    pub fn from_size(size: Size) -> Rectangle {
+        Rectangle {
+            min_row: 0,
+            min_col: 0,
+            max_row: size.height,
+            max_col: size.width,
+        }
+    }
+
     pub fn width(self) -> Width {
         self.max_col - self.min_col
     }
@@ -54,12 +65,11 @@ impl Rectangle {
         self.max_row - self.min_row
     }
 
-    /// Does this rectangle completely cover the other rectangle?
-    pub fn covers(self, other: Rectangle) -> bool {
-        self.min_row <= other.min_row
-            && other.max_row <= self.max_row
-            && self.min_col <= other.min_col
-            && other.max_col <= self.max_col
+    pub fn size(self) -> Size {
+        Size {
+            height: self.height(),
+            width: self.width(),
+        }
     }
 }
 
@@ -72,6 +82,17 @@ impl Add<Size> for Pos {
             col: self.col + size.width,
         }
     }
+}
+
+/// The width of a string in columns. May be an overestimate. Not to be confused with number of
+/// bytes, Unicode code points, or Unicode grapheme clusters.
+pub fn str_width(s: &str) -> Width {
+    unicode_width::UnicodeWidthStr::width(s) as Width
+}
+
+/// Like [`str_width`] but for a single character.
+pub fn is_char_full_width(ch: char) -> bool {
+    unicode_width::UnicodeWidthChar::width(ch) == Some(2)
 }
 
 impl fmt::Display for Pos {

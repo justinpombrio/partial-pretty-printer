@@ -2,23 +2,23 @@ use crate::standard::generative_testing::{generate_all, generate_random, Generat
 use crate::standard::pretty_testing::{assert_pp_without_expectation, SimpleDoc};
 use partial_pretty_printer::{
     notation_constructors::{empty, flat, lit, nl},
-    Notation, Style,
+    Notation,
 };
 
 struct NotationGen;
 
 impl Generator for NotationGen {
-    type Value = Notation;
+    type Value = Notation<()>;
 
-    fn generate<P: Picker>(&self, mut size: u32, picker: &mut P) -> Notation {
+    fn generate<P: Picker>(&self, mut size: u32, picker: &mut P) -> Notation<()> {
         assert_ne!(size, 0);
         if size == 1 {
             match picker.pick_int(5) {
                 0 => empty(),
                 1 => nl(),
-                2 => lit("a", Style::default()),
-                3 => lit("bb", Style::default()),
-                4 => lit("cccc", Style::default()),
+                2 => lit("a", ()),
+                3 => lit("bb", ()),
+                4 => lit("cccc", ()),
                 _ => unreachable!(),
             }
         } else if size == 2 {
@@ -58,16 +58,23 @@ fn oracle_tests() {
         .chain(generate_random(NotationGen, 10, [0; 32]).take(1000))
         .chain(generate_random(NotationGen, 20, [0; 32]).take(1000))
         .chain(generate_random(NotationGen, 30, [0; 32]).take(1000))
-        .chain(generate_random(NotationGen, 50, [0; 32]).take(100));
+        .chain(generate_random(NotationGen, 50, [0; 32]).take(200));
 
+    let mut valid_count = 0;
+    let mut invalid_count = 0;
     for notation in notations {
-        println!("{}", notation);
         if let Ok(doc) = SimpleDoc::try_new(notation) {
             for width in 1..=8 {
                 assert_pp_without_expectation(&doc, width);
             }
+            valid_count += 1;
         } else {
-            println!("  (invalid)");
+            invalid_count += 1;
         }
     }
+    println!(
+        "Tested {} valid / {} total notations",
+        valid_count,
+        valid_count + invalid_count
+    );
 }

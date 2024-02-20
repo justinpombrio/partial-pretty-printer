@@ -1,10 +1,16 @@
-use super::notation_ref::{NotationCase, NotationRef};
+use super::consolidated_notation::{
+    ConsolidatedNotation, DelayedConsolidatedNotation, PrintingError,
+};
 use super::pretty_doc::PrettyDoc;
-use crate::geometry::Width;
+use crate::geometry::{str_width, Width};
 use std::fmt;
 
 const DEBUG_PRINT: bool = false;
+const MAX_WIDTH: Width = 10_000;
 
+/// A list of lines; each line has (indentation, contents)
+///
+/// **Invariant:** there's always at least one line
 struct Layout(Vec<(Width, String)>);
 
 /// For testing!
@@ -12,87 +18,82 @@ struct Layout(Vec<(Width, String)>);
 /// Pretty print the document with the given width. This is meant only for testing.
 /// It's slow: roughly exponential in the size of the doc.
 pub fn oracular_pretty_print<'d, D: PrettyDoc<'d>>(doc: D, width: Width) -> String {
-    let notation = NotationRef::new(doc);
-    let layout = pp(Layout::empty(), notation, false, 0, Some(0), width);
+    let note = DelayedConsolidatedNotation::new(doc)
+        .eval()
+        .expect("Notation mismatch in oracle test (root)")
+        .0;
+    let layout = pp(Layout::empty(), note, 0, width).expect("Notation mismatch in oracle test");
     format!("{}", layout)
 }
 
 fn pp<'d, D: PrettyDoc<'d>>(
     prefix: Layout,
-    notation: NotationRef<'d, D>,
-    is_flat: bool,
-    indent: Width,
-    suffix_len: Option<Width>,
+    note: ConsolidatedNotation<'d, D>,
+    suffix_len: Width,
     width: Width,
-) -> Layout {
-    use NotationCase::*;
+) -> Result<Layout, PrintingError> {
+    use ConsolidatedNotation::*;
+
+    assert!(width < MAX_WIDTH);
 
     if DEBUG_PRINT {
-        println!(
-            "==pp flat:{} indent:{} suffix_len:{:?} width:{}",
-            is_flat, indent, suffix_len, width
-        );
+        println!("==pp suffix_len:{:?} width:{}", suffix_len, width);
         println!("{}", prefix);
-        println!("{}", notation);
+        println!("{}", note);
         println!("==");
     }
 
-    match notation.case() {
-        Empty => prefix,
-        Literal(lit) => prefix.append(Layout::text(lit.str())),
-        Newline => prefix.append(Layout::newline(indent)),
-        Text(txt, _) => prefix.append(Layout::text(txt)),
-        Indent(i, x) => pp(prefix, x, is_flat, indent + i, suffix_len, width),
-        Flat(x) => pp(prefix, x, true, indent, suffix_len, width),
-        Child(_, x) => pp(prefix, x, is_flat, indent, suffix_len, width),
+    match note {
+        Empty => Ok(prefix),
+        Textual(textual) => Ok(prefix.append(Layout::text(textual.str))),
+        Newline(indent) => Ok(prefix.append(Layout::newline(indent))),
+        Child(_, x) => pp(prefix, x.eval()?.0, suffix_len, width),
         Concat(x, y) => {
-            let x_suffix_len = first_line_len(y, is_flat, suffix_len);
-            let y_prefix = pp(prefix, x, is_flat, indent, x_suffix_len, width);
-            pp(y_prefix, y, is_flat, indent, suffix_len, width)
+            let x = x.eval()?.0;
+            let y = y.eval()?.0;
+            let x_suffix_len = first_line_len(y, suffix_len)?.min(MAX_WIDTH);
+            let y_prefix = pp(prefix, x, x_suffix_len, width)?;
+            pp(y_prefix, y, suffix_len, width)
         }
         Choice(x, y) => {
+            let x = x.eval()?.0;
             let last_len = prefix.last_line_len();
-            let first_len = first_line_len(x, is_flat, suffix_len);
-            let fits = if let Some(first_len) = first_len {
-                last_len + first_len <= width
-            } else {
-                false
-            };
+            let first_len = first_line_len(x, suffix_len)?;
+            let fits = last_len + first_len <= width;
             if DEBUG_PRINT {
                 println!(
-                    "fits: {} + {:?} <= {} ? {} (flat: {})",
-                    last_len, first_len, width, fits, is_flat
+                    "fits: {} + {:?} <= {} ? {}",
+                    last_len, first_len, width, fits
                 );
             }
-            let z = if is_flat || fits { x } else { y };
-            pp(prefix, z, is_flat, indent, suffix_len, width)
+            let z = if fits { x } else { y.eval()?.0 };
+            pp(prefix, z, suffix_len, width)
         }
     }
 }
 
+/// Smallest possible first line length of `note`, given that its last line will have an additional
+/// `suffix_len` columns after it. Assumes the rule that in (x | y), y's first line is no longer
+/// than x's.
 fn first_line_len<'d, D: PrettyDoc<'d>>(
-    notation: NotationRef<'d, D>,
-    is_flat: bool,
-    suffix_len: Option<Width>,
-) -> Option<Width> {
-    use NotationCase::*;
+    note: ConsolidatedNotation<'d, D>,
+    suffix_len: Width,
+) -> Result<Width, PrintingError> {
+    use ConsolidatedNotation::*;
 
-    match notation.case() {
-        Empty => suffix_len,
-        Literal(lit) => suffix_len.map(|len| lit.len() + len),
-        Newline if is_flat => None,
-        Newline => Some(0),
-        Text(txt, _) => suffix_len.map(|len| txt.chars().count() as Width + len),
-        Indent(_, x) => first_line_len(x, is_flat, suffix_len),
-        Flat(x) => first_line_len(x, true, suffix_len),
-        Child(_, x) => first_line_len(x, is_flat, suffix_len),
+    match note {
+        Empty => Ok(suffix_len),
+        Textual(textual) => Ok(textual.width + suffix_len),
+        Newline(_) => Ok(0),
+        Child(_, x) => first_line_len(x.eval()?.0, suffix_len),
         Concat(x, y) => {
-            let suffix_len = first_line_len(y, is_flat, suffix_len);
-            first_line_len(x, is_flat, suffix_len)
+            let suffix_len = first_line_len(y.eval()?.0, suffix_len)?.min(MAX_WIDTH);
+            first_line_len(x.eval()?.0, suffix_len)
         }
-        Choice(x, y) => {
-            let z = if is_flat { x } else { y };
-            first_line_len(z, is_flat, suffix_len)
+        Choice(_, y) => {
+            // Wouldn't see a choice if we were flat, so use y.
+            // Relies on the rule that in (x | y), y's first line is no longer than x's.
+            first_line_len(y.eval()?.0, suffix_len)
         }
     }
 }
@@ -107,7 +108,9 @@ impl Layout {
     }
 
     fn newline(indent: Width) -> Layout {
-        Layout(vec![(0, String::new()), (indent, String::new())])
+        let first_line = (0, String::new());
+        let second_line = (indent, String::new());
+        Layout(vec![first_line, second_line])
     }
 
     fn append(self, other: Layout) -> Layout {
@@ -116,8 +119,8 @@ impl Layout {
 
         // Then the last line of `self` extended by the first line of `other`
         let mut other_lines = other.0.into_iter();
-        let suffix = other_lines.next().unwrap().1;
-        lines.last_mut().unwrap().1.push_str(&suffix);
+        let suffix = other_lines.next().unwrap().1; // relies on invariant
+        lines.last_mut().unwrap().1.push_str(&suffix); // relies on invariant
 
         // Then the rest of the lines of `other`
         for line in other_lines {
@@ -128,8 +131,8 @@ impl Layout {
     }
 
     fn last_line_len(&self) -> Width {
-        let last_line = self.0.last().unwrap();
-        last_line.0 + last_line.1.chars().count() as Width
+        let last_line = self.0.last().unwrap(); // relies on invariant
+        last_line.0 + str_width(&last_line.1)
     }
 }
 

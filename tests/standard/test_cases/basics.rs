@@ -1,12 +1,9 @@
 use crate::standard::pretty_testing::{all_paths, assert_pp, punct, SimpleDoc};
-use partial_pretty_printer::{
-    notation_constructors::{flat, nl},
-    Notation,
-};
+use partial_pretty_printer::notation_constructors::{empty, flat, nl};
 
 #[test]
 fn basics_empty() {
-    let notation = Notation::Empty;
+    let notation = empty::<()>();
     assert_pp(&SimpleDoc::new(notation), 80, &[""]);
 }
 
@@ -50,6 +47,7 @@ fn basics_choice() {
 #[test]
 fn test_all_paths_fn() {
     use partial_pretty_printer::examples::json::{json_list, json_string};
+
     let doc = json_list(vec![
         json_list(vec![json_string("0.0"), json_string("0.1")]),
         json_string("1"),

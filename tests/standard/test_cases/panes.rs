@@ -1,31 +1,55 @@
 use crate::standard::pretty_testing::SimpleDoc;
 use partial_pretty_printer::{
-    examples::json::{json_list, json_string},
-    pane::{pane_print, Label, PaneNotation, PaneSize, PlainText, RenderOptions, WidthStrategy},
-    PrettyDoc, Style,
+    examples::{
+        json::{json_list, json_number, json_string, Json},
+        BasicStyle,
+    },
+    pane::{
+        pane_print, FocusSide, Label, PaneNotation, PaneSize, PlainText, RenderOptions,
+        WidthStrategy,
+    },
+    PrettyDoc, Size,
 };
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
+type NoStyle = ();
+
 #[derive(Debug, Clone)]
 struct SimpleLabel<'d, D: PrettyDoc<'d> + Clone + Debug>(
-    Option<(D, Vec<usize>)>,
+    Option<(D, RenderOptions)>,
     PhantomData<&'d D>,
 );
 impl<'d, D: PrettyDoc<'d> + Clone + Debug> Label for SimpleLabel<'d, D> {}
 
 fn get_content<'d, D: PrettyDoc<'d> + Clone + Debug>(
     label: SimpleLabel<'d, D>,
-) -> Option<(D, Vec<usize>)> {
+) -> Option<(D, RenderOptions)> {
     label.0
 }
 
 #[track_caller]
-fn pane_test<'d, D: PrettyDoc<'d> + Clone + Debug>(
-    notation: PaneNotation<SimpleLabel<'d, D>>,
+fn pane_test<'d, S: Debug + Default, D: PrettyDoc<'d, Style = S> + Clone + Debug>(
+    notation: PaneNotation<SimpleLabel<'d, D>, S>,
     expected: &str,
 ) {
-    let mut screen = PlainText::new(7, 7);
+    pane_test_with_size(
+        Size {
+            width: 7,
+            height: 7,
+        },
+        notation,
+        expected,
+    )
+}
+
+#[track_caller]
+fn pane_test_with_size<'d, S: Debug + Default, D: PrettyDoc<'d, Style = S> + Clone + Debug>(
+    size: Size,
+    notation: PaneNotation<SimpleLabel<'d, D>, S>,
+    expected: &str,
+) {
+    let mut screen = PlainText::new(size.width, size.height);
     pane_print(&mut screen, &notation, &get_content).unwrap();
     let actual = screen.to_string();
     if actual != expected {
@@ -35,21 +59,21 @@ fn pane_test<'d, D: PrettyDoc<'d> + Clone + Debug>(
     assert_eq!(actual, expected);
 }
 
-fn fill<L: Label>(ch: char) -> PaneNotation<L> {
+fn fill<L: Label>(ch: char) -> PaneNotation<L, NoStyle> {
     PaneNotation::Fill {
         ch,
-        style: Style::default(),
+        style: NoStyle::default(),
     }
 }
 
 #[test]
 fn test_empty_pane() {
-    pane_test::<&SimpleDoc>(PaneNotation::Empty, "");
+    pane_test::<NoStyle, &SimpleDoc<NoStyle>>(PaneNotation::Empty, "");
 }
 
 #[test]
 fn test_fill_pane() {
-    pane_test::<&SimpleDoc>(
+    pane_test::<NoStyle, &SimpleDoc<NoStyle>>(
         fill('a'),
         "aaaaaaa\n\
          aaaaaaa\n\
@@ -62,10 +86,44 @@ fn test_fill_pane() {
 }
 
 #[test]
+fn test_fill_pane_with_full_width() {
+    pane_test_with_size::<NoStyle, &SimpleDoc<NoStyle>>(
+        Size {
+            width: 7,
+            height: 3,
+        },
+        fill('信'),
+        "信信信\n\
+         信信信\n\
+         信信信\n",
+    );
+
+    pane_test_with_size::<NoStyle, &SimpleDoc<NoStyle>>(
+        Size {
+            width: 6,
+            height: 3,
+        },
+        fill('信'),
+        "信信信\n\
+         信信信\n\
+         信信信\n",
+    );
+
+    pane_test_with_size::<NoStyle, &SimpleDoc<NoStyle>>(
+        Size {
+            width: 1,
+            height: 3,
+        },
+        fill('信'),
+        "",
+    );
+}
+
+#[test]
 fn test_horz_split_pane() {
     use PaneSize::{Fixed, Proportional};
 
-    pane_test::<&SimpleDoc>(
+    pane_test::<NoStyle, &SimpleDoc<NoStyle>>(
         PaneNotation::Horz(vec![
             (Proportional(2), fill('a')),
             (Proportional(3), fill('b')),
@@ -88,7 +146,7 @@ fn test_horz_split_pane() {
 fn test_vert_split_pane() {
     use PaneSize::{Fixed, Proportional};
 
-    pane_test::<&SimpleDoc>(
+    pane_test::<NoStyle, &SimpleDoc<NoStyle>>(
         PaneNotation::Vert(vec![
             (Proportional(2), fill('a')),
             (Proportional(3), fill('b')),
@@ -111,7 +169,7 @@ fn test_vert_split_pane() {
 fn test_mixed_split_pane() {
     use PaneSize::{Fixed, Proportional};
 
-    pane_test::<&SimpleDoc>(
+    pane_test::<NoStyle, &SimpleDoc<NoStyle>>(
         PaneNotation::Horz(vec![
             (Proportional(2), fill('|')),
             (
@@ -152,48 +210,87 @@ fn test_mixed_split_pane() {
 #[test]
 fn test_doc_pane() {
     let render_options = RenderOptions {
-        highlight_cursor: false,
-        cursor_height: 1.0,
+        focus_path: Vec::new(),
+        focus_height: 0.0,
         width_strategy: WidthStrategy::Full,
+        focus_side: FocusSide::Start,
     };
     let doc = json_list(vec![json_string("Hello"), json_string("world")]);
-    let contents = SimpleLabel(Some((&doc, vec![])), PhantomData);
+    let contents = SimpleLabel(Some((&doc, render_options)), PhantomData);
     pane_test(
-        PaneNotation::Doc {
-            label: contents,
-            render_options,
-        },
+        PaneNotation::Doc { label: contents },
         "[\n    \"He\n    \"wo\n]\n",
+    );
+}
+
+#[test]
+fn test_doc_pane_full_width_cutoff() {
+    let render_options = RenderOptions {
+        focus_path: Vec::new(),
+        focus_height: 0.0,
+        width_strategy: WidthStrategy::Full,
+        focus_side: FocusSide::Start,
+    };
+    let doc = json_string("一二三");
+    let contents = SimpleLabel(Some((&doc, render_options)), PhantomData);
+    let note = PaneNotation::Doc { label: contents };
+
+    pane_test_with_size(
+        Size {
+            width: 8,
+            height: 3,
+        },
+        note.clone(),
+        "\"一二三\"\n",
+    );
+    pane_test_with_size(
+        Size {
+            width: 7,
+            height: 3,
+        },
+        note.clone(),
+        "\"一二三\n",
+    );
+    pane_test_with_size(
+        Size {
+            width: 6,
+            height: 3,
+        },
+        note.clone(),
+        "\"一二\n",
+    );
+    pane_test_with_size(
+        Size {
+            width: 5,
+            height: 3,
+        },
+        note.clone(),
+        "\"一二\n",
     );
 }
 
 #[test]
 fn test_pane_cursor_heights() {
     #[track_caller]
-    fn test_at_height(cursor_height: f32, expected: &str) {
+    fn test_at_height(focus_height: f32, expected: &str) {
         let render_options = RenderOptions {
-            highlight_cursor: false,
-            cursor_height,
+            focus_path: Vec::new(),
+            focus_height,
             width_strategy: WidthStrategy::Full,
+            focus_side: FocusSide::Start,
         };
         let doc = json_string("Hi");
-        let contents = SimpleLabel(Some((&doc, vec![])), PhantomData);
-        pane_test(
-            PaneNotation::Doc {
-                label: contents,
-                render_options,
-            },
-            expected,
-        );
+        let contents = SimpleLabel(Some((&doc, render_options)), PhantomData);
+        pane_test(PaneNotation::Doc { label: contents }, expected);
     }
 
-    test_at_height(1.0, "\"Hi\"\n");
-    test_at_height(0.83, "\n\"Hi\"\n");
-    test_at_height(0.67, "\n\n\"Hi\"\n");
+    test_at_height(0.0, "\"Hi\"\n");
+    test_at_height(0.17, "\n\"Hi\"\n");
+    test_at_height(0.33, "\n\n\"Hi\"\n");
     test_at_height(0.5, "\n\n\n\"Hi\"\n");
-    test_at_height(0.33, "\n\n\n\n\"Hi\"\n");
-    test_at_height(0.17, "\n\n\n\n\n\"Hi\"\n");
-    test_at_height(0.0, "\n\n\n\n\n\n\"Hi\"\n");
+    test_at_height(0.67, "\n\n\n\n\"Hi\"\n");
+    test_at_height(0.83, "\n\n\n\n\n\"Hi\"\n");
+    test_at_height(1.0, "\n\n\n\n\n\n\"Hi\"\n");
 }
 
 #[test]
@@ -201,19 +298,14 @@ fn test_pane_widths() {
     #[track_caller]
     fn test_with_width(width_strategy: WidthStrategy, expected: &str) {
         let render_options = RenderOptions {
-            highlight_cursor: false,
-            cursor_height: 1.0,
+            focus_path: Vec::new(),
+            focus_height: 0.0,
             width_strategy,
+            focus_side: FocusSide::Start,
         };
         let doc = json_list(vec![json_string("Hello"), json_string("world")]);
-        let contents = SimpleLabel(Some((&doc, vec![])), PhantomData);
-        pane_test(
-            PaneNotation::Doc {
-                label: contents,
-                render_options,
-            },
-            expected,
-        );
+        let contents = SimpleLabel(Some((&doc, render_options)), PhantomData);
+        pane_test(PaneNotation::Doc { label: contents }, expected);
     }
 
     test_with_width(WidthStrategy::Full, "[\n    \"He\n    \"wo\n]\n");
@@ -221,4 +313,197 @@ fn test_pane_widths() {
     test_with_width(WidthStrategy::Fixed(10), "[\n    \"He\n    \"wo\n]\n");
     test_with_width(WidthStrategy::NoMoreThan(80), "[\n    \"He\n    \"wo\n]\n");
     test_with_width(WidthStrategy::NoMoreThan(5), "[\n    \"He\n    \"wo\n]\n");
+}
+
+fn make_list(start: usize, end: usize) -> Json {
+    json_list(
+        (start..end)
+            .into_iter()
+            .map(|x| json_number(x as f64))
+            .collect(),
+    )
+}
+
+#[test]
+fn test_seek() {
+    fn make_note<'a>(
+        doc: &'a Json,
+        path: &[usize],
+        focus_side: FocusSide,
+    ) -> PaneNotation<SimpleLabel<'a, &'a Json>, BasicStyle> {
+        let render_options = RenderOptions {
+            focus_path: path.to_owned(),
+            focus_height: 0.5,
+            width_strategy: WidthStrategy::Full,
+            focus_side,
+        };
+
+        PaneNotation::Doc {
+            label: SimpleLabel(Some((&doc, render_options)), PhantomData),
+        }
+    }
+    let doc10 = make_list(0, 8);
+    pane_test(
+        make_note(&doc10, &[], FocusSide::Start),
+        &[
+            "",         // force rustfmt
+            "",         // force rustfmt
+            "",         // force rustfmt
+            "[",        // force rustfmt
+            "    0,",   // force rustfmt
+            "    1,",   // force rustfmt
+            "    2,\n", // force rustfmt
+        ]
+        .join("\n"),
+    );
+    pane_test(
+        make_note(&doc10, &[], FocusSide::End),
+        &[
+            "    5,", // force rustfmt
+            "    6,", // force rustfmt
+            "    7",  // force rustfmt
+            "]\n",    // force rustfmt
+        ]
+        .join("\n"),
+    );
+    pane_test(
+        make_note(&doc10, &[1], FocusSide::Start),
+        &[
+            "",         // force rustfmt
+            "[",        // force rustfmt
+            "    0,",   // force rustfmt
+            "    1,",   // force rustfmt
+            "    2,",   // force rustfmt
+            "    3,",   // force rustfmt
+            "    4,\n", // force rustfmt
+        ]
+        .join("\n"),
+    );
+    pane_test(
+        make_note(&doc10, &[1], FocusSide::End),
+        &[
+            "",         // force rustfmt
+            "[",        // force rustfmt
+            "    0,",   // force rustfmt
+            "    1,",   // force rustfmt
+            "    2,",   // force rustfmt
+            "    3,",   // force rustfmt
+            "    4,\n", // force rustfmt
+        ]
+        .join("\n"),
+    );
+}
+
+#[test]
+fn test_dynamic() {
+    fn make_note<'a>(doc: &'a Json) -> PaneNotation<SimpleLabel<'a, &'a Json>, BasicStyle> {
+        let render_options = RenderOptions {
+            focus_path: Vec::new(),
+            focus_height: 0.0,
+            width_strategy: WidthStrategy::Full,
+            focus_side: FocusSide::Start,
+        };
+
+        PaneNotation::Doc {
+            label: SimpleLabel(Some((&doc, render_options)), PhantomData),
+        }
+    }
+
+    let doc8 = make_list(0, 6);
+    let doc5 = make_list(6, 9);
+    let doc_num = json_number(42.0);
+    let doc_unicode = json_string("一1");
+
+    pane_test(
+        PaneNotation::Vert(vec![
+            (PaneSize::Proportional(1), make_note(&doc8)),
+            (PaneSize::Dynamic, make_note(&doc5)),
+        ]),
+        &[
+            "[",      // force rustfmt
+            "    0,", // force rustfmt
+            "[",      // force rustfmt
+            "    6,", // force rustfmt
+            "    7,", // force rustfmt
+            "    8",  // force rustfmt
+            "]\n",
+        ]
+        .join("\n"),
+    );
+
+    pane_test(
+        PaneNotation::Vert(vec![
+            (PaneSize::Proportional(1), make_note(&doc5)),
+            (PaneSize::Dynamic, make_note(&doc8)),
+        ]),
+        &[
+            "[",      // force rustfmt
+            "    0,", // force rustfmt
+            "    1,", // force rustfmt
+            "    2,", // force rustfmt
+            "    3,", // force rustfmt
+            "    4,", // force rustfmt
+            "    5\n",
+        ]
+        .join("\n"),
+    );
+
+    pane_test(
+        PaneNotation::Horz(vec![
+            (PaneSize::Proportional(1), make_note(&doc8)),
+            (PaneSize::Dynamic, make_note(&doc_num)),
+        ]),
+        &[
+            "[    42", // force rustfmt
+            "    0",   // force rustfmt
+            "    1",   // force rustfmt
+            "    2",   // force rustfmt
+            "    3",   // force rustfmt
+            "    4",   // force rustfmt
+            "    5\n",
+        ]
+        .join("\n"),
+    );
+
+    pane_test_with_size(
+        Size {
+            width: 11,
+            height: 7,
+        },
+        PaneNotation::Horz(vec![
+            (PaneSize::Proportional(1), make_note(&doc8)),
+            (PaneSize::Dynamic, make_note(&doc_unicode)),
+        ]),
+        &[
+            "[     \"一1\"", // force rustfmt
+            "    0,",        // force rustfmt
+            "    1,",        // force rustfmt
+            "    2,",        // force rustfmt
+            "    3,",        // force rustfmt
+            "    4,",        // force rustfmt
+            "    5\n",
+        ]
+        .join("\n"),
+    );
+
+    pane_test_with_size(
+        Size {
+            width: 10,
+            height: 7,
+        },
+        PaneNotation::Horz(vec![
+            (PaneSize::Proportional(1), make_note(&doc8)),
+            (PaneSize::Dynamic, make_note(&doc_unicode)),
+        ]),
+        &[
+            "[    \"一1\"", // force rustfmt
+            "    0",        // force rustfmt
+            "    1",        // force rustfmt
+            "    2",        // force rustfmt
+            "    3",        // force rustfmt
+            "    4",        // force rustfmt
+            "    5\n",
+        ]
+        .join("\n"),
+    );
 }

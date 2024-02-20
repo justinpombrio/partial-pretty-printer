@@ -1,35 +1,37 @@
 use partial_pretty_printer::{
     notation_constructors::lit, pretty_print, pretty_print_to_string,
-    testing::oracular_pretty_print, Notation, NotationError, PrettyDoc, Style, ValidNotation,
-    Width,
+    testing::oracular_pretty_print, Notation, NotationError, PrettyDoc, ValidNotation, Width,
 };
+use std::fmt;
 
-#[allow(unused)]
-pub fn punct(s: &'static str) -> Notation {
-    lit(s, Style::plain())
+pub fn punct(s: &'static str) -> Notation<()> {
+    lit(s, ())
 }
 
 #[derive(Debug, Clone)]
-pub struct SimpleDoc(pub ValidNotation);
+pub struct SimpleDoc<S>(pub ValidNotation<S>);
 
-impl SimpleDoc {
-    pub fn new(notation: Notation) -> SimpleDoc {
+impl<S> SimpleDoc<S> {
+    pub fn new(notation: Notation<S>) -> SimpleDoc<S> {
         SimpleDoc(notation.validate().expect("Invalid notation"))
     }
 
-    pub fn try_new(notation: Notation) -> Result<SimpleDoc, NotationError> {
+    pub fn try_new(notation: Notation<S>) -> Result<SimpleDoc<S>, NotationError> {
         Ok(SimpleDoc(notation.validate()?))
     }
 }
 
-impl<'a> PrettyDoc<'a> for &'a SimpleDoc {
+impl<'a, S: fmt::Debug + Default> PrettyDoc<'a> for &'a SimpleDoc<S> {
     type Id = usize;
+    type Style = S;
+    type Mark = ();
 
     fn id(self) -> usize {
-        0
+        // shouldn't be the default of usize
+        1
     }
 
-    fn notation(self) -> &'a ValidNotation {
+    fn notation(self) -> &'a ValidNotation<S> {
         &self.0
     }
 
@@ -46,11 +48,12 @@ impl<'a> PrettyDoc<'a> for &'a SimpleDoc {
     }
 }
 
-fn compare_lines(message: &str, expected: String, actual: String) {
-    if actual != expected {
+#[track_caller]
+fn compare_lines(message: &str, expected: (&'static str, String), actual: (&'static str, String)) {
+    if actual.1 != expected.1 {
         eprintln!(
-            "{}\nEXPECTED:\n{}\nACTUAL:\n{}\n=========",
-            message, expected, actual,
+            "{}\n{}:\n{}\n{}:\n{}\n=========",
+            message, expected.0, expected.1, actual.0, actual.1,
         );
         assert_eq!(actual, expected);
     }
@@ -60,19 +63,22 @@ fn print_above_and_below<'d, D: PrettyDoc<'d>>(
     doc: D,
     width: Width,
     path: &[usize],
-) -> (Vec<String>, Vec<String>) {
-    let (upward_printer, downward_printer) = pretty_print(doc, width, path);
+    seek_end: bool,
+) -> (Vec<String>, String, String, Vec<String>) {
+    let (upward_printer, focused_line, downward_printer) =
+        pretty_print(doc, width, path, seek_end).unwrap();
     let mut lines_above = upward_printer
-        .map(|line| line.to_string())
+        .map(|line| line.unwrap().to_string())
         .collect::<Vec<_>>();
     lines_above.reverse();
+    let left_string = focused_line.to_left_string();
+    let right_string = focused_line.to_right_string();
     let lines_below = downward_printer
-        .map(|line| line.to_string())
+        .map(|line| line.unwrap().to_string())
         .collect::<Vec<_>>();
-    (lines_above, lines_below)
+    (lines_above, left_string, right_string, lines_below)
 }
 
-#[allow(unused)]
 pub fn all_paths<'d, D: PrettyDoc<'d>>(doc: D) -> Vec<Vec<usize>> {
     fn recur<'d, D: PrettyDoc<'d>>(doc: D, path: &mut Vec<usize>, paths: &mut Vec<Vec<usize>>) {
         paths.push(path.clone());
@@ -87,22 +93,24 @@ pub fn all_paths<'d, D: PrettyDoc<'d>>(doc: D) -> Vec<Vec<usize>> {
     paths
 }
 
-#[allow(unused)]
 pub fn print_region<'d, D: PrettyDoc<'d>>(
     doc: D,
     width: Width,
     path: &[usize],
+    seek_end: bool,
     rows: usize,
 ) -> Vec<String> {
-    let (upward_printer, downward_printer) = pretty_print(doc, width, path);
+    let (upward_printer, focused_line, downward_printer) =
+        pretty_print(doc, width, path, seek_end).unwrap();
     let mut lines = upward_printer
-        .map(|line| line.to_string())
+        .map(|line| line.unwrap().to_string())
         .take(rows / 2)
         .collect::<Vec<_>>();
     lines.reverse();
+    lines.push(focused_line.to_string());
     let mut lines_below = downward_printer
-        .map(|line| line.to_string())
-        .take(rows / 2)
+        .map(|line| line.unwrap().to_string())
+        .take(rows / 2 - 1)
         .collect::<Vec<_>>();
     lines.append(&mut lines_below);
     lines
@@ -124,29 +132,49 @@ fn assert_pp_impl<'d, D: PrettyDoc<'d>>(doc: D, width: Width, expected_lines: Op
     if let Some(expected_lines) = expected_lines {
         compare_lines(
             "ORACLE DISAGREES WITH TEST CASE, SO TEST CASE MUST BE WRONG",
-            oracle_result.clone(),
-            expected_lines.join("\n"),
+            ("ORACLE", oracle_result.clone()),
+            ("TEST CASE", expected_lines.join("\n")),
         );
     }
     let lines = pretty_print_to_string(doc, width)
+        .unwrap()
         .split('\n')
         .map(|s| s.to_owned())
         .collect::<Vec<_>>();
     compare_lines(
         &format!("IN PRETTY PRINTING WITH WIDTH {}", width),
-        oracle_result.clone(),
-        lines.join("\n"),
+        ("EXPECTED", oracle_result.clone()),
+        ("ACTUAL", lines.join("\n")),
     );
     for path in all_paths(doc) {
-        let (lines_above, mut lines_below) = print_above_and_below(doc, width, &path);
-        let mut lines = lines_above;
-        lines.append(&mut lines_below);
-        compare_lines(
-            &format!("IN PRETTY PRINTING AT PATH {:?}", path),
-            oracle_result.clone(),
-            lines.join("\n"),
-        );
+        for seek_end in [false, true] {
+            let (lines_above, left_string, right_string, lines_below) =
+                print_above_and_below(doc, width, &path, seek_end);
+            let lines = concat_lines(lines_above, left_string, right_string, lines_below);
+            compare_lines(
+                &format!(
+                    "IN PRETTY PRINTING AT PATH {:?} (seek_end={})",
+                    path, seek_end
+                ),
+                ("EXPECTED", oracle_result.clone()),
+                ("ACTUAL", lines.join("\n")),
+            );
+        }
     }
+}
+
+fn concat_lines(
+    lines_above: Vec<String>,
+    left_string: String,
+    right_string: String,
+    lines_below: Vec<String>,
+) -> Vec<String> {
+    let mut lines = lines_above;
+    let mut center_line = left_string;
+    center_line.push_str(&right_string);
+    lines.push(center_line);
+    lines.extend(lines_below);
+    lines
 }
 
 #[track_caller]
@@ -154,19 +182,32 @@ pub fn assert_pp_seek<'d, D: PrettyDoc<'d>>(
     doc: D,
     width: Width,
     path: &[usize],
-    expected_lines_above: &[&str],
-    expected_lines_below: &[&str],
+    expected_lines: &[&str],
 ) {
-    let (lines_above, lines_below) = print_above_and_below(doc, width, path);
+    let (lines_above_1, left_string_1, right_string_1, lines_below_1) =
+        print_above_and_below(doc, width, path, false);
+    let (lines_above_2, left_string_2, right_string_2, lines_below_2) =
+        print_above_and_below(doc, width, path, true);
+    let start_row = lines_above_1.len();
+    let end_row = lines_above_2.len();
+    let start_col = left_string_1.len();
+    let end_col = left_string_2.len();
+
+    let lines_1 = concat_lines(lines_above_1, left_string_1, right_string_1, lines_below_1);
+    let lines_2 = concat_lines(lines_above_2, left_string_2, right_string_2, lines_below_2);
     compare_lines(
-        &format!("IN DOWNWARD PRINTING AT PATH {:?}", path),
-        expected_lines_below.join("\n"),
-        lines_below.join("\n"),
+        &format!("IN PRINTING AT PATH {:?}", path),
+        ("SEEK_START", lines_1.join("\n")),
+        ("SEEK_END", lines_2.join("\n")),
     );
+
+    let mut lines_with_focus = lines_1;
+    lines_with_focus[end_row].insert(end_col, ')');
+    lines_with_focus[start_row].insert(start_col, '(');
     compare_lines(
-        &format!("IN UPWARD PRINTING AT PATH {:?}", path),
-        expected_lines_above.join("\n"),
-        lines_above.join("\n"),
+        &format!("IN PRINTING AT PATH {:?}", path),
+        ("EXPECTED", expected_lines.join("\n")),
+        ("ACTUAL", lines_with_focus.join("\n")),
     );
 }
 
@@ -175,13 +216,14 @@ pub fn assert_pp_region<'d, D: PrettyDoc<'d>>(
     doc: D,
     width: Width,
     path: &[usize],
+    seek_end: bool,
     rows: usize,
     expected_lines: &[&str],
 ) {
-    let lines = print_region(doc, width, path, rows);
+    let lines = print_region(doc, width, path, seek_end, rows);
     compare_lines(
         &format!("IN PRINTING {} ROWS AT PATH {:?}", rows, path),
-        expected_lines.join("\n"),
-        lines.join("\n"),
+        ("EXPECTED", expected_lines.join("\n")),
+        ("ACTUAL", lines.join("\n")),
     );
 }

@@ -1,89 +1,82 @@
 use super::pretty_window::PrettyWindow;
 use crate::geometry::{Height, Pos, Size, Width};
-use crate::style::ShadedStyle;
+use std::convert::Infallible;
 use std::fmt;
-use std::iter;
+use std::marker::PhantomData;
 
 /// Render a document in plain text.
 #[derive(Debug)]
-pub struct PlainText {
-    lines: Vec<String>,
+pub struct PlainText<S: fmt::Debug + Default, M: fmt::Debug> {
+    lines: Vec<Vec<char>>,
     size: Size,
+    phantom: PhantomData<(S, M)>,
 }
 
-impl fmt::Display for PlainText {
+// Follows each full-width char
+const SENTINEL: char = '\0';
+
+impl<S: fmt::Debug + Default, M: fmt::Debug> fmt::Display for PlainText<S, M> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for line in &self.lines {
-            writeln!(f, "{}", line)?;
+            for ch in line {
+                if *ch != SENTINEL {
+                    write!(f, "{}", ch)?;
+                }
+            }
+            writeln!(f)?;
         }
         Ok(())
     }
 }
 
-impl PlainText {
+impl<S: fmt::Debug + Default, M: fmt::Debug> PlainText<S, M> {
     /// Construct a screen with the given width and height.
-    pub fn new(width: Width, height: Height) -> PlainText {
-        PlainText {
+    pub fn new(width: Width, height: Height) -> PlainText<S, M> {
+        PlainText::<S, M> {
             lines: vec![],
             size: Size { width, height },
+            phantom: PhantomData,
         }
     }
 
     /// Construct a screen with the given width and unbounded height.
-    pub fn new_unbounded_height(width: Width) -> PlainText {
-        PlainText::new(width, Height::max_value())
-    }
-
-    fn get_mut_line(&mut self, line_num: usize) -> &mut String {
-        if self.lines.len() < line_num + 1 {
-            self.lines.resize_with(line_num + 1, String::new);
-        }
-        &mut self.lines[line_num as usize]
+    pub fn new_unbounded_height(width: Width) -> PlainText<S, M> {
+        PlainText::<S, M>::new(width, Height::max_value())
     }
 }
 
-impl PrettyWindow for PlainText {
-    type Error = fmt::Error;
+impl<S: fmt::Debug + Default, M: fmt::Debug> PrettyWindow for PlainText<S, M> {
+    type Error = Infallible;
+    type Style = S;
+    type Mark = M;
 
     fn size(&self) -> Result<Size, Self::Error> {
         Ok(self.size)
     }
 
-    fn print(&mut self, pos: Pos, string: &str, _style: ShadedStyle) -> Result<(), Self::Error> {
-        if pos.row >= self.size.height {
-            return Ok(());
-        }
-        let line_mut = self.get_mut_line(pos.row as usize);
-        let mut old_chars = line_mut.chars();
-        let mut new_line = String::new();
-
-        // Print out the old contents that are the to left of the start column.
-        for _ in 0..pos.col {
-            new_line.push(old_chars.next().unwrap_or(' '));
-        }
-
-        // Print out the new contents.
-        new_line.push_str(string);
-
-        // Print out the old contents that are to the right of the end column.
-        let old_chars = old_chars.skip(string.chars().count());
-        for ch in old_chars {
-            new_line.push(ch);
-        }
-
-        *line_mut = new_line;
-        Ok(())
-    }
-
-    fn fill(
+    fn print_char(
         &mut self,
-        pos: Pos,
         ch: char,
-        len: Width,
-        style: ShadedStyle,
+        pos: Pos,
+        _mark: Option<&Self::Mark>,
+        _style: &Self::Style,
+        full_width: bool,
     ) -> Result<(), Self::Error> {
-        // TODO: don't construct a string, be more efficient
-        let string: String = iter::repeat(ch).take(len as usize).collect();
-        self.print(pos, &string, style)
+        let row = pos.row as usize;
+        let col = pos.col as usize;
+        if self.lines.len() < row + 1 {
+            self.lines.resize_with(row + 1, Vec::new);
+        }
+        let line = &mut self.lines[row];
+
+        let width = if full_width { 2 } else { 1 };
+        if line.len() < col + width {
+            line.resize(col + width, ' ');
+        }
+        line[col] = ch;
+        if full_width {
+            line[col + 1] = SENTINEL;
+        }
+        Ok(())
     }
 }
