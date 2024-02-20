@@ -11,7 +11,7 @@ const MAX_WIDTH: Width = 10_000;
 /// A list of lines; each line has (indentation, contents)
 ///
 /// **Invariant:** there's always at least one line
-struct Layout(Vec<(Width, String)>);
+struct Layout(Vec<String>);
 
 /// For testing!
 ///
@@ -46,19 +46,25 @@ fn pp<'d, D: PrettyDoc<'d>>(
     match note {
         Empty => Ok(prefix),
         Textual(textual) => Ok(prefix.append(Layout::text(textual.str))),
-        Newline(indent) => Ok(prefix.append(Layout::newline(indent))),
+        Newline(indent) => {
+            let mut indent_string = String::new();
+            for textual in indent {
+                indent_string.push_str(textual.str);
+            }
+            Ok(prefix.append(Layout::newline(indent_string)))
+        }
         Child(_, x) => pp(prefix, x.eval()?.0, suffix_len, width),
         Concat(x, y) => {
             let x = x.eval()?.0;
             let y = y.eval()?.0;
-            let x_suffix_len = first_line_len(y, suffix_len)?.min(MAX_WIDTH);
+            let x_suffix_len = first_line_len(y.clone(), suffix_len)?.min(MAX_WIDTH);
             let y_prefix = pp(prefix, x, x_suffix_len, width)?;
             pp(y_prefix, y, suffix_len, width)
         }
         Choice(x, y) => {
             let x = x.eval()?.0;
             let last_len = prefix.last_line_len();
-            let first_len = first_line_len(x, suffix_len)?;
+            let first_len = first_line_len(x.clone(), suffix_len)?;
             let fits = last_len + first_len <= width;
             if DEBUG_PRINT {
                 println!(
@@ -100,17 +106,15 @@ fn first_line_len<'d, D: PrettyDoc<'d>>(
 
 impl Layout {
     fn empty() -> Layout {
-        Layout(vec![(0, String::new())])
+        Layout(vec![String::new()])
     }
 
     fn text(s: &str) -> Layout {
-        Layout(vec![(0, s.to_string())])
+        Layout(vec![s.to_string()])
     }
 
-    fn newline(indent: Width) -> Layout {
-        let first_line = (0, String::new());
-        let second_line = (indent, String::new());
-        Layout(vec![first_line, second_line])
+    fn newline(prefix: String) -> Layout {
+        Layout(vec![String::new(), prefix])
     }
 
     fn append(self, other: Layout) -> Layout {
@@ -119,8 +123,8 @@ impl Layout {
 
         // Then the last line of `self` extended by the first line of `other`
         let mut other_lines = other.0.into_iter();
-        let suffix = other_lines.next().unwrap().1; // relies on invariant
-        lines.last_mut().unwrap().1.push_str(&suffix); // relies on invariant
+        let suffix = other_lines.next().unwrap(); // relies on invariant
+        lines.last_mut().unwrap().push_str(&suffix); // relies on invariant
 
         // Then the rest of the lines of `other`
         for line in other_lines {
@@ -132,17 +136,17 @@ impl Layout {
 
     fn last_line_len(&self) -> Width {
         let last_line = self.0.last().unwrap(); // relies on invariant
-        last_line.0 + str_width(&last_line.1)
+        str_width(&last_line)
     }
 }
 
 impl fmt::Display for Layout {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        for (i, (spaces, line)) in self.0.iter().enumerate() {
+        for (i, line) in self.0.iter().enumerate() {
             if i > 0 {
                 writeln!(f)?;
             }
-            write!(f, "{:spaces$}{}", "", line, spaces = *spaces as usize)?;
+            write!(f, "{}", line)?;
         }
         Ok(())
     }
@@ -150,14 +154,14 @@ impl fmt::Display for Layout {
 
 #[test]
 fn test_layout() {
-    let ab = Layout(vec![(1, "a".to_owned()), (1, "bb".to_owned())]);
-    let cd = Layout(vec![(2, "ccc".to_owned()), (2, "dddd".to_owned())]);
+    let ab = Layout(vec![" a".to_owned(), " bb".to_owned()]);
+    let cd = Layout(vec!["ccc".to_owned(), "  dddd".to_owned()]);
     let abcd = ab.append(cd);
     assert_eq!(format!("{}", abcd), " a\n bbccc\n  dddd");
 
     let hello = Layout::text("Hello");
     let world = Layout::text("world!");
-    let newline = Layout::newline(2);
+    let newline = Layout::newline("  ".to_owned());
     let hello_world = hello.append(newline).append(world);
     assert_eq!(format!("{}", hello_world), "Hello\n  world!");
 }

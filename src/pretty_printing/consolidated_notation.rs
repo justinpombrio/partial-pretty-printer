@@ -16,7 +16,7 @@ use std::fmt;
 #[derive(Debug)]
 pub enum ConsolidatedNotation<'d, D: PrettyDoc<'d>> {
     Empty,
-    Newline(Width),
+    Newline(Vec<Segment<'d, D>>),
     Textual(Textual<'d, D>),
     Concat(
         DelayedConsolidatedNotation<'d, D>,
@@ -27,6 +27,16 @@ pub enum ConsolidatedNotation<'d, D: PrettyDoc<'d>> {
         DelayedConsolidatedNotation<'d, D>,
     ),
     Child(usize, DelayedConsolidatedNotation<'d, D>),
+}
+
+// TODO: docs
+// TODO: should know its length?
+#[derive(Debug)]
+pub struct Segment<'d, D: PrettyDoc<'d>> {
+    pub str: &'d str,
+    pub style: &'d D::Style,
+    pub doc_id: D::Id,
+    pub mark: Option<&'d D::Mark>,
 }
 
 #[derive(Debug)]
@@ -43,7 +53,7 @@ pub struct DelayedConsolidatedNotation<'d, D: PrettyDoc<'d>> {
     doc: D,
     notation: &'d Notation<D::Style>,
     flat: bool,
-    indent: Width,
+    indent: Vec<Segment<'d, D>>,
     join_pos: Option<JoinPos<'d, D>>,
     mark: Option<&'d D::Mark>,
 }
@@ -68,21 +78,32 @@ impl<'d, D: PrettyDoc<'d>> Clone for Textual<'d, D> {
 }
 impl<'d, D: PrettyDoc<'d>> Copy for Textual<'d, D> {}
 
+impl<'d, D: PrettyDoc<'d>> Clone for Segment<'d, D> {
+    fn clone(&self) -> Self {
+        Segment {
+            str: self.str,
+            style: self.style,
+            doc_id: self.doc_id,
+            mark: self.mark,
+        }
+    }
+}
+impl<'d, D: PrettyDoc<'d>> Copy for Segment<'d, D> {}
+
 impl<'d, D: PrettyDoc<'d>> Clone for ConsolidatedNotation<'d, D> {
     fn clone(&self) -> Self {
         use ConsolidatedNotation::*;
 
         match self {
             Empty => Empty,
-            Newline(ind) => Newline(*ind),
+            Newline(ind) => Newline(ind.clone()),
             Textual(textual) => Textual(*textual),
-            Concat(note1, note2) => Concat(*note1, *note2),
-            Choice(note1, note2) => Choice(*note1, *note2),
-            Child(i, child) => Child(*i, *child),
+            Concat(note1, note2) => Concat(note1.clone(), note2.clone()),
+            Choice(note1, note2) => Choice(note1.clone(), note2.clone()),
+            Child(i, child) => Child(*i, child.clone()),
         }
     }
 }
-impl<'d, D: PrettyDoc<'d>> Copy for ConsolidatedNotation<'d, D> {}
 
 impl<'d, D: PrettyDoc<'d>> Clone for DelayedConsolidatedNotation<'d, D> {
     fn clone(&self) -> Self {
@@ -90,13 +111,12 @@ impl<'d, D: PrettyDoc<'d>> Clone for DelayedConsolidatedNotation<'d, D> {
             doc: self.doc,
             notation: self.notation,
             flat: self.flat,
-            indent: self.indent,
+            indent: self.indent.clone(),
             join_pos: self.join_pos,
             mark: self.mark,
         }
     }
 }
-impl<'d, D: PrettyDoc<'d>> Copy for DelayedConsolidatedNotation<'d, D> {}
 
 impl<'d, D: PrettyDoc<'d>> Clone for JoinPos<'d, D> {
     fn clone(&self) -> Self {
@@ -140,7 +160,7 @@ impl<'d, D: PrettyDoc<'d>> DelayedConsolidatedNotation<'d, D> {
             doc,
             notation: &doc.notation().0,
             flat: false,
-            indent: 0,
+            indent: Vec::new(),
             join_pos: None,
             mark: doc.whole_node_mark(),
         }
@@ -187,28 +207,35 @@ impl<'d, D: PrettyDoc<'d>> DelayedConsolidatedNotation<'d, D> {
                 self.notation = note;
                 self.eval()
             }
-            Indent(indent, note) => {
-                self.indent += indent;
+            Indent(prefix, note) => {
+                self.indent.push(Segment {
+                    str: prefix.str(),
+                    style: prefix.style(),
+                    doc_id: self.doc.id(),
+                    mark: self.mark,
+                });
                 self.notation = note;
                 self.eval()
             }
             Concat(note1, note2) => {
-                let mut cnote1 = self;
+                let mark = self.mark;
+                let mut cnote1 = self.clone();
                 cnote1.notation = note1;
                 let mut cnote2 = self;
                 cnote2.notation = note2;
-                Ok((ConsolidatedNotation::Concat(cnote1, cnote2), self.mark))
+                Ok((ConsolidatedNotation::Concat(cnote1, cnote2), mark))
             }
             Choice(note1, _note2) if self.flat => {
                 self.notation = note1;
                 self.eval()
             }
             Choice(note1, note2) => {
-                let mut cnote1 = self;
+                let mark = self.mark;
+                let mut cnote1 = self.clone();
                 cnote1.notation = note1;
                 let mut cnote2 = self;
                 cnote2.notation = note2;
-                Ok((ConsolidatedNotation::Choice(cnote1, cnote2), self.mark))
+                Ok((ConsolidatedNotation::Choice(cnote1, cnote2), mark))
             }
             IfEmptyText(note1, note2) => {
                 if self.doc.num_children().is_some() {

@@ -156,9 +156,7 @@ pub mod notation_constructors;
 
 pub use geometry::{Col, Height, Pos, Row, Size, Width};
 pub use notation::Notation;
-pub use pretty_printing::{
-    pretty_print, pretty_print_to_string, Indentation, Line, PrettyDoc, Segment,
-};
+pub use pretty_printing::{pretty_print, pretty_print_to_string, Line, PrettyDoc, Segment};
 pub use valid_notation::{NotationError, ValidNotation};
 
 pub mod testing {
