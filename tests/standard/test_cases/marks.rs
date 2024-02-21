@@ -63,14 +63,6 @@ impl RichText {
 
     fn push_line<'d>(&mut self, line: Line<'d, &'d Json>) {
         let mut chars = Vec::new();
-        for _ in 0..line.indentation.num_spaces {
-            chars.push(RichChar {
-                ch: ' ',
-                id: line.indentation.doc_id,
-                style: BasicStyle::default(),
-                mark: line.indentation.mark.copied(),
-            });
-        }
         for segment in &line.segments {
             for ch in segment.str.chars() {
                 chars.push(RichChar {

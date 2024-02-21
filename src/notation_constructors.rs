@@ -1,6 +1,5 @@
 // TODO: docs
 
-use super::geometry::Width;
 use super::notation::{Literal, Notation};
 
 pub fn empty<S>() -> Notation<S> {
@@ -28,8 +27,9 @@ pub fn flat<S>(n: Notation<S>) -> Notation<S> {
     Notation::Flat(Box::new(n))
 }
 
-pub fn indent<S>(i: Width, n: Notation<S>) -> Notation<S> {
-    Notation::Indent(i, Box::new(n))
+// TODO: new method with int indent
+pub fn indent<S>(indent: &str, style: S, n: Notation<S>) -> Notation<S> {
+    Notation::Indent(Literal::new(indent, style), Box::new(n))
 }
 
 pub fn mark<S>(mark_name: &'static str, n: Notation<S>) -> Notation<S> {

@@ -45,6 +45,16 @@ fn basics_choice() {
 }
 
 #[test]
+fn basics_nested_indent() {
+    let notation = punct("Hello") + (1 >> (punct("wonderful") + (2 >> punct("world!"))));
+    assert_pp(
+        &SimpleDoc::new(notation),
+        80,
+        &["Hello", " wonderful", "   world!"],
+    );
+}
+
+#[test]
 fn test_all_paths_fn() {
     use partial_pretty_printer::examples::json::{json_list, json_string};
 

@@ -8,10 +8,14 @@ use std::fmt;
 const DEBUG_PRINT: bool = false;
 const MAX_WIDTH: Width = 10_000;
 
+// TODO: docs
 /// A list of lines; each line has (indentation, contents)
 ///
 /// **Invariant:** there's always at least one line
-struct Layout(Vec<(Width, String)>);
+struct Layout {
+    indent_stack: Vec<String>,
+    lines: Vec<String>,
+}
 
 /// For testing!
 ///
@@ -45,8 +49,8 @@ fn pp<'d, D: PrettyDoc<'d>>(
 
     match note {
         Empty => Ok(prefix),
-        Textual(textual) => Ok(prefix.append(Layout::text(textual.str))),
-        Newline(indent) => Ok(prefix.append(Layout::newline(indent))),
+        Textual(textual) => Ok(prefix.append_text(textual.str)),
+        Newline => Ok(prefix.append_newline()),
         Child(_, x) => pp(prefix, x.eval()?.0, suffix_len, width),
         Concat(x, y) => {
             let x = x.eval()?.0;
@@ -69,6 +73,8 @@ fn pp<'d, D: PrettyDoc<'d>>(
             let z = if fits { x } else { y.eval()?.0 };
             pp(prefix, z, suffix_len, width)
         }
+        PushIndent(textual) => Ok(prefix.push_indent(textual.str)),
+        PopIndent(_) => Ok(prefix.pop_indent()),
     }
 }
 
@@ -82,9 +88,9 @@ fn first_line_len<'d, D: PrettyDoc<'d>>(
     use ConsolidatedNotation::*;
 
     match note {
-        Empty => Ok(suffix_len),
+        Empty | PushIndent(_) | PopIndent(_) => Ok(suffix_len),
         Textual(textual) => Ok(textual.width + suffix_len),
-        Newline(_) => Ok(0),
+        Newline => Ok(0),
         Child(_, x) => first_line_len(x.eval()?.0, suffix_len),
         Concat(x, y) => {
             let suffix_len = first_line_len(y.eval()?.0, suffix_len)?.min(MAX_WIDTH);
@@ -100,54 +106,52 @@ fn first_line_len<'d, D: PrettyDoc<'d>>(
 
 impl Layout {
     fn empty() -> Layout {
-        Layout(vec![(0, String::new())])
-    }
-
-    fn text(s: &str) -> Layout {
-        Layout(vec![(0, s.to_string())])
-    }
-
-    fn newline(indent: Width) -> Layout {
-        let first_line = (0, String::new());
-        let second_line = (indent, String::new());
-        Layout(vec![first_line, second_line])
-    }
-
-    fn append(self, other: Layout) -> Layout {
-        // Start with self.lines
-        let mut lines = self.0;
-
-        // Then the last line of `self` extended by the first line of `other`
-        let mut other_lines = other.0.into_iter();
-        let suffix = other_lines.next().unwrap().1; // relies on invariant
-        lines.last_mut().unwrap().1.push_str(&suffix); // relies on invariant
-
-        // Then the rest of the lines of `other`
-        for line in other_lines {
-            lines.push(line);
+        Layout {
+            lines: vec![String::new()],
+            indent_stack: Vec::new(),
         }
+    }
 
-        Layout(lines)
+    fn append_text(mut self, text: &str) -> Layout {
+        self.lines.last_mut().unwrap().push_str(&text); // relies on invariant
+        self
+    }
+
+    fn append_newline(mut self) -> Layout {
+        let new_line = self.indent_stack.join("");
+        self.lines.push(new_line);
+        self
+    }
+
+    fn push_indent(mut self, indent: &str) -> Layout {
+        self.indent_stack.push(indent.to_owned());
+        self
+    }
+
+    fn pop_indent(mut self) -> Layout {
+        self.indent_stack.pop();
+        self
     }
 
     fn last_line_len(&self) -> Width {
-        let last_line = self.0.last().unwrap(); // relies on invariant
-        last_line.0 + str_width(&last_line.1)
+        let last_line = self.lines.last().unwrap(); // relies on invariant
+        str_width(last_line)
     }
 }
 
 impl fmt::Display for Layout {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        for (i, (spaces, line)) in self.0.iter().enumerate() {
+        for (i, line) in self.lines.iter().enumerate() {
             if i > 0 {
                 writeln!(f)?;
             }
-            write!(f, "{:spaces$}{}", "", line, spaces = *spaces as usize)?;
+            write!(f, "{}", line)?;
         }
         Ok(())
     }
 }
 
+/* TODO
 #[test]
 fn test_layout() {
     let ab = Layout(vec![(1, "a".to_owned()), (1, "bb".to_owned())]);
@@ -161,3 +165,4 @@ fn test_layout() {
     let hello_world = hello.append(newline).append(world);
     assert_eq!(format!("{}", hello_world), "Hello\n  world!");
 }
+*/

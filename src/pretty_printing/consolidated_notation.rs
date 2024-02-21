@@ -16,7 +16,7 @@ use std::fmt;
 #[derive(Debug)]
 pub enum ConsolidatedNotation<'d, D: PrettyDoc<'d>> {
     Empty,
-    Newline(Width),
+    Newline,
     Textual(Textual<'d, D>),
     Concat(
         DelayedConsolidatedNotation<'d, D>,
@@ -27,6 +27,8 @@ pub enum ConsolidatedNotation<'d, D: PrettyDoc<'d>> {
         DelayedConsolidatedNotation<'d, D>,
     ),
     Child(usize, DelayedConsolidatedNotation<'d, D>),
+    PushIndent(Textual<'d, D>),
+    PopIndent(Textual<'d, D>),
 }
 
 #[derive(Debug)]
@@ -43,8 +45,8 @@ pub struct DelayedConsolidatedNotation<'d, D: PrettyDoc<'d>> {
     doc: D,
     notation: &'d Notation<D::Style>,
     flat: bool,
-    indent: Width,
     join_pos: Option<JoinPos<'d, D>>,
+    indent_pos: Option<IndentPos>,
     mark: Option<&'d D::Mark>,
 }
 
@@ -55,6 +57,13 @@ struct JoinPos<'d, D: PrettyDoc<'d>> {
     index: usize,
     first: &'d Notation<D::Style>,
     join: &'d Notation<D::Style>,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum IndentPos {
+    Push,
+    Inside,
+    Pop,
 }
 
 impl<'d, D: PrettyDoc<'d>> Clone for Textual<'d, D> {
@@ -74,11 +83,13 @@ impl<'d, D: PrettyDoc<'d>> Clone for ConsolidatedNotation<'d, D> {
 
         match self {
             Empty => Empty,
-            Newline(ind) => Newline(*ind),
+            Newline => Newline,
             Textual(textual) => Textual(*textual),
             Concat(note1, note2) => Concat(*note1, *note2),
             Choice(note1, note2) => Choice(*note1, *note2),
             Child(i, child) => Child(*i, *child),
+            PushIndent(textual) => PushIndent(*textual),
+            PopIndent(textual) => PopIndent(*textual),
         }
     }
 }
@@ -90,8 +101,8 @@ impl<'d, D: PrettyDoc<'d>> Clone for DelayedConsolidatedNotation<'d, D> {
             doc: self.doc,
             notation: self.notation,
             flat: self.flat,
-            indent: self.indent,
             join_pos: self.join_pos,
+            indent_pos: self.indent_pos,
             mark: self.mark,
         }
     }
@@ -140,7 +151,7 @@ impl<'d, D: PrettyDoc<'d>> DelayedConsolidatedNotation<'d, D> {
             doc,
             notation: &doc.notation().0,
             flat: false,
-            indent: 0,
+            indent_pos: None,
             join_pos: None,
             mark: doc.whole_node_mark(),
         }
@@ -158,7 +169,7 @@ impl<'d, D: PrettyDoc<'d>> DelayedConsolidatedNotation<'d, D> {
 
         match self.notation {
             Empty => Ok((ConsolidatedNotation::Empty, self.mark)),
-            Newline => Ok((ConsolidatedNotation::Newline(self.indent), self.mark)),
+            Newline => Ok((ConsolidatedNotation::Newline, self.mark)),
             Literal(lit) => Ok((
                 ConsolidatedNotation::Textual(Textual {
                     str: lit.str(),
@@ -187,11 +198,39 @@ impl<'d, D: PrettyDoc<'d>> DelayedConsolidatedNotation<'d, D> {
                 self.notation = note;
                 self.eval()
             }
-            Indent(indent, note) => {
-                self.indent += indent;
-                self.notation = note;
-                self.eval()
-            }
+            Indent(literal, indented_note) => match self.indent_pos {
+                None => {
+                    let mut cnote1 = self;
+                    cnote1.indent_pos = Some(IndentPos::Push);
+                    let mut cnote2 = self;
+                    cnote2.indent_pos = Some(IndentPos::Inside);
+                    Ok((ConsolidatedNotation::Concat(cnote1, cnote2), self.mark))
+                }
+                Some(IndentPos::Push) => {
+                    let textual = Textual {
+                        str: literal.str(),
+                        width: literal.width(),
+                        style: literal.style(),
+                    };
+                    Ok((ConsolidatedNotation::PushIndent(textual), self.mark))
+                }
+                Some(IndentPos::Inside) => {
+                    let mut cnote1 = self;
+                    cnote1.indent_pos = None;
+                    cnote1.notation = indented_note;
+                    let mut cnote2 = self;
+                    cnote2.indent_pos = Some(IndentPos::Pop);
+                    Ok((ConsolidatedNotation::Concat(cnote1, cnote2), self.mark))
+                }
+                Some(IndentPos::Pop) => {
+                    let textual = Textual {
+                        str: literal.str(),
+                        width: literal.width(),
+                        style: literal.style(),
+                    };
+                    Ok((ConsolidatedNotation::PopIndent(textual), self.mark))
+                }
+            },
             Concat(note1, note2) => {
                 let mut cnote1 = self;
                 cnote1.notation = note1;
@@ -328,11 +367,13 @@ impl<'d, D: PrettyDoc<'d>> fmt::Display for ConsolidatedNotation<'d, D> {
 
         match self {
             Empty => write!(f, "ε"),
-            Newline(_) => write!(f, "↵"),
+            Newline => write!(f, "↵"),
             Textual(textual) => write!(f, "'{}'", textual.str),
             Concat(left, right) => write!(f, "{} + {}", left, right),
             Choice(opt1, opt2) => write!(f, "({} | {})", opt1, opt2),
             Child(i, _) => write!(f, "${}", i),
+            PushIndent(textual) => write!(f, "push('{}')", textual.str),
+            PopIndent(_) => write!(f, "pop"),
         }
     }
 }
