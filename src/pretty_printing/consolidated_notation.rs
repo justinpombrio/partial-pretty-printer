@@ -4,6 +4,7 @@ use super::pretty_doc::PrettyDoc;
 use crate::geometry::{str_width, Width};
 use crate::notation::Notation;
 use std::fmt;
+use std::rc::Rc;
 
 /// A `Notation` says how to print a _single_ node in a document. The _notation tree_ is what you
 /// get from gluing together the `Notation`s for every node in the document. A
@@ -16,7 +17,7 @@ use std::fmt;
 #[derive(Debug)]
 pub enum ConsolidatedNotation<'d, D: PrettyDoc<'d>> {
     Empty,
-    Newline(Vec<Segment<'d, D>>),
+    Newline(Option<Rc<IndentNode<'d, D>>>),
     Textual(Textual<'d, D>),
     Concat(
         DelayedConsolidatedNotation<'d, D>,
@@ -46,6 +47,12 @@ pub struct Textual<'d, D: PrettyDoc<'d>> {
     pub style: &'d D::Style,
 }
 
+#[derive(Debug)]
+pub struct IndentNode<'d, D: PrettyDoc<'d>> {
+    pub segment: Segment<'d, D>,
+    pub parent: Option<Rc<IndentNode<'d, D>>>,
+}
+
 /// A `ConsolidatedNotation` that has not yet been evaluated, to prevent the entire notation tree
 /// from being in memory at once. Call `.eval()` to get a `ConsolidatedNotation`.
 #[derive(Debug)]
@@ -53,7 +60,7 @@ pub struct DelayedConsolidatedNotation<'d, D: PrettyDoc<'d>> {
     doc: D,
     notation: &'d Notation<D::Style>,
     flat: bool,
-    indent: Vec<Segment<'d, D>>,
+    indent: Option<Rc<IndentNode<'d, D>>>,
     join_pos: Option<JoinPos<'d, D>>,
     mark: Option<&'d D::Mark>,
 }
@@ -160,7 +167,7 @@ impl<'d, D: PrettyDoc<'d>> DelayedConsolidatedNotation<'d, D> {
             doc,
             notation: &doc.notation().0,
             flat: false,
-            indent: Vec::new(),
+            indent: None,
             join_pos: None,
             mark: doc.whole_node_mark(),
         }
@@ -208,12 +215,16 @@ impl<'d, D: PrettyDoc<'d>> DelayedConsolidatedNotation<'d, D> {
                 self.eval()
             }
             Indent(prefix, note) => {
-                self.indent.push(Segment {
-                    str: prefix.str(),
-                    style: prefix.style(),
-                    doc_id: self.doc.id(),
-                    mark: self.mark,
+                let new_indent = Rc::new(IndentNode {
+                    segment: Segment {
+                        str: prefix.str(),
+                        style: prefix.style(),
+                        doc_id: self.doc.id(),
+                        mark: self.mark,
+                    },
+                    parent: self.indent,
                 });
+                self.indent = Some(new_indent);
                 self.notation = note;
                 self.eval()
             }

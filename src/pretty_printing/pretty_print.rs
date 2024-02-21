@@ -1,5 +1,5 @@
 use super::consolidated_notation::{
-    ConsolidatedNotation, DelayedConsolidatedNotation, PrintingError, Segment, Textual,
+    ConsolidatedNotation, DelayedConsolidatedNotation, IndentNode, PrintingError, Segment, Textual,
 };
 use super::pretty_doc::PrettyDoc;
 use crate::geometry::{str_width, Width};
@@ -7,6 +7,7 @@ use crate::infra::span;
 use std::convert::From;
 use std::iter::Iterator;
 use std::mem;
+use std::rc::Rc;
 
 /// Pretty print a document, focused to the left or right of the node found by traversing `path`
 /// from the root. If `seek_end` is true, focus will be to the right of the node, otherwise to the
@@ -205,10 +206,18 @@ struct Block<'d, D: PrettyDoc<'d>> {
 }
 
 impl<'d, D: PrettyDoc<'d>> Block<'d, D> {
-    fn new(indentation: Vec<Segment<'d, D>>, chunks: Vec<Chunk<'d, D>>) -> Block<'d, D> {
+    fn new(indentation: Option<Rc<IndentNode<'d, D>>>, chunks: Vec<Chunk<'d, D>>) -> Block<'d, D> {
+        let mut indentation = &indentation;
+        let mut indent_segments = Vec::new();
+        while let Some(indent_node) = indentation {
+            indent_segments.push(indent_node.segment);
+            indentation = &indent_node.parent;
+        }
+        indent_segments.reverse();
+
         Block {
-            prefix_len: indentation.iter().map(|seg| str_width(seg.str)).sum(),
-            segments: indentation,
+            prefix_len: indent_segments.iter().map(|seg| str_width(seg.str)).sum(),
+            segments: indent_segments,
             chunks,
         }
     }
@@ -248,7 +257,7 @@ struct Printer<'d, D: PrettyDoc<'d>> {
 impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
     fn new(doc: D, width: Width) -> Result<Printer<'d, D>, PrintingError> {
         let chunk = Chunk::new(DelayedConsolidatedNotation::new(doc))?;
-        let mut block = Block::new(Vec::new(), Vec::new());
+        let mut block = Block::new(None, Vec::new());
         let mut printer = Printer {
             width,
             prev_blocks: Vec::new(),

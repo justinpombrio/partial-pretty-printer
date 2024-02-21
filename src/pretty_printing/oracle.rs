@@ -47,11 +47,14 @@ fn pp<'d, D: PrettyDoc<'d>>(
         Empty => Ok(prefix),
         Textual(textual) => Ok(prefix.append(Layout::text(textual.str))),
         Newline(indent) => {
-            let mut indent_string = String::new();
-            for textual in indent {
-                indent_string.push_str(textual.str);
+            let mut indent = &indent;
+            let mut indent_strings = Vec::new();
+            while let Some(indent_node) = indent {
+                indent_strings.push(indent_node.segment.str.to_owned());
+                indent = &indent_node.parent;
             }
-            Ok(prefix.append(Layout::newline(indent_string)))
+            indent_strings.reverse();
+            Ok(prefix.append(Layout::newline(indent_strings.join(""))))
         }
         Child(_, x) => pp(prefix, x.eval()?.0, suffix_len, width),
         Concat(x, y) => {
