@@ -8,7 +8,7 @@ use std::fmt;
 const DEBUG_PRINT: bool = false;
 const MAX_WIDTH: Width = 10_000;
 
-/// A list of lines; each line has (indentation, contents)
+/// A list of lines.
 ///
 /// **Invariant:** there's always at least one line
 struct Layout(Vec<String>);

@@ -14,9 +14,7 @@ use std::ops::{Add, BitOr, BitXor, Shr};
 pub enum Notation<S> {
     /// Display nothing.
     Empty,
-    // TODO update doc
-    /// Display a newline followed a number of spaces determined by the indentation level. (See
-    /// [`Notation::Indent`]).
+    /// Display a newline followed by the current indentation. (See [`Notation::Indent`]).
     Newline,
     /// Display a piece of text. Can only be used on a [`PrettyDoc`] node for which
     /// `.num_children()` returns `None` (implying that it contains text).
@@ -27,10 +25,12 @@ pub enum Notation<S> {
     /// followed the recommendation of not putting `Newline`s in the left-most options of choices,
     /// then this `Flat` will be displayed all on one line.
     Flat(Box<Notation<S>>),
-    // TODO update doc
-    /// Increase the indentation level of the contained notation by the given width. The
-    /// indentation level determines the number of spaces put after `Newline`s. (It therefore
-    /// doesn't affect the first line of a notation.)
+    /// Append a string to the indentation of the contained notation. All of the
+    /// indentation strings will be displayed after `Newline`s. (They therefore
+    /// don't affect the first line of a notation.) Indentation strings will
+    /// typically contain one indentation level's worth of whitespace characters
+    /// (eg. 4 spaces), but can be used for other purposes like placing comment
+    /// syntax at the start of a line.
     Indent(Literal<S>, Box<Notation<S>>),
     /// Display both notations. The first character of the right notation immediately follows the
     /// last character of the left notation. Note that the column at which the right notation

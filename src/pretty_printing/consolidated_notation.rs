@@ -47,9 +47,22 @@ pub struct Textual<'d, D: PrettyDoc<'d>> {
     pub style: &'d D::Style,
 }
 
+// Performance Note: Adding support for arbitrary indentation strings increased
+// the pretty printing time by 25%, compared to storing indentation as a number
+// of spaces (according to the time_json test). Storing an `Rc<IndentNode>` in
+// `ConsolidatedNotation::Newline` is significantly faster than storing a
+// `Vec<Segment>`, but we should consider finding another implementation with
+// even fewer heap allocations.
+
+/// One level of indentation, plus a reference to the level of indentation to
+/// its left. It's used to form trees that store the document's indentation.
 #[derive(Debug)]
 pub struct IndentNode<'d, D: PrettyDoc<'d>> {
+    /// The indentation string and its associated data. Typically it will just
+    /// contain whitespace characters, but it could also contain syntax for
+    /// commenting out a line, etc.
     pub segment: Segment<'d, D>,
+    /// The piece of indentation immediately to the left of this one, if any.
     pub parent: Option<Rc<IndentNode<'d, D>>>,
 }
 
@@ -60,6 +73,7 @@ pub struct DelayedConsolidatedNotation<'d, D: PrettyDoc<'d>> {
     doc: D,
     notation: &'d Notation<D::Style>,
     flat: bool,
+    /// The right-most / deepest indentation level
     indent: Option<Rc<IndentNode<'d, D>>>,
     join_pos: Option<JoinPos<'d, D>>,
     mark: Option<&'d D::Mark>,

@@ -108,18 +108,16 @@ impl<'d, D: PrettyDoc<'d>> Chunk<'d, D> {
     }
 }
 
-// TODO: Update docs
 /// The contents of a single pretty printed line.
 pub struct Line<'d, D: PrettyDoc<'d>> {
-    /// A sequence of pieces of text to be displayed after `indentation`, in order from left to
+    /// A sequence of pieces of text to be displayed in order from left to
     /// right, with no spacing in between.
     pub segments: Vec<Segment<'d, D>>,
 }
 
-// TODO: Update docs
 /// The contents of the line containing the focus point.
 pub struct FocusedLine<'d, D: PrettyDoc<'d>> {
-    /// Pieces of text that appear after the indentation but before the focus point.
+    /// Pieces of text that appear before the focus point.
     pub left_segments: Vec<Segment<'d, D>>,
     /// Pieces of text that appear after the focus point.
     pub right_segments: Vec<Segment<'d, D>>,
@@ -186,16 +184,12 @@ impl<'d, D: PrettyDoc<'d>> ToString for FocusedLine<'d, D> {
     }
 }
 
-// TODO: Update docs
-// | segments ->|<- chunks |
-// ^^^^^^^^^^^^^^
-//   prefix_len
 /// INVARIANTS:
 /// - prefix_len is always sum(segment width)
 /// - chunks only contains Textual, Choice, Child
 ///
-/// | indentation | segments ->|<- chunks |
-/// ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/// | segments ->|<- chunks |
+/// ^^^^^^^^^^^^^^
 ///   prefix_len
 struct Block<'d, D: PrettyDoc<'d>> {
     /// Resolved text. Last element is the rightmost text.
@@ -444,7 +438,7 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
         use ConsolidatedNotation::*;
         span!("expand_first");
 
-        // | block.indent | block.segments ->| stack ->|<- block.chunks |
+        // | block.segments ->| stack ->|<- block.chunks |
         let mut stack = vec![chunk];
         while let Some(chunk) = stack.pop() {
             match chunk.notation {
@@ -477,7 +471,7 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
         use ConsolidatedNotation::*;
         span!("expand_last");
 
-        // | block.indent | block.segments ->| chunks ->|<- stack |<- block.chunks |
+        // | block.segments ->| chunks ->|<- stack |<- block.chunks |
         let mut chunks = Vec::new();
         let mut stack = vec![chunk];
         while let Some(chunk) = stack.pop() {

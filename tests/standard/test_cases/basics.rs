@@ -1,5 +1,5 @@
 use crate::standard::pretty_testing::{all_paths, assert_pp, punct, SimpleDoc};
-use partial_pretty_printer::notation_constructors::{empty, flat, nl};
+use partial_pretty_printer::notation_constructors::{empty, flat, indent, nl};
 
 #[test]
 fn basics_empty() {
@@ -29,6 +29,12 @@ fn basics_newline() {
 fn basics_indent() {
     let notation = punct("Hello") + (2 >> punct("world!"));
     assert_pp(&SimpleDoc::new(notation), 80, &["Hello", "  world!"]);
+}
+
+#[test]
+fn basics_non_whitespace_indent() {
+    let notation = punct("Hello") + indent("// ", (), nl() + punct("world!"));
+    assert_pp(&SimpleDoc::new(notation), 80, &["Hello", "// world!"]);
 }
 
 #[test]
