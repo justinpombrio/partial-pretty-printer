@@ -10,7 +10,7 @@ const MAX_WIDTH: Width = 10_000;
 
 /// A list of lines.
 ///
-/// **Invariant:** there's always at least one line
+/// **Invariant:** there's always at least one line.
 struct Layout(Vec<String>);
 
 /// For testing!
@@ -46,12 +46,12 @@ fn pp<'d, D: PrettyDoc<'d>>(
     match note {
         Empty => Ok(prefix),
         Textual(textual) => Ok(prefix.append(Layout::text(textual.str))),
-        Newline(indent) => {
-            let mut indent = &indent;
+        Newline(indentation) => {
+            let mut remaining_indentation = &indentation;
             let mut indent_strings = Vec::new();
-            while let Some(indent_node) = indent {
+            while let Some(indent_node) = remaining_indentation {
                 indent_strings.push(indent_node.segment.str.to_owned());
-                indent = &indent_node.parent;
+                remaining_indentation = &indent_node.parent;
             }
             indent_strings.reverse();
             Ok(prefix.append(Layout::newline(indent_strings.join(""))))
@@ -120,6 +120,7 @@ impl Layout {
         Layout(vec![String::new(), prefix])
     }
 
+    // TODO: Remove this method in favor of append_text & append_newline
     fn append(self, other: Layout) -> Layout {
         // Start with self.lines
         let mut lines = self.0;

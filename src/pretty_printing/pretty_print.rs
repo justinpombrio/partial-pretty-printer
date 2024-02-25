@@ -2,7 +2,7 @@ use super::consolidated_notation::{
     ConsolidatedNotation, DelayedConsolidatedNotation, IndentNode, PrintingError, Segment, Textual,
 };
 use super::pretty_doc::PrettyDoc;
-use crate::geometry::{str_width, Width};
+use crate::geometry::Width;
 use crate::infra::span;
 use std::convert::From;
 use std::iter::Iterator;
@@ -108,6 +108,7 @@ impl<'d, D: PrettyDoc<'d>> Chunk<'d, D> {
     }
 }
 
+// TODO: Make this struct Line(Vec<Segment>)?
 /// The contents of a single pretty printed line.
 pub struct Line<'d, D: PrettyDoc<'d>> {
     /// A sequence of pieces of text to be displayed in order from left to
@@ -125,14 +126,14 @@ pub struct FocusedLine<'d, D: PrettyDoc<'d>> {
 
 impl<'d, D: PrettyDoc<'d>> Line<'d, D> {
     pub fn width(&self) -> Width {
-        self.segments.iter().map(|seg| str_width(seg.str)).sum()
+        self.segments.iter().map(|seg| seg.width).sum()
     }
 }
 
 impl<'d, D: PrettyDoc<'d>> FocusedLine<'d, D> {
     pub fn width(&self) -> Width {
         let segs = self.left_segments.iter().chain(self.right_segments.iter());
-        segs.map(|seg| str_width(seg.str)).sum()
+        segs.map(|seg| seg.width).sum()
     }
 
     pub fn to_left_string(&self) -> String {
@@ -190,7 +191,7 @@ impl<'d, D: PrettyDoc<'d>> ToString for FocusedLine<'d, D> {
 ///
 /// | segments ->|<- chunks |
 /// ^^^^^^^^^^^^^^
-///   prefix_len
+/// prefix_len
 struct Block<'d, D: PrettyDoc<'d>> {
     /// Resolved text. Last element is the rightmost text.
     segments: Vec<Segment<'d, D>>,
@@ -200,17 +201,18 @@ struct Block<'d, D: PrettyDoc<'d>> {
 }
 
 impl<'d, D: PrettyDoc<'d>> Block<'d, D> {
+    // TODO: Make this &IndentNode for efficiency
     fn new(indentation: Option<Rc<IndentNode<'d, D>>>, chunks: Vec<Chunk<'d, D>>) -> Block<'d, D> {
-        let mut indentation = &indentation;
+        let mut remaining_indentation = &indentation;
         let mut indent_segments = Vec::new();
-        while let Some(indent_node) = indentation {
+        while let Some(indent_node) = remaining_indentation {
             indent_segments.push(indent_node.segment);
-            indentation = &indent_node.parent;
+            remaining_indentation = &indent_node.parent;
         }
         indent_segments.reverse();
 
         Block {
-            prefix_len: indent_segments.iter().map(|seg| str_width(seg.str)).sum(),
+            prefix_len: indent_segments.iter().map(|seg| seg.width).sum(),
             segments: indent_segments,
             chunks,
         }
@@ -219,11 +221,12 @@ impl<'d, D: PrettyDoc<'d>> Block<'d, D> {
     fn push_text(&mut self, doc_id: D::Id, mark: Option<&'d D::Mark>, textual: Textual<'d, D>) {
         self.segments.push(Segment {
             str: textual.str,
+            width: textual.width,
             style: textual.style,
             doc_id,
             mark,
         });
-        self.prefix_len += str_width(textual.str);
+        self.prefix_len += textual.width;
     }
 
     fn print(self) -> Line<'d, D> {
@@ -399,6 +402,7 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
                         if expand_child {
                             self.expand_focusing_first_block(&mut block, Chunk::new(child)?)?;
                         } else {
+                            // Put the chunk back. Can't clone directly b.c. partly moved.
                             block.chunks.push(Chunk {
                                 notation: Child(i, child),
                                 id: chunk.id,

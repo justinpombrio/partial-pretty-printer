@@ -29,7 +29,7 @@ pub enum Notation<S> {
     /// indentation strings will be displayed after `Newline`s. (They therefore
     /// don't affect the first line of a notation.) Indentation strings will
     /// typically contain one indentation level's worth of whitespace characters
-    /// (eg. 4 spaces), but can be used for other purposes like placing comment
+    /// (eg. 4 spaces), but can also be used for other purposes like placing comment
     /// syntax at the start of a line.
     Indent(Literal<S>, Box<Notation<S>>),
     /// Display both notations. The first character of the right notation immediately follows the

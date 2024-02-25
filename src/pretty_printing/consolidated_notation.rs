@@ -30,16 +30,17 @@ pub enum ConsolidatedNotation<'d, D: PrettyDoc<'d>> {
     Child(usize, DelayedConsolidatedNotation<'d, D>),
 }
 
-// TODO: docs
-// TODO: should know its length?
+/// A fully resolved piece of text.
 #[derive(Debug)]
 pub struct Segment<'d, D: PrettyDoc<'d>> {
     pub str: &'d str,
+    pub width: Width,
     pub style: &'d D::Style,
     pub doc_id: D::Id,
     pub mark: Option<&'d D::Mark>,
 }
 
+/// A styled piece of text from Notation::Literal or Notation::Text or Notation::Indent.
 #[derive(Debug)]
 pub struct Textual<'d, D: PrettyDoc<'d>> {
     pub str: &'d str,
@@ -47,22 +48,19 @@ pub struct Textual<'d, D: PrettyDoc<'d>> {
     pub style: &'d D::Style,
 }
 
-// Performance Note: Adding support for arbitrary indentation strings increased
-// the pretty printing time by 25%, compared to storing indentation as a number
-// of spaces (according to the time_json test). Storing an `Rc<IndentNode>` in
-// `ConsolidatedNotation::Newline` is significantly faster than storing a
-// `Vec<Segment>`, but we should consider finding another implementation with
-// even fewer heap allocations.
+// Performance Note: We've tested three implementations of indentation so far:
+// - Indentation as a number of spaces (less expressive)
+// - Identation as an `Rc<IndentNode>` (the current impl) -- 25% slower
+// - Indentation as a `Vec<Segment>` -- much slower
+// If there's a way to implement it with fewer heap alloations, we should try it.
 
 /// One level of indentation, plus a reference to the level of indentation to
-/// its left. It's used to form trees that store the document's indentation.
+/// its left. These references form trees, with each child referencing its parent.
 #[derive(Debug)]
 pub struct IndentNode<'d, D: PrettyDoc<'d>> {
-    /// The indentation string and its associated data. Typically it will just
-    /// contain whitespace characters, but it could also contain syntax for
-    /// commenting out a line, etc.
+    /// The rightmost/current level of indentation.
     pub segment: Segment<'d, D>,
-    /// The piece of indentation immediately to the left of this one, if any.
+    /// The level of indentation to the left of this one.
     pub parent: Option<Rc<IndentNode<'d, D>>>,
 }
 
@@ -73,7 +71,6 @@ pub struct DelayedConsolidatedNotation<'d, D: PrettyDoc<'d>> {
     doc: D,
     notation: &'d Notation<D::Style>,
     flat: bool,
-    /// The right-most / deepest indentation level
     indent: Option<Rc<IndentNode<'d, D>>>,
     join_pos: Option<JoinPos<'d, D>>,
     mark: Option<&'d D::Mark>,
@@ -103,6 +100,7 @@ impl<'d, D: PrettyDoc<'d>> Clone for Segment<'d, D> {
     fn clone(&self) -> Self {
         Segment {
             str: self.str,
+            width: self.width,
             style: self.style,
             doc_id: self.doc_id,
             mark: self.mark,
@@ -232,6 +230,7 @@ impl<'d, D: PrettyDoc<'d>> DelayedConsolidatedNotation<'d, D> {
                 let new_indent = Rc::new(IndentNode {
                     segment: Segment {
                         str: prefix.str(),
+                        width: prefix.width(),
                         style: prefix.style(),
                         doc_id: self.doc.id(),
                         mark: self.mark,
