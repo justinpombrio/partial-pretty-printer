@@ -108,7 +108,6 @@ impl<'d, D: PrettyDoc<'d>> Chunk<'d, D> {
     }
 }
 
-// TODO: Make this struct Line(Vec<Segment>)?
 /// The contents of a single pretty printed line.
 pub struct Line<'d, D: PrettyDoc<'d>> {
     /// A sequence of pieces of text to be displayed in order from left to
@@ -201,7 +200,6 @@ struct Block<'d, D: PrettyDoc<'d>> {
 }
 
 impl<'d, D: PrettyDoc<'d>> Block<'d, D> {
-    // TODO: Make this &IndentNode for efficiency
     fn new(indentation: Option<Rc<IndentNode<'d, D>>>, chunks: Vec<Chunk<'d, D>>) -> Block<'d, D> {
         let mut remaining_indentation = &indentation;
         let mut indent_segments = Vec::new();
@@ -282,7 +280,7 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
                 }
                 Choice(opt1, opt2) => {
                     let choice = self.choose(&block, opt1, opt2)?;
-                    self.expand_focusing_first_block(&mut block, Chunk::new(choice)?)?;
+                    self.expand_focusing_first_block(&mut block, choice)?;
                 }
             }
         }
@@ -304,7 +302,7 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
                 Child(_, note) => self.expand_focusing_last_block(&mut block, Chunk::new(note)?)?,
                 Choice(opt1, opt2) => {
                     let choice = self.choose(&block, opt1, opt2)?;
-                    self.expand_focusing_last_block(&mut block, Chunk::new(choice)?)?;
+                    self.expand_focusing_last_block(&mut block, choice)?;
                 }
             }
         }
@@ -344,7 +342,7 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
                     }
                     Choice(opt1, opt2) => {
                         let choice = self.choose(&block, opt1, opt2)?;
-                        self.expand_focusing_last_block(&mut block, Chunk::new(choice)?)?;
+                        self.expand_focusing_last_block(&mut block, choice)?;
                     }
                 }
             }
@@ -419,7 +417,7 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
                     }
                     Choice(opt1, opt2) => {
                         let choice = self.choose(&block, opt1, opt2)?;
-                        self.expand_focusing_first_block(&mut block, Chunk::new(choice)?)?;
+                        self.expand_focusing_first_block(&mut block, choice)?;
                         self.next_blocks.push(block);
                         break;
                     }
@@ -511,17 +509,26 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
         block: &Block<'d, D>,
         opt1: DelayedConsolidatedNotation<'d, D>,
         opt2: DelayedConsolidatedNotation<'d, D>,
-    ) -> Result<DelayedConsolidatedNotation<'d, D>, PrintingError> {
+    ) -> Result<Chunk<'d, D>, PrintingError> {
         span!("choose");
 
-        let opt1_evaled = opt1.clone().eval()?.0;
+        let id1 = opt1.doc().id();
+        let (opt1_evaled, mark1) = opt1.eval()?;
 
         if self.width >= block.prefix_len
-            && fits(self.width - block.prefix_len, opt1_evaled, &block.chunks)?
+            && fits(
+                self.width - block.prefix_len,
+                opt1_evaled.clone(),
+                &block.chunks,
+            )?
         {
-            Ok(opt1)
+            Ok(Chunk {
+                id: id1,
+                mark: mark1,
+                notation: opt1_evaled,
+            })
         } else {
-            Ok(opt2)
+            Chunk::new(opt2)
         }
     }
 
@@ -613,7 +620,7 @@ fn fits<'d, D: PrettyDoc<'d>>(
                 }
             }
             Newline(_) => return Ok(true),
-            Child(_, note) => notations.push(note.clone().eval()?.0),
+            Child(_, note) => notations.push(note.eval()?.0),
             Concat(note1, note2) => {
                 notations.push(note2.eval()?.0);
                 notations.push(note1.eval()?.0);
