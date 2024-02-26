@@ -14,8 +14,7 @@ use std::ops::{Add, BitOr, BitXor, Shr};
 pub enum Notation<S> {
     /// Display nothing.
     Empty,
-    /// Display a newline followed a number of spaces determined by the indentation level. (See
-    /// [`Notation::Indent`]).
+    /// Display a newline followed by the current indentation. (See [`Notation::Indent`]).
     Newline,
     /// Display a piece of text. Can only be used on a [`PrettyDoc`] node for which
     /// `.num_children()` returns `None` (implying that it contains text).
@@ -26,10 +25,13 @@ pub enum Notation<S> {
     /// followed the recommendation of not putting `Newline`s in the left-most options of choices,
     /// then this `Flat` will be displayed all on one line.
     Flat(Box<Notation<S>>),
-    /// Increase the indentation level of the contained notation by the given width. The
-    /// indentation level determines the number of spaces put after `Newline`s. (It therefore
-    /// doesn't affect the first line of a notation.)
-    Indent(Width, Box<Notation<S>>),
+    /// Append a string to the indentation of the contained notation. All of the
+    /// indentation strings will be displayed after `Newline`s. (They therefore
+    /// don't affect the first line of a notation.) Indentation strings will
+    /// typically contain one indentation level's worth of whitespace characters
+    /// (eg. 4 spaces), but can also be used for other purposes like placing comment
+    /// syntax at the start of a line.
+    Indent(Literal<S>, Box<Notation<S>>),
     /// Display both notations. The first character of the right notation immediately follows the
     /// last character of the left notation. Note that the column at which the right notation
     /// starts does not affect its indentation level.
@@ -112,7 +114,7 @@ impl<S> fmt::Display for Notation<S> {
             Text(_) => write!(f, "TEXT"),
             Literal(lit) => write!(f, "'{}'", lit.string),
             Flat(note) => write!(f, "Flat({})", note),
-            Indent(i, note) => write!(f, "{}⇒({})", i, note),
+            Indent(lit, note) => write!(f, "'{}'⇒({})", lit.string, note),
             Concat(left, right) => write!(f, "{} + {}", left, right),
             Choice(opt1, opt2) => write!(f, "({} | {})", opt1, opt2),
             IfEmptyText(opt1, opt2) => write!(f, "IfEmptyText({} | {})", opt1, opt2),
@@ -155,13 +157,19 @@ impl<S> BitXor<Notation<S>> for Notation<S> {
     }
 }
 
-impl<S> Shr<Notation<S>> for Width {
+impl<S> Shr<Notation<S>> for Width
+where
+    S: Default,
+{
     type Output = Notation<S>;
 
-    /// `i >> x` is shorthand for `Indent(i, Newline + x)` (sometimes called "nesting").
+    /// `i >> x` is shorthand for `Indent(i_spaces, Newline + x)` (sometimes called "nesting").
     fn shr(self, notation: Notation<S>) -> Notation<S> {
         Notation::Indent(
-            self,
+            Literal::new(
+                &format!("{:spaces$}", "", spaces = self as usize),
+                S::default(),
+            ),
             Box::new(Notation::Concat(
                 Box::new(Notation::Newline),
                 Box::new(notation),

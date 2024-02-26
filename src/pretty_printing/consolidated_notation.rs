@@ -4,6 +4,7 @@ use super::pretty_doc::PrettyDoc;
 use crate::geometry::{str_width, Width};
 use crate::notation::Notation;
 use std::fmt;
+use std::rc::Rc;
 
 /// A `Notation` says how to print a _single_ node in a document. The _notation tree_ is what you
 /// get from gluing together the `Notation`s for every node in the document. A
@@ -16,7 +17,7 @@ use std::fmt;
 #[derive(Debug)]
 pub enum ConsolidatedNotation<'d, D: PrettyDoc<'d>> {
     Empty,
-    Newline(Width),
+    Newline(Option<Rc<IndentNode<'d, D>>>),
     Textual(Textual<'d, D>),
     Concat(
         DelayedConsolidatedNotation<'d, D>,
@@ -29,11 +30,38 @@ pub enum ConsolidatedNotation<'d, D: PrettyDoc<'d>> {
     Child(usize, DelayedConsolidatedNotation<'d, D>),
 }
 
+/// A fully resolved piece of text.
+#[derive(Debug)]
+pub struct Segment<'d, D: PrettyDoc<'d>> {
+    pub str: &'d str,
+    pub width: Width,
+    pub style: &'d D::Style,
+    pub doc_id: D::Id,
+    pub mark: Option<&'d D::Mark>,
+}
+
+/// A styled piece of text from Notation::Literal or Notation::Text or Notation::Indent.
 #[derive(Debug)]
 pub struct Textual<'d, D: PrettyDoc<'d>> {
     pub str: &'d str,
     pub width: Width,
     pub style: &'d D::Style,
+}
+
+// Performance Note: We've tested three implementations of indentation so far:
+// - Indentation as a number of spaces (less expressive)
+// - Identation as an `Rc<IndentNode>` (the current impl) -- 25% slower
+// - Indentation as a `Vec<Segment>` -- much slower
+// If there's a way to implement it with fewer heap alloations, we should try it.
+
+/// One level of indentation, plus a reference to the level of indentation to
+/// its left. These references form trees, with each child referencing its parent.
+#[derive(Debug)]
+pub struct IndentNode<'d, D: PrettyDoc<'d>> {
+    /// The rightmost/current level of indentation.
+    pub segment: Segment<'d, D>,
+    /// The level of indentation to the left of this one.
+    pub parent: Option<Rc<IndentNode<'d, D>>>,
 }
 
 /// A `ConsolidatedNotation` that has not yet been evaluated, to prevent the entire notation tree
@@ -43,7 +71,7 @@ pub struct DelayedConsolidatedNotation<'d, D: PrettyDoc<'d>> {
     doc: D,
     notation: &'d Notation<D::Style>,
     flat: bool,
-    indent: Width,
+    indent: Option<Rc<IndentNode<'d, D>>>,
     join_pos: Option<JoinPos<'d, D>>,
     mark: Option<&'d D::Mark>,
 }
@@ -68,21 +96,33 @@ impl<'d, D: PrettyDoc<'d>> Clone for Textual<'d, D> {
 }
 impl<'d, D: PrettyDoc<'d>> Copy for Textual<'d, D> {}
 
+impl<'d, D: PrettyDoc<'d>> Clone for Segment<'d, D> {
+    fn clone(&self) -> Self {
+        Segment {
+            str: self.str,
+            width: self.width,
+            style: self.style,
+            doc_id: self.doc_id,
+            mark: self.mark,
+        }
+    }
+}
+impl<'d, D: PrettyDoc<'d>> Copy for Segment<'d, D> {}
+
 impl<'d, D: PrettyDoc<'d>> Clone for ConsolidatedNotation<'d, D> {
     fn clone(&self) -> Self {
         use ConsolidatedNotation::*;
 
         match self {
             Empty => Empty,
-            Newline(ind) => Newline(*ind),
+            Newline(ind) => Newline(ind.clone()),
             Textual(textual) => Textual(*textual),
-            Concat(note1, note2) => Concat(*note1, *note2),
-            Choice(note1, note2) => Choice(*note1, *note2),
-            Child(i, child) => Child(*i, *child),
+            Concat(note1, note2) => Concat(note1.clone(), note2.clone()),
+            Choice(note1, note2) => Choice(note1.clone(), note2.clone()),
+            Child(i, child) => Child(*i, child.clone()),
         }
     }
 }
-impl<'d, D: PrettyDoc<'d>> Copy for ConsolidatedNotation<'d, D> {}
 
 impl<'d, D: PrettyDoc<'d>> Clone for DelayedConsolidatedNotation<'d, D> {
     fn clone(&self) -> Self {
@@ -90,13 +130,12 @@ impl<'d, D: PrettyDoc<'d>> Clone for DelayedConsolidatedNotation<'d, D> {
             doc: self.doc,
             notation: self.notation,
             flat: self.flat,
-            indent: self.indent,
+            indent: self.indent.clone(),
             join_pos: self.join_pos,
             mark: self.mark,
         }
     }
 }
-impl<'d, D: PrettyDoc<'d>> Copy for DelayedConsolidatedNotation<'d, D> {}
 
 impl<'d, D: PrettyDoc<'d>> Clone for JoinPos<'d, D> {
     fn clone(&self) -> Self {
@@ -140,7 +179,7 @@ impl<'d, D: PrettyDoc<'d>> DelayedConsolidatedNotation<'d, D> {
             doc,
             notation: &doc.notation().0,
             flat: false,
-            indent: 0,
+            indent: None,
             join_pos: None,
             mark: doc.whole_node_mark(),
         }
@@ -187,28 +226,40 @@ impl<'d, D: PrettyDoc<'d>> DelayedConsolidatedNotation<'d, D> {
                 self.notation = note;
                 self.eval()
             }
-            Indent(indent, note) => {
-                self.indent += indent;
+            Indent(prefix, note) => {
+                let new_indent = Rc::new(IndentNode {
+                    segment: Segment {
+                        str: prefix.str(),
+                        width: prefix.width(),
+                        style: prefix.style(),
+                        doc_id: self.doc.id(),
+                        mark: self.mark,
+                    },
+                    parent: self.indent,
+                });
+                self.indent = Some(new_indent);
                 self.notation = note;
                 self.eval()
             }
             Concat(note1, note2) => {
-                let mut cnote1 = self;
+                let mark = self.mark;
+                let mut cnote1 = self.clone();
                 cnote1.notation = note1;
                 let mut cnote2 = self;
                 cnote2.notation = note2;
-                Ok((ConsolidatedNotation::Concat(cnote1, cnote2), self.mark))
+                Ok((ConsolidatedNotation::Concat(cnote1, cnote2), mark))
             }
             Choice(note1, _note2) if self.flat => {
                 self.notation = note1;
                 self.eval()
             }
             Choice(note1, note2) => {
-                let mut cnote1 = self;
+                let mark = self.mark;
+                let mut cnote1 = self.clone();
                 cnote1.notation = note1;
                 let mut cnote2 = self;
                 cnote2.notation = note2;
-                Ok((ConsolidatedNotation::Choice(cnote1, cnote2), self.mark))
+                Ok((ConsolidatedNotation::Choice(cnote1, cnote2), mark))
             }
             IfEmptyText(note1, note2) => {
                 if self.doc.num_children().is_some() {

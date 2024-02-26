@@ -284,18 +284,6 @@ where
         return Ok(());
     }
 
-    // Print indentation
-    for _ in 0..line.indentation.num_spaces {
-        if pos.col >= rect.max_col {
-            return Ok(());
-        }
-        let mark = line.indentation.mark;
-        window
-            .print_char(' ', pos, mark, &D::Style::default(), false)
-            .map_err(PaneError::PrettyWindowError)?;
-        pos.col += 1;
-    }
-
     // Print each segment
     for segment in line.segments {
         for ch in segment.str.chars() {

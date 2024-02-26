@@ -1,12 +1,13 @@
 use super::consolidated_notation::{
-    ConsolidatedNotation, DelayedConsolidatedNotation, PrintingError, Textual,
+    ConsolidatedNotation, DelayedConsolidatedNotation, IndentNode, PrintingError, Segment, Textual,
 };
 use super::pretty_doc::PrettyDoc;
-use crate::geometry::{str_width, Width};
+use crate::geometry::Width;
 use crate::infra::span;
 use std::convert::From;
 use std::iter::Iterator;
 use std::mem;
+use std::rc::Rc;
 
 /// Pretty print a document, focused to the left or right of the node found by traversing `path`
 /// from the root. If `seek_end` is true, focus will be to the right of the node, otherwise to the
@@ -47,7 +48,6 @@ pub fn pretty_print<'d, D: PrettyDoc<'d>>(
     let num_left_segs = printer.next_blocks.last().unwrap().segments.len();
     let mut line = printer.print_next_line()?.unwrap();
     let focused_line = FocusedLine {
-        indentation: line.indentation,
         right_segments: line.segments.split_off(num_left_segs),
         left_segments: line.segments,
     };
@@ -95,11 +95,10 @@ impl<'d, D: PrettyDoc<'d>> Clone for Chunk<'d, D> {
         Chunk {
             id: self.id,
             mark: self.mark,
-            notation: self.notation,
+            notation: self.notation.clone(),
         }
     }
 }
-impl<'d, D: PrettyDoc<'d>> Copy for Chunk<'d, D> {}
 
 impl<'d, D: PrettyDoc<'d>> Chunk<'d, D> {
     fn new(notation: DelayedConsolidatedNotation<'d, D>) -> Result<Self, PrintingError> {
@@ -111,74 +110,33 @@ impl<'d, D: PrettyDoc<'d>> Chunk<'d, D> {
 
 /// The contents of a single pretty printed line.
 pub struct Line<'d, D: PrettyDoc<'d>> {
-    /// The indentation of this line, together with its id and mark.
-    pub indentation: Indentation<'d, D>,
-    /// A sequence of pieces of text to be displayed after `indentation`, in order from left to
+    /// A sequence of pieces of text to be displayed in order from left to
     /// right, with no spacing in between.
     pub segments: Vec<Segment<'d, D>>,
 }
 
 /// The contents of the line containing the focus point.
 pub struct FocusedLine<'d, D: PrettyDoc<'d>> {
-    /// The indentation of this line, together with its id and mark.
-    pub indentation: Indentation<'d, D>,
-    /// Pieces of text that appear after the indentation but before the focus point.
+    /// Pieces of text that appear before the focus point.
     pub left_segments: Vec<Segment<'d, D>>,
     /// Pieces of text that appear after the focus point.
     pub right_segments: Vec<Segment<'d, D>>,
 }
 
-#[derive(Debug)]
-pub struct Indentation<'d, D: PrettyDoc<'d>> {
-    pub num_spaces: Width,
-    pub doc_id: D::Id,
-    pub mark: Option<&'d D::Mark>,
-}
-
-impl<'d, D: PrettyDoc<'d>> Clone for Indentation<'d, D> {
-    fn clone(&self) -> Self {
-        Indentation {
-            num_spaces: self.num_spaces,
-            doc_id: self.doc_id,
-            mark: self.mark,
-        }
-    }
-}
-impl<'d, D: PrettyDoc<'d>> Copy for Indentation<'d, D> {}
-
-#[derive(Debug)]
-pub struct Segment<'d, D: PrettyDoc<'d>> {
-    pub str: &'d str,
-    pub style: &'d D::Style,
-    pub doc_id: D::Id,
-    pub mark: Option<&'d D::Mark>,
-}
-
 impl<'d, D: PrettyDoc<'d>> Line<'d, D> {
     pub fn width(&self) -> Width {
-        let mut width = self.indentation.num_spaces;
-        for segment in &self.segments {
-            width += str_width(segment.str);
-        }
-        width
+        self.segments.iter().map(|seg| seg.width).sum()
     }
 }
 
 impl<'d, D: PrettyDoc<'d>> FocusedLine<'d, D> {
     pub fn width(&self) -> Width {
-        let mut width = self.indentation.num_spaces;
-        for segment in self.left_segments.iter().chain(self.right_segments.iter()) {
-            width += str_width(segment.str);
-        }
-        width
+        let segs = self.left_segments.iter().chain(self.right_segments.iter());
+        segs.map(|seg| seg.width).sum()
     }
 
     pub fn to_left_string(&self) -> String {
-        let mut string = format!(
-            "{:spaces$}",
-            "",
-            spaces = self.indentation.num_spaces as usize
-        );
+        let mut string = String::new();
         for segment in &self.left_segments {
             string.push_str(segment.str);
         }
@@ -198,10 +156,7 @@ impl<'d, D: PrettyDoc<'d>> From<FocusedLine<'d, D>> for Line<'d, D> {
     fn from(focused_line: FocusedLine<'d, D>) -> Line<'d, D> {
         let mut segments = focused_line.left_segments;
         segments.extend(focused_line.right_segments);
-        Line {
-            indentation: focused_line.indentation,
-            segments,
-        }
+        Line { segments }
     }
 }
 
@@ -209,11 +164,7 @@ impl<'d, D: PrettyDoc<'d>> ToString for Line<'d, D> {
     fn to_string(&self) -> String {
         span!("Line::to_string");
 
-        let mut string = format!(
-            "{:spaces$}",
-            "",
-            spaces = self.indentation.num_spaces as usize
-        );
+        let mut string = String::new();
         for segment in &self.segments {
             string.push_str(segment.str);
         }
@@ -225,11 +176,7 @@ impl<'d, D: PrettyDoc<'d>> ToString for FocusedLine<'d, D> {
     fn to_string(&self) -> String {
         span!("FocusedLine::to_string");
 
-        let mut string = format!(
-            "{:spaces$}",
-            "",
-            spaces = self.indentation.num_spaces as usize
-        );
+        let mut string = String::new();
         for segment in self.left_segments.iter().chain(self.right_segments.iter()) {
             string.push_str(segment.str);
         }
@@ -238,27 +185,33 @@ impl<'d, D: PrettyDoc<'d>> ToString for FocusedLine<'d, D> {
 }
 
 /// INVARIANTS:
-/// - prefix_len is always indentation.num_spaces + sum(segment width)
+/// - prefix_len is always sum(segment width)
 /// - chunks only contains Textual, Choice, Child
 ///
-/// | indentation | segments ->|<- chunks |
-/// ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-///   prefix_len
+/// | segments ->|<- chunks |
+/// ^^^^^^^^^^^^^^
+/// prefix_len
 struct Block<'d, D: PrettyDoc<'d>> {
-    indentation: Indentation<'d, D>,
-    prefix_len: Width,
     /// Resolved text. Last element is the rightmost text.
     segments: Vec<Segment<'d, D>>,
+    prefix_len: Width,
     /// Unresolved notations. Last element is the _leftmost_ chunk.
     chunks: Vec<Chunk<'d, D>>,
 }
 
 impl<'d, D: PrettyDoc<'d>> Block<'d, D> {
-    fn new(indentation: Indentation<'d, D>, chunks: Vec<Chunk<'d, D>>) -> Block<'d, D> {
+    fn new(indentation: Option<Rc<IndentNode<'d, D>>>, chunks: Vec<Chunk<'d, D>>) -> Block<'d, D> {
+        let mut remaining_indentation = &indentation;
+        let mut indent_segments = Vec::new();
+        while let Some(indent_node) = remaining_indentation {
+            indent_segments.push(indent_node.segment);
+            remaining_indentation = &indent_node.parent;
+        }
+        indent_segments.reverse();
+
         Block {
-            indentation,
-            prefix_len: indentation.num_spaces,
-            segments: Vec::new(),
+            prefix_len: indent_segments.iter().map(|seg| seg.width).sum(),
+            segments: indent_segments,
             chunks,
         }
     }
@@ -266,18 +219,18 @@ impl<'d, D: PrettyDoc<'d>> Block<'d, D> {
     fn push_text(&mut self, doc_id: D::Id, mark: Option<&'d D::Mark>, textual: Textual<'d, D>) {
         self.segments.push(Segment {
             str: textual.str,
+            width: textual.width,
             style: textual.style,
             doc_id,
             mark,
         });
-        self.prefix_len += str_width(textual.str);
+        self.prefix_len += textual.width;
     }
 
     fn print(self) -> Line<'d, D> {
         assert!(self.chunks.is_empty());
 
         Line {
-            indentation: self.indentation,
             segments: self.segments,
         }
     }
@@ -299,12 +252,7 @@ struct Printer<'d, D: PrettyDoc<'d>> {
 impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
     fn new(doc: D, width: Width) -> Result<Printer<'d, D>, PrintingError> {
         let chunk = Chunk::new(DelayedConsolidatedNotation::new(doc))?;
-        let indentation = Indentation {
-            num_spaces: 0,
-            doc_id: doc.id(),
-            mark: doc.whole_node_mark(),
-        };
-        let mut block = Block::new(indentation, Vec::new());
+        let mut block = Block::new(None, Vec::new());
         let mut printer = Printer {
             width,
             prev_blocks: Vec::new(),
@@ -332,7 +280,7 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
                 }
                 Choice(opt1, opt2) => {
                     let choice = self.choose(&block, opt1, opt2)?;
-                    self.expand_focusing_first_block(&mut block, Chunk::new(choice)?)?;
+                    self.expand_focusing_first_block(&mut block, choice)?;
                 }
             }
         }
@@ -354,7 +302,7 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
                 Child(_, note) => self.expand_focusing_last_block(&mut block, Chunk::new(note)?)?,
                 Choice(opt1, opt2) => {
                     let choice = self.choose(&block, opt1, opt2)?;
-                    self.expand_focusing_last_block(&mut block, Chunk::new(choice)?)?;
+                    self.expand_focusing_last_block(&mut block, choice)?;
                 }
             }
         }
@@ -394,7 +342,7 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
                     }
                     Choice(opt1, opt2) => {
                         let choice = self.choose(&block, opt1, opt2)?;
-                        self.expand_focusing_last_block(&mut block, Chunk::new(choice)?)?;
+                        self.expand_focusing_last_block(&mut block, choice)?;
                     }
                 }
             }
@@ -452,7 +400,12 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
                         if expand_child {
                             self.expand_focusing_first_block(&mut block, Chunk::new(child)?)?;
                         } else {
-                            block.chunks.push(chunk);
+                            // Put the chunk back. Can't clone directly b.c. partly moved.
+                            block.chunks.push(Chunk {
+                                notation: Child(i, child),
+                                id: chunk.id,
+                                mark: chunk.mark,
+                            });
                         }
                         self.next_blocks.push(block);
                         return Ok(());
@@ -464,7 +417,7 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
                     }
                     Choice(opt1, opt2) => {
                         let choice = self.choose(&block, opt1, opt2)?;
-                        self.expand_focusing_first_block(&mut block, Chunk::new(choice)?)?;
+                        self.expand_focusing_first_block(&mut block, choice)?;
                         self.next_blocks.push(block);
                         break;
                     }
@@ -487,18 +440,13 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
         use ConsolidatedNotation::*;
         span!("expand_first");
 
-        // | block.indent | block.segments ->| stack ->|<- block.chunks |
+        // | block.segments ->| stack ->|<- block.chunks |
         let mut stack = vec![chunk];
         while let Some(chunk) = stack.pop() {
             match chunk.notation {
                 Empty => (),
                 Textual(_) | Choice(_, _) | Child(_, _) => block.chunks.push(chunk),
-                Newline(num_spaces) => {
-                    let indentation = Indentation {
-                        num_spaces,
-                        doc_id: chunk.id,
-                        mark: chunk.mark,
-                    };
+                Newline(indentation) => {
                     let chunks = mem::take(&mut block.chunks);
                     self.next_blocks.push(Block::new(indentation, chunks));
                 }
@@ -525,27 +473,21 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
         use ConsolidatedNotation::*;
         span!("expand_last");
 
-        // | block.indent | block.segments ->| chunks ->|<- stack |<- block.chunks |
+        // | block.segments ->| chunks ->|<- stack |<- block.chunks |
         let mut chunks = Vec::new();
         let mut stack = vec![chunk];
         while let Some(chunk) = stack.pop() {
             match chunk.notation {
                 Empty => (),
                 Textual(_) | Choice(_, _) | Child(_, _) => chunks.push(chunk),
-                Newline(num_spaces) => {
+                Newline(indentation) => {
                     chunks.reverse();
                     let prev_block = Block {
-                        indentation: block.indentation,
-                        prefix_len: block.prefix_len,
                         segments: mem::take(&mut block.segments),
+                        prefix_len: block.prefix_len,
                         chunks: mem::take(&mut chunks),
                     };
                     self.prev_blocks.push(prev_block);
-                    let indentation = Indentation {
-                        num_spaces,
-                        doc_id: chunk.id,
-                        mark: chunk.mark,
-                    };
                     *block = Block::new(indentation, mem::take(&mut block.chunks));
                 }
                 Concat(left, right) => {
@@ -567,17 +509,26 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
         block: &Block<'d, D>,
         opt1: DelayedConsolidatedNotation<'d, D>,
         opt2: DelayedConsolidatedNotation<'d, D>,
-    ) -> Result<DelayedConsolidatedNotation<'d, D>, PrintingError> {
+    ) -> Result<Chunk<'d, D>, PrintingError> {
         span!("choose");
 
-        let opt1_evaled = opt1.eval()?.0;
+        let id1 = opt1.doc().id();
+        let (opt1_evaled, mark1) = opt1.eval()?;
 
         if self.width >= block.prefix_len
-            && fits(self.width - block.prefix_len, opt1_evaled, &block.chunks)?
+            && fits(
+                self.width - block.prefix_len,
+                opt1_evaled.clone(),
+                &block.chunks,
+            )?
         {
-            Ok(opt1)
+            Ok(Chunk {
+                id: id1,
+                mark: mark1,
+                notation: opt1_evaled,
+            })
         } else {
-            Ok(opt2)
+            Chunk::new(opt2)
         }
     }
 
@@ -607,15 +558,13 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
     pub fn debug_short(&self) {
         fn print_block<'d, D: PrettyDoc<'d>>(block: &Block<'d, D>) {
             println!(
-                "{:spaces$}{}|{}",
-                "",
+                "{}|{}",
                 block
                     .segments
                     .iter()
                     .map(|seg| seg.str)
                     .fold(String::new(), |a, b| a + b),
                 block.chunks.len(),
-                spaces = block.indentation.num_spaces as usize,
             );
         }
 
@@ -656,7 +605,7 @@ fn fits<'d, D: PrettyDoc<'d>>(
                 None => return Ok(true),
                 Some((chunk, more)) => {
                     next_chunks = more;
-                    chunk.notation
+                    chunk.notation.clone()
                 }
             },
         };

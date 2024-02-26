@@ -63,14 +63,6 @@ impl RichText {
 
     fn push_line<'d>(&mut self, line: Line<'d, &'d Json>) {
         let mut chars = Vec::new();
-        for _ in 0..line.indentation.num_spaces {
-            chars.push(RichChar {
-                ch: ' ',
-                id: line.indentation.doc_id,
-                style: BasicStyle::default(),
-                mark: line.indentation.mark.copied(),
-            });
-        }
         for segment in &line.segments {
             for ch in segment.str.chars() {
                 chars.push(RichChar {
@@ -193,10 +185,10 @@ fn test_json_marks() {
             r#"ggggaaaaabb22g"#,
             r#"ggggccccccdd33g"#,
             r#"ggggeeeeeeeeeeeff7"#,
-            r#"77777777444444444447"#,
-            r#"7777777755555557"#,
-            r#"7777777766666666"#,
-            r#"77777"#,
+            r#"gggg7777444444444447"#,
+            r#"gggg777755555557"#,
+            r#"gggg777766666666"#,
+            r#"gggg7"#,
             r#"g"#,
         ]
         .join("\n"),
@@ -227,10 +219,10 @@ fn test_json_marks() {
             r#"              "#,
             r#"               "#,
             r#"                 ["#,
-            r#"FFFFFFFFFFFFFFFFFFFF"#,
-            r#"FFFFFFFFLLLLLLLF"#,
-            r#"FFFFFFFFFFFFFFFF"#,
-            r#"FFFF]"#,
+            r#"    FFFFFFFFFFFFFFFF"#,
+            r#"    FFFFLLLLLLLF"#,
+            r#"    FFFFFFFFFFFF"#,
+            r#"    ]"#,
             r#"}"#,
         ]
         .join("\n"),
