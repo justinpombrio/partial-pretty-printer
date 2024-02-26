@@ -45,7 +45,7 @@ fn pp<'d, D: PrettyDoc<'d>>(
 
     match note {
         Empty => Ok(prefix),
-        Textual(textual) => Ok(prefix.append(Layout::text(textual.str))),
+        Textual(textual) => Ok(prefix.append_text(textual.str)),
         Newline(indentation) => {
             let mut remaining_indentation = &indentation;
             let mut indent_strings = Vec::new();
@@ -54,7 +54,7 @@ fn pp<'d, D: PrettyDoc<'d>>(
                 remaining_indentation = &indent_node.parent;
             }
             indent_strings.reverse();
-            Ok(prefix.append(Layout::newline(indent_strings.join(""))))
+            Ok(prefix.append_newline(indent_strings.join("")))
         }
         Child(_, x) => pp(prefix, x.eval()?.0, suffix_len, width),
         Concat(x, y) => {
@@ -112,30 +112,14 @@ impl Layout {
         Layout(vec![String::new()])
     }
 
-    fn text(s: &str) -> Layout {
-        Layout(vec![s.to_string()])
+    fn append_newline(mut self, indentation: String) -> Layout {
+        self.0.push(indentation);
+        self
     }
 
-    fn newline(prefix: String) -> Layout {
-        Layout(vec![String::new(), prefix])
-    }
-
-    // TODO: Remove this method in favor of append_text & append_newline
-    fn append(self, other: Layout) -> Layout {
-        // Start with self.lines
-        let mut lines = self.0;
-
-        // Then the last line of `self` extended by the first line of `other`
-        let mut other_lines = other.0.into_iter();
-        let suffix = other_lines.next().unwrap(); // relies on invariant
-        lines.last_mut().unwrap().push_str(&suffix); // relies on invariant
-
-        // Then the rest of the lines of `other`
-        for line in other_lines {
-            lines.push(line);
-        }
-
-        Layout(lines)
+    fn append_text(mut self, text: &str) -> Layout {
+        self.0.last_mut().unwrap().push_str(text); // relies on invariant
+        self
     }
 
     fn last_line_len(&self) -> Width {
@@ -154,18 +138,4 @@ impl fmt::Display for Layout {
         }
         Ok(())
     }
-}
-
-#[test]
-fn test_layout() {
-    let ab = Layout(vec![" a".to_owned(), " bb".to_owned()]);
-    let cd = Layout(vec!["ccc".to_owned(), "  dddd".to_owned()]);
-    let abcd = ab.append(cd);
-    assert_eq!(format!("{}", abcd), " a\n bbccc\n  dddd");
-
-    let hello = Layout::text("Hello");
-    let world = Layout::text("world!");
-    let newline = Layout::newline("  ".to_owned());
-    let hello_world = hello.append(newline).append(world);
-    assert_eq!(format!("{}", hello_world), "Hello\n  world!");
 }
