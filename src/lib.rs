@@ -27,8 +27,8 @@
 //!
 //! - Print a [`PrettyDoc`] to a `String` using [`pretty_print_to_string`].
 //! - Print a node in a [`PrettyDoc`] to get lazy iterators over [`Line`] using
-//! [`pretty_print`].  This lets you (i) use colors and (ii) print just part of a document for
-//! efficiency.
+//! [`pretty_print`]. This lets you (i) use styles and (ii) print just part of a
+//! document for efficiency.
 //! - Make a character-grid based UI with nested panes, using the [`pane`] module.
 //!
 //! Keep reading for details.
@@ -39,10 +39,14 @@
 //!
 //! ```ignore
 //! pub trait PrettyDoc<'d>: Copy {
-//!     type Id: Eq + Copy;
+//!     type Id: Eq + Hash + Copy + Default + fmt::Debug;
+//!     type Style: Style + 'd;
+//!     type StyleLabel: fmt::Debug + Clone + 'd;
 //!
 //!     fn id(self) -> Self::Id;
-//!     fn notation(self) -> &'d ValidNotation;
+//!     fn notation(self) -> &'d ValidNotation<Self::StyleLabel>;
+//!     fn lookup_style(self, style_label: Self::StyleLabel) -> Self::Style;
+//!     fn node_style(self) -> Self::Style;
 //!     fn num_children(self) -> Option<usize>;
 //!     fn unwrap_text(self) -> &'d str;
 //!     fn unwrap_child(self, i: usize) -> Self;
@@ -61,67 +65,48 @@
 //! ## Pretty Printing Functions
 //!
 //! There are two ways to pretty print a `PrettyDoc`.
-//! The simpler one is [`pretty_print_to_string`], which
-//! prints the entirety of the document, with a preferred line width, to a string:
+//! The simpler one is [`pretty_print_to_string`], which prints the entirety of
+//! the document to a string, with a preferred line width:
 //!
 //! ```ignore
-//! fn pretty_print_to_string<D: PrettyDoc>(
-//!     doc: &'d D,
-//!     width: Width
-//! ) -> String;
+//! pub fn pretty_print_to_string<'d, D: PrettyDoc<'d>>(
+//!     doc: D,
+//!     width: Width,
+//! ) -> Result<String, PrintingError>;
 //! ```
 //!
 //! ([`Width`] is just an alias for an integer type, currently `u16`.)
 //!
 //! This provides a simple interface, but does not take full advantage of this library. To do so,
 //! you can use the more versatile [`pretty_print`] function:
-//!     
+//!
 //! ```ignore
-//! fn pretty_print<'d, D: PrettyDoc>(
-//!     doc: &'d D,
+//! pub fn pretty_print<'d, D: PrettyDoc<'d>>(
+//!     doc: D,
 //!     width: Width,
 //!     path: &[usize],
-//! ) -> (
-//!     impl Iterator<Item = Line<'d>> + 'd,
-//!     impl Iterator<Item = Line<'d>> + 'd,
-//! );
+//!     seek_end: bool,
+//! ) -> Result<
+//!     (
+//!         impl Iterator<Item = Result<Line<'d, D>, PrintingError>>,
+//!         FocusedLine<'d, D>,
+//!         impl Iterator<Item = Result<Line<'d, D>, PrintingError>>,
+//!     ),
+//!     PrintingError,
+//! >;
 //! ```
 //!
 //! This exposes two additional features.
 //!
-//! First, instead of printing the entire document, it lets you print just part of the document.
-//! `path` is a sequence of indices, that leads from the root of the document to a node buried
-//! inside of it. The return value is a pair of iterators over line contents: the first prints lines
-//! _above_ the buried node going up; the second prints lines _from its first line_ going down. If
-//! you exhaust both iterators, you will print the entire document, but if you take fewer you can
-//! save the pretty printer some work.
+//! First, instead of printing the entire document, it lets you print just part
+//! of the document. `path` (and `seek_end`) specify which line of the document
+//! to focus on. The return value gives that focused line, and iterators that
+//! yield the lines above and below it. If you exhaust both iterators, you will
+//! print the entire document, but if you take fewer lines you can save the
+//! pretty printer a lot of work.
 //!
-//! Secondly, notice that the iterators contain [`Line`] instead of strings:
-//!
-//! ```ignore
-//! pub struct Line<'d, D: PrettyDoc<'d>> {
-//!     pub indentation: Indentation<'d, D>,
-//!     pub segments: Vec<Segment<'d, D>>,
-//! }
-//!
-//! pub struct Indentation<'d, D: PrettyDoc<'d>> {
-//!     pub num_spaces: Width,
-//!     pub doc_id: D::Id,
-//!     pub mark: Option<&'d D::Mark>,
-//! }
-//!
-//! pub struct Segment<'d, D: PrettyDoc<'d>> {
-//!     pub str: &'d str,
-//!     pub style: &'d D::Style,
-//!     pub doc_id: D::Id,
-//!     pub mark: Option<&'d D::Mark>,
-//! }
-//! ```
-//!
-//! The contents of the line can contain styles, which are set in the [`Notation`]s returned by
-//! [`PrettyDoc`]. Additionally, there is cursor highlighting information in the form of a _shade_ for
-//! the background color. `spaces` is the indentation level of the line, and the shade of those
-//! spaces.
+//! Second, notice that the iterators yield [`Line`]s instead of strings. A
+//! `Line` contains additional metadata such as styles.
 //!
 //! ## Notation Design
 //!
@@ -187,23 +172,21 @@ pub mod pane {
     //! pub fn pane_print<'d, L, D, W>(
     //!     window: &mut W,
     //!     notation: &PaneNotation<L, D::Style>,
-    //!     get_content: &impl Fn(L) -> Option<(D, Path)>,
+    //!     get_content: &impl Fn(L) -> Option<(D, RenderOptions)>,
     //! ) -> Result<(), PaneError<W>>
     //! where
-    //!     L: Label,
+    //!     L: DocLabel,
     //!     D: PrettyDoc<'d>,
-    //!     W: PrettyWindow<Style = D::Style, Mark = D::Mark>,
-    //! { ... }
+    //!     W: PrettyWindow<Style = D::Style>;
     //! ```
     //!
     //! - `window` is the `PrettyWindow` to display to.
-    //! - `note` is the `PaneNotation` to render. It says how to break up the screen into rectangular
-    //!   "panes", and which document to display in each pane. It does not contain the Documents
-    //!   directly, instead it references them by `Label`. (`Label` is a trait alias: `trait Label:
-    //!   Clone + Debug {}`.)
-    //! - `get_content` is a function to look up a document by label. It returns both the document, and
-    //!   the [Path] to the node in the document to focus on. (The empty path `vec![]` will focus on the
-    //!   top of the document.)
+    //! - `notation` is the `PaneNotation` to render. It says how to break up
+    //!   the screen into rectangular "panes", and which document to display in
+    //!   each pane. It does not contain the Documents directly, instead it
+    //!   references them by `DocLabel`.
+    //! - `get_content()` is a function to look up a document by label. It
+    //!   returns both the document, and information about how to render it.
     pub use super::pane_printing::{
         pane_print, DocLabel, FocusSide, PaneError, PaneNotation, PaneSize, Path, PlainText,
         PrettyWindow, RenderOptions, WidthStrategy,

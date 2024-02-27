@@ -145,7 +145,7 @@ fn make_json_dictionary() -> Json {
 }
 
 #[test]
-fn test_json_marks() {
+fn test_json_styles() {
     let json = make_json_dictionary();
     let rich_text = print(&json, 27);
     assert_str_eq(

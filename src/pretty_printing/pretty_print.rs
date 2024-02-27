@@ -16,10 +16,6 @@ use std::rc::Rc;
 /// `width` is the desired line width. The algorithm will attempt to, but is not guaranteed to,
 /// find a layout that fits within that width.
 ///
-// TODO doc
-/// `marks` is a set of document node ids to mark. Each chunk of text in the output will say which,
-/// if any, marked id it is part of.
-///
 /// Returns a tuple with three things:
 ///
 /// - an iterator that prints lines above the focused line going up
@@ -85,7 +81,6 @@ pub fn pretty_print_to_string<'d, D: PrettyDoc<'d>>(
     Ok(string)
 }
 
-// TODO replace Chunk with just ConsolidatedNotation?
 struct Chunk<'d, D: PrettyDoc<'d>> {
     notation: ConsolidatedNotation<'d, D>,
     id: D::Id,

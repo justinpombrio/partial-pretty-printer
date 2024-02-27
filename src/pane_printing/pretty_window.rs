@@ -8,8 +8,7 @@ pub trait PrettyWindow: Sized {
     // `PrettyWindow` as a trait object.
     type Error: std::error::Error + 'static;
 
-    // TODO doc
-    /// The style used in the document's notation.
+    /// The style used in the document.
     type Style: fmt::Debug + Default;
 
     /// Get the size of this window.

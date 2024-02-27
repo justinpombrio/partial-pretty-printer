@@ -10,7 +10,9 @@ use std::ops::{Add, BitOr, BitXor, Shr};
 ///
 /// Additionally, whenever possible, `x` should be flat (contain no newlines). This allows
 /// notations to use the `Flat` variant to attempt to fit `(x | y)` all on one line.
-// TODO doc L
+///
+/// Type parameter `L` is a label used to look up a style in the document. It
+/// corresponds to the `PrettyDoc::StyleLabel` associated type.
 #[derive(Clone, Debug)]
 pub enum Notation<L: fmt::Debug + Clone> {
     /// Display nothing.
@@ -31,8 +33,8 @@ pub enum Notation<L: fmt::Debug + Clone> {
     /// don't affect the first line of a notation.) Indentation strings will
     /// typically contain one indentation level's worth of whitespace characters
     /// (eg. 4 spaces), but can also be used for other purposes like placing comment
-    /// syntax at the start of a line.
-    // TODO doc
+    /// syntax at the start of a line. If the `Option<L>` is `Some`, that style
+    /// will be applied to the indentation string.
     Indent(Literal, Option<L>, Box<Notation<L>>),
     /// Display both notations. The first character of the right notation immediately follows the
     /// last character of the left notation. Note that the column at which the right notation
@@ -47,9 +49,8 @@ pub enum Notation<L: fmt::Debug + Clone> {
     /// Display the `i`th child of this node.  Can only be used on a [`PrettyDoc`] node for which
     /// `.num_children()` returns `Some(n)`, with `i < n`.
     Child(usize),
-    // TODO docs
-    /// Look up the mark with the given name in the current node, if any, and apply it to this
-    /// notation. (The lookup happens via `PrettyDoc::partial_node_mark()`.)
+    /// Look up the style with the given label in the current document node and apply it to this
+    /// notation. (The lookup happens via `PrettyDoc::lookup_style()`.)
     Style(L, Box<Notation<L>>),
     /// Determines what to display based on the number of children this [`PrettyDoc`] node has.
     Count {
