@@ -1,7 +1,7 @@
-use crate::standard::pretty_testing::{assert_pp, assert_pp_seek, punct};
+use crate::standard::pretty_testing::{assert_pp, assert_pp_seek};
 use once_cell::sync::Lazy;
 use partial_pretty_printer::notation_constructors::{
-    child, count, fold, left, nl, right, text, Count, Fold,
+    child, count, fold, left, lit, nl, right, text, Count, Fold,
 };
 use partial_pretty_printer::{PrettyDoc, ValidNotation};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -22,23 +22,23 @@ enum FlowWrapData {
 const START: &str = "始";
 const END: &str = "端";
 
-static WORD_NOTATION: Lazy<ValidNotation<()>> = Lazy::new(|| text(()).validate().unwrap());
+static WORD_NOTATION: Lazy<ValidNotation<()>> = Lazy::new(|| text().validate().unwrap());
 static WORDS_NOTATION: Lazy<ValidNotation<()>> = Lazy::new(|| {
-    let soft_break = punct(" ") | nl();
+    let soft_break = lit(" ") | nl();
     count(Count {
-        zero: punct(""),
-        one: punct("    ") + child(0),
-        many: punct("    ")
+        zero: lit(""),
+        one: lit("    ") + child(0),
+        many: lit("    ")
             + fold(Fold {
                 first: child(0),
-                join: left() + punct(",") + soft_break + right(),
+                join: left() + lit(",") + soft_break + right(),
             }),
     })
     .validate()
     .unwrap()
 });
 static PARAGRAPH_NOTATION: Lazy<ValidNotation<()>> =
-    Lazy::new(|| (punct(START) + child(0) + punct(END)).validate().unwrap());
+    Lazy::new(|| (lit(START) + child(0) + lit(END)).validate().unwrap());
 
 enum Contents<'d> {
     Text(&'d str),
@@ -60,7 +60,7 @@ impl FlowWrap {
 impl<'d> PrettyDoc<'d> for &'d FlowWrap {
     type Id = usize;
     type Style = ();
-    type Mark = ();
+    type StyleLabel = ();
 
     fn id(self) -> usize {
         self.id
@@ -74,6 +74,14 @@ impl<'d> PrettyDoc<'d> for &'d FlowWrap {
             Words(_) => &WORDS_NOTATION,
             Paragraph(_) => &PARAGRAPH_NOTATION,
         }
+    }
+
+    fn node_style(self) -> () {
+        ()
+    }
+
+    fn lookup_style(self, _label: ()) -> () {
+        ()
     }
 
     fn num_children(self) -> Option<usize> {

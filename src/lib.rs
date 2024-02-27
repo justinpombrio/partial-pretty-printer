@@ -205,7 +205,7 @@ pub mod pane {
     //!   the [Path] to the node in the document to focus on. (The empty path `vec![]` will focus on the
     //!   top of the document.)
     pub use super::pane_printing::{
-        pane_print, FocusSide, Label, PaneError, PaneNotation, PaneSize, Path, PlainText,
+        pane_print, DocLabel, FocusSide, PaneError, PaneNotation, PaneSize, Path, PlainText,
         PrettyWindow, RenderOptions, WidthStrategy,
     };
 }

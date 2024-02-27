@@ -1,7 +1,6 @@
-use crate::pretty_printing::PrettyDoc;
+use crate::pretty_printing::{PrettyDoc, Style};
 use crate::valid_notation::ValidNotation;
 use std::cell::Cell;
-use std::fmt;
 use std::thread_local;
 
 thread_local! {
@@ -15,61 +14,60 @@ fn next_id() -> u32 {
     id
 }
 
+pub type StyleLabel = &'static str;
+
 #[derive(Debug)]
-pub struct Tree<Style, Mark>
+pub struct Tree<S>
 where
-    Style: fmt::Debug + Default + 'static,
-    Mark: fmt::Debug,
+    S: Style + From<StyleLabel> + Default + 'static,
 {
     pub id: u32,
-    pub notation: &'static ValidNotation<Style>,
-    pub contents: Contents<Style, Mark>,
-    pub whole_node_mark: Option<Mark>,
-    pub partial_node_marks: Vec<(String, Mark)>,
+    pub notation: &'static ValidNotation<StyleLabel>,
+    pub contents: Contents<S>,
+    pub node_style: S,
+    pub style_overrides: Vec<(StyleLabel, S)>,
 }
 
 #[derive(Debug)]
-pub enum Contents<Style, Mark>
+pub enum Contents<S>
 where
-    Style: fmt::Debug + Default + 'static,
-    Mark: fmt::Debug,
+    S: Style + From<StyleLabel> + Default + 'static,
 {
     Text(String),
-    Children(Vec<Tree<Style, Mark>>),
+    Children(Vec<Tree<S>>),
 }
 
-impl<Style, Mark> Tree<Style, Mark>
+impl<S> Tree<S>
 where
-    Style: fmt::Debug + Default + 'static,
-    Mark: fmt::Debug,
+    S: Style + From<StyleLabel> + Default + 'static,
 {
-    pub fn new_text(notation: &'static ValidNotation<Style>, text: String) -> Self {
+    pub fn new_text(notation: &'static ValidNotation<StyleLabel>, text: String) -> Self {
         Tree {
             id: next_id(),
             notation,
             contents: Contents::Text(text),
-            whole_node_mark: None,
-            partial_node_marks: Vec::new(),
+            node_style: S::default(),
+            style_overrides: Vec::new(),
         }
     }
 
-    pub fn new_branch(notation: &'static ValidNotation<Style>, children: Vec<Self>) -> Self {
+    pub fn new_branch(notation: &'static ValidNotation<StyleLabel>, children: Vec<Self>) -> Self {
         Tree {
             id: next_id(),
             notation,
             contents: Contents::Children(children),
-            whole_node_mark: None,
-            partial_node_marks: Vec::new(),
+            node_style: S::default(),
+            style_overrides: Vec::new(),
         }
     }
 
-    pub fn whole_node_mark(mut self, mark: Mark) -> Self {
-        self.whole_node_mark = Some(mark);
+    pub fn with_style(mut self, style: S) -> Self {
+        self.node_style = style;
         self
     }
 
-    pub fn partial_node_mark(mut self, name: &str, mark: Mark) -> Self {
-        self.partial_node_marks.push((name.to_owned(), mark));
+    pub fn with_style_override(mut self, label: StyleLabel, style: S) -> Self {
+        self.style_overrides.push((label, style));
         self
     }
 
@@ -79,34 +77,33 @@ where
     }
 }
 
-impl<'d, Style, Mark> PrettyDoc<'d> for &'d Tree<Style, Mark>
+impl<'d, S> PrettyDoc<'d> for &'d Tree<S>
 where
-    Style: fmt::Debug + Default + 'static,
-    Mark: fmt::Debug,
+    S: Style + From<StyleLabel> + Default + 'static,
 {
     type Id = u32;
-    type Style = Style;
-    type Mark = Mark;
+    type Style = S;
+    type StyleLabel = StyleLabel;
 
     fn id(self) -> u32 {
         self.id
     }
 
-    fn notation(self) -> &'d ValidNotation<Style> {
+    fn notation(self) -> &'d ValidNotation<StyleLabel> {
         self.notation
     }
 
-    fn whole_node_mark(self) -> Option<&'d Self::Mark> {
-        self.whole_node_mark.as_ref()
+    fn node_style(self) -> Self::Style {
+        self.node_style.clone()
     }
 
-    fn partial_node_mark(self, mark_name: &'static str) -> Option<&'d Self::Mark> {
-        for (name, mark) in &self.partial_node_marks {
-            if name == mark_name {
-                return Some(mark);
+    fn lookup_style(self, label: StyleLabel) -> Self::Style {
+        for (l, style) in &self.style_overrides {
+            if *l == label {
+                return style.clone();
             }
         }
-        None
+        Self::Style::from(label)
     }
 
     fn num_children(self) -> Option<usize> {

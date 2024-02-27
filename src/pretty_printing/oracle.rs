@@ -20,8 +20,7 @@ struct Layout(Vec<String>);
 pub fn oracular_pretty_print<'d, D: PrettyDoc<'d>>(doc: D, width: Width) -> String {
     let note = DelayedConsolidatedNotation::new(doc)
         .eval()
-        .expect("Notation mismatch in oracle test (root)")
-        .0;
+        .expect("Notation mismatch in oracle test (root)");
     let layout = pp(Layout::empty(), note, 0, width).expect("Notation mismatch in oracle test");
     format!("{}", layout)
 }
@@ -56,16 +55,16 @@ fn pp<'d, D: PrettyDoc<'d>>(
             indent_strings.reverse();
             Ok(prefix.append_newline(indent_strings.join("")))
         }
-        Child(_, x) => pp(prefix, x.eval()?.0, suffix_len, width),
+        Child(_, x) => pp(prefix, x.eval()?, suffix_len, width),
         Concat(x, y) => {
-            let x = x.eval()?.0;
-            let y = y.eval()?.0;
+            let x = x.eval()?;
+            let y = y.eval()?;
             let x_suffix_len = first_line_len(y.clone(), suffix_len)?.min(MAX_WIDTH);
             let y_prefix = pp(prefix, x, x_suffix_len, width)?;
             pp(y_prefix, y, suffix_len, width)
         }
         Choice(x, y) => {
-            let x = x.eval()?.0;
+            let x = x.eval()?;
             let last_len = prefix.last_line_len();
             let first_len = first_line_len(x.clone(), suffix_len)?;
             let fits = last_len + first_len <= width;
@@ -75,7 +74,7 @@ fn pp<'d, D: PrettyDoc<'d>>(
                     last_len, first_len, width, fits
                 );
             }
-            let z = if fits { x } else { y.eval()?.0 };
+            let z = if fits { x } else { y.eval()? };
             pp(prefix, z, suffix_len, width)
         }
     }
@@ -94,15 +93,15 @@ fn first_line_len<'d, D: PrettyDoc<'d>>(
         Empty => Ok(suffix_len),
         Textual(textual) => Ok(textual.width + suffix_len),
         Newline(_) => Ok(0),
-        Child(_, x) => first_line_len(x.eval()?.0, suffix_len),
+        Child(_, x) => first_line_len(x.eval()?, suffix_len),
         Concat(x, y) => {
-            let suffix_len = first_line_len(y.eval()?.0, suffix_len)?.min(MAX_WIDTH);
-            first_line_len(x.eval()?.0, suffix_len)
+            let suffix_len = first_line_len(y.eval()?, suffix_len)?.min(MAX_WIDTH);
+            first_line_len(x.eval()?, suffix_len)
         }
         Choice(_, y) => {
             // Wouldn't see a choice if we were flat, so use y.
             // Relies on the rule that in (x | y), y's first line is no longer than x's.
-            first_line_len(y.eval()?.0, suffix_len)
+            first_line_len(y.eval()?, suffix_len)
         }
     }
 }

@@ -1,50 +1,53 @@
 // TODO: docs
 
 use super::notation::{Literal, Notation};
+use std::fmt;
 
-pub fn empty<S>() -> Notation<S> {
+pub fn empty<L: fmt::Debug + Clone>() -> Notation<L> {
     Notation::Empty
 }
 
-pub fn nl<S>() -> Notation<S> {
+pub fn nl<L: fmt::Debug + Clone>() -> Notation<L> {
     Notation::Newline
 }
 
-pub fn child<S>(i: usize) -> Notation<S> {
+pub fn child<L: fmt::Debug + Clone>(i: usize) -> Notation<L> {
     Notation::Child(i)
 }
 
-pub fn text<S>(style: S) -> Notation<S> {
-    Notation::Text(style)
+pub fn style<L: fmt::Debug + Clone>(style_label: L, n: Notation<L>) -> Notation<L> {
+    Notation::Style(style_label, Box::new(n))
 }
 
-pub fn lit<S>(s: &str, style: S) -> Notation<S> {
-    let literal = Literal::new(s, style);
-    Notation::Literal(literal)
+pub fn text<L: fmt::Debug + Clone>() -> Notation<L> {
+    Notation::Text
 }
 
-pub fn flat<S>(n: Notation<S>) -> Notation<S> {
+pub fn lit<L: fmt::Debug + Clone>(s: &str) -> Notation<L> {
+    Notation::Literal(Literal::new(s))
+}
+
+pub fn flat<L: fmt::Debug + Clone>(n: Notation<L>) -> Notation<L> {
     Notation::Flat(Box::new(n))
 }
 
-pub fn indent<S>(s: &str, style: S, n: Notation<S>) -> Notation<S> {
-    let literal = Literal::new(s, style);
-    Notation::Indent(literal, Box::new(n))
-}
-
-pub fn mark<S>(mark_name: &'static str, n: Notation<S>) -> Notation<S> {
-    Notation::Mark(mark_name, Box::new(n))
+pub fn indent<L: fmt::Debug + Clone>(
+    s: &str,
+    style_label: Option<L>,
+    n: Notation<L>,
+) -> Notation<L> {
+    Notation::Indent(Literal::new(s), style_label, Box::new(n))
 }
 
 /* Count */
 
-pub struct Count<S> {
-    pub zero: Notation<S>,
-    pub one: Notation<S>,
-    pub many: Notation<S>,
+pub struct Count<L: fmt::Debug + Clone> {
+    pub zero: Notation<L>,
+    pub one: Notation<L>,
+    pub many: Notation<L>,
 }
 
-pub fn count<S>(count: Count<S>) -> Notation<S> {
+pub fn count<L: fmt::Debug + Clone>(count: Count<L>) -> Notation<L> {
     Notation::Count {
         zero: Box::new(count.zero),
         one: Box::new(count.one),
@@ -54,22 +57,22 @@ pub fn count<S>(count: Count<S>) -> Notation<S> {
 
 /* Fold */
 
-pub struct Fold<S> {
-    pub first: Notation<S>,
-    pub join: Notation<S>,
+pub struct Fold<L: fmt::Debug + Clone> {
+    pub first: Notation<L>,
+    pub join: Notation<L>,
 }
 
-pub fn fold<S>(fold: Fold<S>) -> Notation<S> {
+pub fn fold<L: fmt::Debug + Clone>(fold: Fold<L>) -> Notation<L> {
     Notation::Fold {
         first: Box::new(fold.first),
         join: Box::new(fold.join),
     }
 }
 
-pub fn left<S>() -> Notation<S> {
+pub fn left<L: fmt::Debug + Clone>() -> Notation<L> {
     Notation::Left
 }
 
-pub fn right<S>() -> Notation<S> {
+pub fn right<L: fmt::Debug + Clone>() -> Notation<L> {
     Notation::Right
 }

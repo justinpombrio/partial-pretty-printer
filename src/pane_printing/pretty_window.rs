@@ -8,12 +8,9 @@ pub trait PrettyWindow: Sized {
     // `PrettyWindow` as a trait object.
     type Error: std::error::Error + 'static;
 
+    // TODO doc
     /// The style used in the document's notation.
     type Style: fmt::Debug + Default;
-
-    /// Arbitrary data associated with some nodes in the document. Returned as part of
-    /// `Line` when pretty printing.
-    type Mark;
 
     /// Get the size of this window.
     fn size(&self) -> Result<Size, Self::Error>;
@@ -25,7 +22,6 @@ pub trait PrettyWindow: Sized {
         &mut self,
         ch: char,
         pos: Pos,
-        mark: Option<&Self::Mark>,
         style: &Self::Style,
         full_width: bool,
     ) -> Result<(), Self::Error>;

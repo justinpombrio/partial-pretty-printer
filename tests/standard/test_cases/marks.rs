@@ -6,14 +6,11 @@ use partial_pretty_printer::{
     pretty_print, Line, Width,
 };
 
-type Mark = char;
-
 #[derive(Debug)]
 struct RichChar {
     ch: char,
     id: u32,
     style: BasicStyle,
-    mark: Option<Mark>,
 }
 
 #[derive(Debug)]
@@ -63,13 +60,12 @@ impl RichText {
 
     fn push_line<'d>(&mut self, line: Line<'d, &'d Json>) {
         let mut chars = Vec::new();
-        for segment in &line.segments {
+        for segment in line.segments {
             for ch in segment.str.chars() {
                 chars.push(RichChar {
                     ch,
                     id: segment.doc_id,
-                    style: *segment.style,
-                    mark: segment.mark.copied(),
+                    style: segment.style.clone(),
                 });
             }
         }
@@ -112,18 +108,6 @@ impl RichText {
         s.pop();
         s
     }
-
-    fn display_marks(&self) -> String {
-        let mut s = String::new();
-        for line in &self.lines {
-            for rich_char in line {
-                s.push(rich_char.mark.unwrap_or(' '));
-            }
-            s.push('\n');
-        }
-        s.pop();
-        s
-    }
 }
 
 fn assert_str_eq(expected: &str, actual: &str) {
@@ -138,23 +122,26 @@ fn assert_str_eq(expected: &str, actual: &str) {
 fn make_json_dictionary() -> Json {
     Json::reset_id();
     json_dict(vec![
-        ("Name", json_string("Alice").whole_node_mark('A')),
+        (
+            "Name",
+            json_string("Alice").with_style(BasicStyle::new().bold()),
+        ),
         ("Age", json_number(42.0)),
         ("Pets", json_list(Vec::new())),
         (
             "Favorites",
             json_list(vec![
                 json_string("chocolate"),
-                json_string("lemon").whole_node_mark('L'),
+                json_string("lemon").with_style(BasicStyle::new().color(Color::Yellow)),
                 json_string("almond"),
             ])
-            .whole_node_mark('F')
-            .partial_node_mark("open", '[')
-            .partial_node_mark("close", ']'),
+            .with_style(BasicStyle::new().color(Color::Red).bold())
+            .with_style_override("open", BasicStyle::new().color(Color::Cyan))
+            .with_style_override("close", BasicStyle::new().color(Color::Blue)),
         ),
     ])
-    .partial_node_mark("open", '{')
-    .partial_node_mark("close", '}')
+    .with_style_override("open", BasicStyle::new().color(Color::Cyan))
+    .with_style_override("close", BasicStyle::new().color(Color::Blue))
 }
 
 #[test]
@@ -197,36 +184,19 @@ fn test_json_marks() {
 
     assert_str_eq(
         &[
-            r#"w"#,
-            r#"wwwwmmmmmmwwmmmmmmmw"#,
+            r#"c"#,
+            r#"wwwwmmmmmmwwMMMMMMMw"#,
             r#"wwwwmmmmmwwbbw"#,
             r#"wwwwmmmmmmwwwww"#,
-            r#"wwwwmmmmmmmmmmmwww"#,
-            r#"wwwwwwwwmmmmmmmmmmmw"#,
-            r#"wwwwwwwwmmmmmmmw"#,
-            r#"wwwwwwwwmmmmmmmm"#,
-            r#"wwwww"#,
-            r#"w"#,
+            r#"wwwwmmmmmmmmmmmwwC"#,
+            r#"wwwwRRRRMMMMMMMMMMMR"#,
+            r#"wwwwRRRRMMMMMMMR"#,
+            r#"wwwwRRRRMMMMMMMM"#,
+            r#"wwwwB"#,
+            r#"b"#,
         ]
         .join("\n"),
         &rich_text.display_styles(),
-    );
-
-    assert_str_eq(
-        &[
-            r#"{"#,
-            r#"            AAAAAAA "#,
-            r#"              "#,
-            r#"               "#,
-            r#"                 ["#,
-            r#"    FFFFFFFFFFFFFFFF"#,
-            r#"    FFFFLLLLLLLF"#,
-            r#"    FFFFFFFFFFFF"#,
-            r#"    ]"#,
-            r#"}"#,
-        ]
-        .join("\n"),
-        &rich_text.display_marks(),
     );
 
     let rich_text = print(&json, 90);
@@ -241,12 +211,7 @@ fn test_json_marks() {
     );
 
     assert_str_eq(
-        r#"wmmmmmmwwmmmmmmmwwmmmmmwwbbwwmmmmmmwwwwwwmmmmmmmmmmmwwwmmmmmmmmmmmwwmmmmmmmwwmmmmmmmmww"#,
+        r#"cmmmmmmwwMMMMMMMwwmmmmmwwbbwwmmmmmmwwwwwwmmmmmmmmmmmwwCMMMMMMMMMMMRRMMMMMMMRRMMMMMMMMBb"#,
         &rich_text.display_styles(),
-    );
-
-    assert_str_eq(
-        r#"{        AAAAAAA                                      [FFFFFFFFFFFFFLLLLLLLFFFFFFFFFF]}"#,
-        &rich_text.display_marks(),
     );
 }

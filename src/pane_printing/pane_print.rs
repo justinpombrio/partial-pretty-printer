@@ -1,5 +1,5 @@
 use super::divvy::Divvier;
-use super::pane_notation::{Label, PaneNotation, PaneSize};
+use super::pane_notation::{DocLabel, PaneNotation, PaneSize};
 use super::pretty_window::PrettyWindow;
 use super::render_options::{FocusSide, RenderOptions};
 use crate::geometry::{is_char_full_width, Height, Pos, Rectangle, Row, Size, Width};
@@ -30,7 +30,7 @@ pub enum PaneError<W: PrettyWindow> {
 /// - `window` is the `PrettyWindow` to display to.
 /// - `notation` is the `PaneNotation` to render. It says how to break up the screen into rectangular
 ///   "panes", and which document to display in each pane. It does not contain the Documents
-///   directly, instead it references them by `Label`.
+///   directly, instead it references them by `DocLabel`.
 /// - `get_content` is a function to look up a document by label. It returns both the document, and
 ///   the path to the node in the document to focus on.
 pub fn pane_print<'d, L, D, W>(
@@ -39,9 +39,9 @@ pub fn pane_print<'d, L, D, W>(
     get_content: &impl Fn(L) -> Option<(D, RenderOptions)>,
 ) -> Result<(), PaneError<W>>
 where
-    L: Label,
+    L: DocLabel,
     D: PrettyDoc<'d>,
-    W: PrettyWindow<Style = D::Style, Mark = D::Mark>,
+    W: PrettyWindow<Style = D::Style>,
 {
     let size = window.size().map_err(PaneError::PrettyWindowError)?;
     let rect = Rectangle::from_size(size);
@@ -55,9 +55,9 @@ fn pane_print_rec<'d, L, D, W>(
     rect: Rectangle,
 ) -> Result<(), PaneError<W>>
 where
-    L: Label,
+    L: DocLabel,
     D: PrettyDoc<'d>,
-    W: PrettyWindow<Style = D::Style, Mark = D::Mark>,
+    W: PrettyWindow<Style = D::Style>,
 {
     match notation {
         PaneNotation::Empty => (),
@@ -69,7 +69,7 @@ where
                 let mut col = rect.min_col;
                 while col + char_width <= rect.max_col {
                     window
-                        .print_char(*ch, Pos { row, col }, None, style, is_full_width)
+                        .print_char(*ch, Pos { row, col }, style, is_full_width)
                         .map_err(PaneError::PrettyWindowError)?;
                     col += char_width;
                 }
@@ -249,7 +249,7 @@ impl<'d, D: PrettyDoc<'d>> PrintedDoc<'d, D> {
     fn render<W>(self, window: &mut W, rect: Rectangle) -> Result<(), PaneError<W>>
     where
         D: PrettyDoc<'d>,
-        W: PrettyWindow<Style = D::Style, Mark = D::Mark>,
+        W: PrettyWindow<Style = D::Style>,
     {
         let mut relative_pos = Pos {
             col: 0,
@@ -273,7 +273,7 @@ fn render_line<'d, D, W>(
 ) -> Result<(), PaneError<W>>
 where
     D: PrettyDoc<'d>,
-    W: PrettyWindow<Style = D::Style, Mark = D::Mark>,
+    W: PrettyWindow<Style = D::Style>,
 {
     // Compute pos in absolute window coords
     let mut pos = Pos {
@@ -293,7 +293,7 @@ where
                 return Ok(());
             }
             window
-                .print_char(ch, pos, segment.mark, segment.style, is_full_width)
+                .print_char(ch, pos, &segment.style, is_full_width)
                 .map_err(PaneError::PrettyWindowError)?;
             pos.col += char_width;
         }
