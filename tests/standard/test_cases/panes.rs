@@ -5,7 +5,7 @@ use partial_pretty_printer::{
         BasicStyle,
     },
     pane::{
-        pane_print, FocusSide, Label, PaneNotation, PaneSize, PlainText, RenderOptions,
+        pane_print, DocLabel, FocusSide, PaneNotation, PaneSize, PlainText, RenderOptions,
         WidthStrategy,
     },
     PrettyDoc, Size,
@@ -20,7 +20,7 @@ struct SimpleLabel<'d, D: PrettyDoc<'d> + Clone + Debug>(
     Option<(D, RenderOptions)>,
     PhantomData<&'d D>,
 );
-impl<'d, D: PrettyDoc<'d> + Clone + Debug> Label for SimpleLabel<'d, D> {}
+impl<'d, D: PrettyDoc<'d> + Clone + Debug> DocLabel for SimpleLabel<'d, D> {}
 
 fn get_content<'d, D: PrettyDoc<'d> + Clone + Debug>(
     label: SimpleLabel<'d, D>,
@@ -59,7 +59,7 @@ fn pane_test_with_size<'d, S: Debug + Default, D: PrettyDoc<'d, Style = S> + Clo
     assert_eq!(actual, expected);
 }
 
-fn fill<L: Label>(ch: char) -> PaneNotation<L, NoStyle> {
+fn fill<L: DocLabel>(ch: char) -> PaneNotation<L, NoStyle> {
     PaneNotation::Fill {
         ch,
         style: NoStyle::default(),
@@ -68,12 +68,12 @@ fn fill<L: Label>(ch: char) -> PaneNotation<L, NoStyle> {
 
 #[test]
 fn test_empty_pane() {
-    pane_test::<NoStyle, &SimpleDoc<NoStyle>>(PaneNotation::Empty, "");
+    pane_test::<NoStyle, &SimpleDoc>(PaneNotation::Empty, "");
 }
 
 #[test]
 fn test_fill_pane() {
-    pane_test::<NoStyle, &SimpleDoc<NoStyle>>(
+    pane_test::<NoStyle, &SimpleDoc>(
         fill('a'),
         "aaaaaaa\n\
          aaaaaaa\n\
@@ -87,7 +87,7 @@ fn test_fill_pane() {
 
 #[test]
 fn test_fill_pane_with_full_width() {
-    pane_test_with_size::<NoStyle, &SimpleDoc<NoStyle>>(
+    pane_test_with_size::<NoStyle, &SimpleDoc>(
         Size {
             width: 7,
             height: 3,
@@ -98,7 +98,7 @@ fn test_fill_pane_with_full_width() {
          信信信\n",
     );
 
-    pane_test_with_size::<NoStyle, &SimpleDoc<NoStyle>>(
+    pane_test_with_size::<NoStyle, &SimpleDoc>(
         Size {
             width: 6,
             height: 3,
@@ -109,7 +109,7 @@ fn test_fill_pane_with_full_width() {
          信信信\n",
     );
 
-    pane_test_with_size::<NoStyle, &SimpleDoc<NoStyle>>(
+    pane_test_with_size::<NoStyle, &SimpleDoc>(
         Size {
             width: 1,
             height: 3,
@@ -123,7 +123,7 @@ fn test_fill_pane_with_full_width() {
 fn test_horz_split_pane() {
     use PaneSize::{Fixed, Proportional};
 
-    pane_test::<NoStyle, &SimpleDoc<NoStyle>>(
+    pane_test::<NoStyle, &SimpleDoc>(
         PaneNotation::Horz(vec![
             (Proportional(2), fill('a')),
             (Proportional(3), fill('b')),
@@ -146,7 +146,7 @@ fn test_horz_split_pane() {
 fn test_vert_split_pane() {
     use PaneSize::{Fixed, Proportional};
 
-    pane_test::<NoStyle, &SimpleDoc<NoStyle>>(
+    pane_test::<NoStyle, &SimpleDoc>(
         PaneNotation::Vert(vec![
             (Proportional(2), fill('a')),
             (Proportional(3), fill('b')),
@@ -169,7 +169,7 @@ fn test_vert_split_pane() {
 fn test_mixed_split_pane() {
     use PaneSize::{Fixed, Proportional};
 
-    pane_test::<NoStyle, &SimpleDoc<NoStyle>>(
+    pane_test::<NoStyle, &SimpleDoc>(
         PaneNotation::Horz(vec![
             (Proportional(2), fill('|')),
             (

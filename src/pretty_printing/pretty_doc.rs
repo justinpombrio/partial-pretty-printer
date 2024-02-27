@@ -9,30 +9,23 @@ use std::hash::Hash;
 /// implementations, which call `unwrap_child`.
 pub trait PrettyDoc<'d>: Copy {
     type Id: Eq + Hash + Copy + Default + fmt::Debug;
-    /// The style used in this document's notation.
-    type Style: fmt::Debug + Default + 'd;
-    /// Arbitrary data associated with some nodes in the document. Returned as part of
-    /// `Line` when pretty printing.
-    type Mark: fmt::Debug + 'd;
+    /// Arbitrary metadata that's applied to regions of the document.
+    type Style: Style + 'd;
+    /// Used to look up a style. It should be small and cheap to clone.
+    type StyleLabel: fmt::Debug + Clone + 'd;
 
     /// An id that uniquely identifies this node. It should not be `Id::default()`.
     fn id(self) -> Self::Id;
 
     /// The node's notation.
-    fn notation(self) -> &'d ValidNotation<Self::Style>;
+    fn notation(self) -> &'d ValidNotation<Self::StyleLabel>;
 
-    /// The mark on this node, if any. This method is called once per document node. If it returns
-    /// `Some(mark)`, the mark is applied to that node.
-    fn whole_node_mark(self) -> Option<&'d Self::Mark> {
-        None
-    }
+    /// Returns the style associated with this label, in the context of this node.
+    fn lookup_style(self, style_label: Self::StyleLabel) -> Self::Style;
 
-    /// Look up a mark that applies to only part of this node. Whenever `Notation::Mark(mark_name,
-    /// notation)` is encountered while printing, `partial_node_mark(mark_name)` is invoked. If it
-    /// returns `Some(mark)`, then that mark is applied to `notation`.
-    fn partial_node_mark(self, _mark_name: &'static str) -> Option<&'d Self::Mark> {
-        None
-    }
+    /// A style to apply to this node. This method is called once per document
+    /// node and applies to the whole node.
+    fn node_style(self) -> Self::Style;
 
     /// Get this node's number of children, or `None` if it contains text instead. `Some(0)` means
     /// that this node contains no children, and no text.
@@ -72,5 +65,20 @@ pub trait PrettyDoc<'d>: Copy {
     /// it could have a more efficient implementation.
     fn unwrap_prev_sibling(self, parent: Self, i: usize) -> Self {
         parent.unwrap_child(i)
+    }
+}
+
+/// Styles are arbitrary metadata that are applied to regions of the document.
+/// When multiple styles overlap, they are merged into a single style with
+/// `Style::combine()`.
+pub trait Style: fmt::Debug + Clone {
+    /// Produce a new Style by combining the `outer_style` with an `inner_style`
+    /// that applies to a subregion.
+    fn combine(outer_style: &Self, inner_style: &Self) -> Self;
+}
+
+impl Style for () {
+    fn combine(_outer_style: &Self, _inner_style: &Self) -> Self {
+        ()
     }
 }

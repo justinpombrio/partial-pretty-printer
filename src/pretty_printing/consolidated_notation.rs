@@ -1,6 +1,6 @@
 //! Walk along the notation tree, skipping the boring parts.
 
-use super::pretty_doc::PrettyDoc;
+use super::pretty_doc::{PrettyDoc, Style};
 use crate::geometry::{str_width, Width};
 use crate::notation::Notation;
 use std::fmt;
@@ -35,9 +35,8 @@ pub enum ConsolidatedNotation<'d, D: PrettyDoc<'d>> {
 pub struct Segment<'d, D: PrettyDoc<'d>> {
     pub str: &'d str,
     pub width: Width,
-    pub style: &'d D::Style,
+    pub style: D::Style,
     pub doc_id: D::Id,
-    pub mark: Option<&'d D::Mark>,
 }
 
 /// A styled piece of text from Notation::Literal or Notation::Text or Notation::Indent.
@@ -45,7 +44,7 @@ pub struct Segment<'d, D: PrettyDoc<'d>> {
 pub struct Textual<'d, D: PrettyDoc<'d>> {
     pub str: &'d str,
     pub width: Width,
-    pub style: &'d D::Style,
+    pub style: D::Style,
 }
 
 // Performance Note: We've tested three implementations of indentation so far:
@@ -69,11 +68,11 @@ pub struct IndentNode<'d, D: PrettyDoc<'d>> {
 #[derive(Debug)]
 pub struct DelayedConsolidatedNotation<'d, D: PrettyDoc<'d>> {
     doc: D,
-    notation: &'d Notation<D::Style>,
+    notation: &'d Notation<D::StyleLabel>,
     flat: bool,
     indent: Option<Rc<IndentNode<'d, D>>>,
     join_pos: Option<JoinPos<'d, D>>,
-    mark: Option<&'d D::Mark>,
+    style: D::Style,
 }
 
 #[derive(Debug)]
@@ -81,8 +80,8 @@ struct JoinPos<'d, D: PrettyDoc<'d>> {
     parent: D,
     child: D,
     index: usize,
-    first: &'d Notation<D::Style>,
-    join: &'d Notation<D::Style>,
+    first: &'d Notation<D::StyleLabel>,
+    join: &'d Notation<D::StyleLabel>,
 }
 
 impl<'d, D: PrettyDoc<'d>> Clone for Textual<'d, D> {
@@ -90,24 +89,21 @@ impl<'d, D: PrettyDoc<'d>> Clone for Textual<'d, D> {
         Textual {
             str: self.str,
             width: self.width,
-            style: self.style,
+            style: self.style.clone(),
         }
     }
 }
-impl<'d, D: PrettyDoc<'d>> Copy for Textual<'d, D> {}
 
 impl<'d, D: PrettyDoc<'d>> Clone for Segment<'d, D> {
     fn clone(&self) -> Self {
         Segment {
             str: self.str,
             width: self.width,
-            style: self.style,
+            style: self.style.clone(),
             doc_id: self.doc_id,
-            mark: self.mark,
         }
     }
 }
-impl<'d, D: PrettyDoc<'d>> Copy for Segment<'d, D> {}
 
 impl<'d, D: PrettyDoc<'d>> Clone for ConsolidatedNotation<'d, D> {
     fn clone(&self) -> Self {
@@ -116,7 +112,7 @@ impl<'d, D: PrettyDoc<'d>> Clone for ConsolidatedNotation<'d, D> {
         match self {
             Empty => Empty,
             Newline(ind) => Newline(ind.clone()),
-            Textual(textual) => Textual(*textual),
+            Textual(textual) => Textual(textual.clone()),
             Concat(note1, note2) => Concat(note1.clone(), note2.clone()),
             Choice(note1, note2) => Choice(note1.clone(), note2.clone()),
             Child(i, child) => Child(*i, child.clone()),
@@ -132,7 +128,7 @@ impl<'d, D: PrettyDoc<'d>> Clone for DelayedConsolidatedNotation<'d, D> {
             flat: self.flat,
             indent: self.indent.clone(),
             join_pos: self.join_pos,
-            mark: self.mark,
+            style: self.style.clone(),
         }
     }
 }
@@ -181,7 +177,7 @@ impl<'d, D: PrettyDoc<'d>> DelayedConsolidatedNotation<'d, D> {
             flat: false,
             indent: None,
             join_pos: None,
-            mark: doc.whole_node_mark(),
+            style: doc.node_style(),
         }
     }
 
@@ -189,36 +185,28 @@ impl<'d, D: PrettyDoc<'d>> DelayedConsolidatedNotation<'d, D> {
         &self.doc
     }
 
-    /// Expand this node, to get a usable `ConsolidatedNotation` and its mark (if any).
-    pub fn eval(
-        mut self,
-    ) -> Result<(ConsolidatedNotation<'d, D>, Option<&'d D::Mark>), PrintingError> {
+    /// Expand this node to get a usable `ConsolidatedNotation`.
+    pub fn eval(mut self) -> Result<ConsolidatedNotation<'d, D>, PrintingError> {
         use Notation::*;
 
         match self.notation {
-            Empty => Ok((ConsolidatedNotation::Empty, self.mark)),
-            Newline => Ok((ConsolidatedNotation::Newline(self.indent), self.mark)),
-            Literal(lit) => Ok((
-                ConsolidatedNotation::Textual(Textual {
-                    str: lit.str(),
-                    width: lit.width(),
-                    style: lit.style(),
-                }),
-                self.mark,
-            )),
-            Text(style) => {
+            Empty => Ok(ConsolidatedNotation::Empty),
+            Newline => Ok(ConsolidatedNotation::Newline(self.indent)),
+            Literal(lit) => Ok(ConsolidatedNotation::Textual(Textual {
+                str: lit.str(),
+                width: lit.width(),
+                style: self.style,
+            })),
+            Text => {
                 if self.doc.num_children().is_some() {
                     Err(PrintingError::TextNotationOnTextlessDoc)
                 } else {
                     let text = self.doc.unwrap_text();
-                    Ok((
-                        ConsolidatedNotation::Textual(Textual {
-                            str: text,
-                            width: str_width(text),
-                            style,
-                        }),
-                        self.mark,
-                    ))
+                    Ok(ConsolidatedNotation::Textual(Textual {
+                        str: text,
+                        width: str_width(text),
+                        style: self.style,
+                    }))
                 }
             }
             Flat(note) => {
@@ -226,14 +214,18 @@ impl<'d, D: PrettyDoc<'d>> DelayedConsolidatedNotation<'d, D> {
                 self.notation = note;
                 self.eval()
             }
-            Indent(prefix, note) => {
+            Indent(prefix, style_label, note) => {
+                let style = if let Some(label) = style_label {
+                    D::Style::combine(&self.style, &self.doc.lookup_style(label.clone()))
+                } else {
+                    self.style.clone()
+                };
                 let new_indent = Rc::new(IndentNode {
                     segment: Segment {
                         str: prefix.str(),
                         width: prefix.width(),
-                        style: prefix.style(),
+                        style,
                         doc_id: self.doc.id(),
-                        mark: self.mark,
                     },
                     parent: self.indent,
                 });
@@ -242,24 +234,22 @@ impl<'d, D: PrettyDoc<'d>> DelayedConsolidatedNotation<'d, D> {
                 self.eval()
             }
             Concat(note1, note2) => {
-                let mark = self.mark;
                 let mut cnote1 = self.clone();
                 cnote1.notation = note1;
                 let mut cnote2 = self;
                 cnote2.notation = note2;
-                Ok((ConsolidatedNotation::Concat(cnote1, cnote2), mark))
+                Ok(ConsolidatedNotation::Concat(cnote1, cnote2))
             }
             Choice(note1, _note2) if self.flat => {
                 self.notation = note1;
                 self.eval()
             }
             Choice(note1, note2) => {
-                let mark = self.mark;
                 let mut cnote1 = self.clone();
                 cnote1.notation = note1;
                 let mut cnote2 = self;
                 cnote2.notation = note2;
-                Ok((ConsolidatedNotation::Choice(cnote1, cnote2), mark))
+                Ok(ConsolidatedNotation::Choice(cnote1, cnote2))
             }
             IfEmptyText(note1, note2) => {
                 if self.doc.num_children().is_some() {
@@ -279,19 +269,15 @@ impl<'d, D: PrettyDoc<'d>> DelayedConsolidatedNotation<'d, D> {
                     Err(PrintingError::ChildIndexOutOfBounds { index: *i, len: n })
                 }
                 Some(_) => {
-                    let parent_mark = self.mark;
                     self.doc = self.doc.unwrap_child(*i);
                     self.notation = &self.doc.notation().0;
-                    if let Some(child_mark) = self.doc.whole_node_mark() {
-                        self.mark = Some(child_mark);
-                    }
-                    Ok((ConsolidatedNotation::Child(*i, self), parent_mark))
+                    self.style = D::Style::combine(&self.style, &self.doc.node_style());
+                    Ok(ConsolidatedNotation::Child(*i, self))
                 }
             },
-            Mark(mark_name, note) => {
-                if let Some(mark) = self.doc.partial_node_mark(mark_name) {
-                    self.mark = Some(mark);
-                }
+            Style(style_label, note) => {
+                self.style =
+                    D::Style::combine(&self.style, &self.doc.lookup_style(style_label.clone()));
                 self.notation = note;
                 self.eval()
             }
@@ -358,14 +344,11 @@ impl<'d, D: PrettyDoc<'d>> DelayedConsolidatedNotation<'d, D> {
                 }
                 Some(JoinPos { child, index, .. }) => {
                     let index = *index;
-                    let parent_mark = self.mark;
                     self.doc = *child;
                     self.notation = &child.notation().0;
-                    if let Some(child_mark) = self.doc.whole_node_mark() {
-                        self.mark = Some(child_mark);
-                    }
+                    self.style = D::Style::combine(&self.style, &self.doc.node_style());
                     self.join_pos = None;
-                    Ok((ConsolidatedNotation::Child(index, self), parent_mark))
+                    Ok(ConsolidatedNotation::Child(index, self))
                 }
             },
         }

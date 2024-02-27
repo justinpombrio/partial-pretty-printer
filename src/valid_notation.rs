@@ -1,9 +1,10 @@
 use crate::notation::Notation;
+use std::fmt;
 
 /// A Notation that has passed validation. Obtain one by constructing a [Notation] and then calling
 /// [`Notation::validate`].
 #[derive(Clone, Debug)]
-pub struct ValidNotation<S>(pub(crate) Notation<S>);
+pub struct ValidNotation<L: fmt::Debug + Clone>(pub(crate) Notation<L>);
 
 #[derive(thiserror::Error, Debug, Clone)]
 pub enum NotationError {
@@ -71,8 +72,8 @@ impl Context {
     }
 }
 
-impl<S> Notation<S> {
-    pub fn validate(mut self) -> Result<ValidNotation<S>, NotationError> {
+impl<L: fmt::Debug + Clone> Notation<L> {
+    pub fn validate(mut self) -> Result<ValidNotation<L>, NotationError> {
         self.validate_rec(false, Context::InNothing)?;
         Ok(ValidNotation(self))
     }
@@ -83,10 +84,10 @@ impl<S> Notation<S> {
         use NotationError::*;
 
         match self {
-            Text(_) if ctx.in_count() => return Err(TextInsideCount),
-            Empty | Text(_) | Literal(_) | Newline => (),
+            Text if ctx.in_count() => return Err(TextInsideCount),
+            Empty | Text | Literal(_) | Newline => (),
             Flat(note) => note.validate_rec(true, ctx)?,
-            Indent(_, note) => note.validate_rec(flat, ctx)?,
+            Indent(_, _, note) => note.validate_rec(flat, ctx)?,
             Concat(note1, note2) => {
                 note1.validate_rec(flat, ctx)?;
                 note2.validate_rec(flat, ctx)?;
@@ -104,7 +105,7 @@ impl<S> Notation<S> {
             Child(_) if ctx == InCountZero => return Err(CountZeroChild),
             Child(n) if *n > 0 && ctx == InCountOne => return Err(CountOneChildIndex(*n)),
             Child(_) => (),
-            Mark(_, note) => note.validate_rec(flat, ctx)?,
+            Style(_, note) => note.validate_rec(flat, ctx)?,
             Count { .. } if ctx.in_count() => return Err(NestedCount),
             Count { zero, one, many } => {
                 zero.validate_rec(flat, InCountZero)?;

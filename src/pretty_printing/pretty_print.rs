@@ -16,9 +16,6 @@ use std::rc::Rc;
 /// `width` is the desired line width. The algorithm will attempt to, but is not guaranteed to,
 /// find a layout that fits within that width.
 ///
-/// `marks` is a set of document node ids to mark. Each chunk of text in the output will say which,
-/// if any, marked id it is part of.
-///
 /// Returns a tuple with three things:
 ///
 /// - an iterator that prints lines above the focused line going up
@@ -87,14 +84,12 @@ pub fn pretty_print_to_string<'d, D: PrettyDoc<'d>>(
 struct Chunk<'d, D: PrettyDoc<'d>> {
     notation: ConsolidatedNotation<'d, D>,
     id: D::Id,
-    mark: Option<&'d D::Mark>,
 }
 
 impl<'d, D: PrettyDoc<'d>> Clone for Chunk<'d, D> {
     fn clone(&self) -> Self {
         Chunk {
             id: self.id,
-            mark: self.mark,
             notation: self.notation.clone(),
         }
     }
@@ -102,9 +97,10 @@ impl<'d, D: PrettyDoc<'d>> Clone for Chunk<'d, D> {
 
 impl<'d, D: PrettyDoc<'d>> Chunk<'d, D> {
     fn new(notation: DelayedConsolidatedNotation<'d, D>) -> Result<Self, PrintingError> {
-        let id = notation.doc().id();
-        let (notation, mark) = notation.eval()?;
-        Ok(Chunk { id, mark, notation })
+        Ok(Chunk {
+            id: notation.doc().id(),
+            notation: notation.eval()?,
+        })
     }
 }
 
@@ -204,7 +200,7 @@ impl<'d, D: PrettyDoc<'d>> Block<'d, D> {
         let mut remaining_indentation = &indentation;
         let mut indent_segments = Vec::new();
         while let Some(indent_node) = remaining_indentation {
-            indent_segments.push(indent_node.segment);
+            indent_segments.push(indent_node.segment.clone());
             remaining_indentation = &indent_node.parent;
         }
         indent_segments.reverse();
@@ -216,13 +212,12 @@ impl<'d, D: PrettyDoc<'d>> Block<'d, D> {
         }
     }
 
-    fn push_text(&mut self, doc_id: D::Id, mark: Option<&'d D::Mark>, textual: Textual<'d, D>) {
+    fn push_text(&mut self, doc_id: D::Id, textual: Textual<'d, D>) {
         self.segments.push(Segment {
             str: textual.str,
             width: textual.width,
             style: textual.style,
             doc_id,
-            mark,
         });
         self.prefix_len += textual.width;
     }
@@ -274,7 +269,7 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
         while let Some(chunk) = block.chunks.pop() {
             match chunk.notation {
                 Empty | Newline(_) | Concat(_, _) => panic!("bug in print_next_line"),
-                Textual(textual) => block.push_text(chunk.id, chunk.mark, textual),
+                Textual(textual) => block.push_text(chunk.id, textual),
                 Child(_, note) => {
                     self.expand_focusing_first_block(&mut block, Chunk::new(note)?)?
                 }
@@ -298,7 +293,7 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
         while let Some(chunk) = block.chunks.pop() {
             match chunk.notation {
                 Empty | Newline(_) | Concat(_, _) => panic!("bug in print_prev_line"),
-                Textual(textual) => block.push_text(chunk.id, chunk.mark, textual),
+                Textual(textual) => block.push_text(chunk.id, textual),
                 Child(_, note) => self.expand_focusing_last_block(&mut block, Chunk::new(note)?)?,
                 Choice(opt1, opt2) => {
                     let choice = self.choose(&block, opt1, opt2)?;
@@ -336,7 +331,7 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
                 let chunk = block.chunks.pop().unwrap();
                 match chunk.notation {
                     Empty | Newline(_) | Concat(_, _) => panic!("bug in seek"),
-                    Textual(textual) => block.push_text(chunk.id, chunk.mark, textual),
+                    Textual(textual) => block.push_text(chunk.id, textual),
                     Child(_, note) => {
                         self.expand_focusing_last_block(&mut block, Chunk::new(note)?)?
                     }
@@ -394,7 +389,7 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
             while let Some(chunk) = block.chunks.pop() {
                 match chunk.notation {
                     Empty | Newline(_) | Concat(_, _) => panic!("bug in seek_child"),
-                    Textual(textual) => block.push_text(chunk.id, chunk.mark, textual),
+                    Textual(textual) => block.push_text(chunk.id, textual),
                     Child(i, child) if chunk.id == parent_id && i == child_index => {
                         // Found!
                         if expand_child {
@@ -404,7 +399,6 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
                             block.chunks.push(Chunk {
                                 notation: Child(i, child),
                                 id: chunk.id,
-                                mark: chunk.mark,
                             });
                         }
                         self.next_blocks.push(block);
@@ -512,21 +506,16 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
     ) -> Result<Chunk<'d, D>, PrintingError> {
         span!("choose");
 
-        let id1 = opt1.doc().id();
-        let (opt1_evaled, mark1) = opt1.eval()?;
+        let chunk1 = Chunk::new(opt1)?;
 
         if self.width >= block.prefix_len
             && fits(
                 self.width - block.prefix_len,
-                opt1_evaled.clone(),
+                chunk1.notation.clone(),
                 &block.chunks,
             )?
         {
-            Ok(Chunk {
-                id: id1,
-                mark: mark1,
-                notation: opt1_evaled,
-            })
+            Ok(chunk1)
         } else {
             Chunk::new(opt2)
         }
@@ -620,17 +609,17 @@ fn fits<'d, D: PrettyDoc<'d>>(
                 }
             }
             Newline(_) => return Ok(true),
-            Child(_, note) => notations.push(note.eval()?.0),
+            Child(_, note) => notations.push(note.eval()?),
             Concat(note1, note2) => {
-                notations.push(note2.eval()?.0);
-                notations.push(note1.eval()?.0);
+                notations.push(note2.eval()?);
+                notations.push(note1.eval()?);
             }
             Choice(_opt1, opt2) => {
                 // This assumes that:
                 //     For every layout a in opt1 and b in opt2,
                 //     first_line_len(a) >= first_line_len(b)
                 // And also that ConsolidatedNotation would have removed this choice if we're in a Flat
-                notations.push(opt2.eval()?.0);
+                notations.push(opt2.eval()?);
             }
         }
     }

@@ -16,9 +16,9 @@ impl Generator for NotationGen {
             match picker.pick_int(5) {
                 0 => empty(),
                 1 => nl(),
-                2 => lit("a", ()),
-                3 => lit("bb", ()),
-                4 => lit("cccc", ()),
+                2 => lit("a"),
+                3 => lit("bb"),
+                4 => lit("cccc"),
                 _ => unreachable!(),
             }
         } else if size == 2 {

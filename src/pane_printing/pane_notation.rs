@@ -1,11 +1,11 @@
 use std::fmt;
 
 /// Document ids, used to look up documents.
-pub trait Label: Clone + fmt::Debug {}
+pub trait DocLabel: Clone + fmt::Debug {}
 
 /// Specify the content of a `Pane`.
 #[derive(Clone, Debug)]
-pub enum PaneNotation<L: Label, S> {
+pub enum PaneNotation<L: DocLabel, S> {
     /// Split the pane into multiple subpanes from left to right, each with its own `PaneNotation`.
     /// Each subpane has the same height as this `Pane`, and a width determined by its [`PaneSize`].
     Horz(Vec<(PaneSize, PaneNotation<L, S>)>),

@@ -1,6 +1,6 @@
-use crate::standard::pretty_testing::{assert_pp, punct};
+use crate::standard::pretty_testing::assert_pp;
 use once_cell::sync::Lazy;
-use partial_pretty_printer::notation_constructors::{child, flat, text};
+use partial_pretty_printer::notation_constructors::{child, flat, lit, text};
 use partial_pretty_printer::{PrettyDoc, ValidNotation};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -17,18 +17,18 @@ enum RubyData {
     DoLoop(Box<[Ruby; 2]>),
 }
 
-static VAR_NOTATION: Lazy<ValidNotation<()>> = Lazy::new(|| text(()).validate().unwrap());
+static VAR_NOTATION: Lazy<ValidNotation<()>> = Lazy::new(|| text().validate().unwrap());
 static METHOD_CALL_NOTATION: Lazy<ValidNotation<()>> = Lazy::new(|| {
-    let single = punct(".") + child(1) + punct(" ") + child(2);
-    let two_lines = punct(".") + child(1) + punct(" ") + child(2);
-    let multi = punct(".") + child(1) + (4 >> child(2));
+    let single = lit(".") + child(1) + lit(" ") + child(2);
+    let two_lines = lit(".") + child(1) + lit(" ") + child(2);
+    let multi = lit(".") + child(1) + (4 >> child(2));
     (child(0) + (single | (4 >> (two_lines | multi))))
         .validate()
         .unwrap()
 });
 static DO_LOOP_NOTATION: Lazy<ValidNotation<()>> = Lazy::new(|| {
-    let single = punct("do |") + child(0) + punct("| ") + flat(child(1)) + punct(" end");
-    let multi = (punct("do |") + child(0) + punct("|") + (4 >> child(1))) ^ punct("end");
+    let single = lit("do |") + child(0) + lit("| ") + flat(child(1)) + lit(" end");
+    let multi = (lit("do |") + child(0) + lit("|") + (4 >> child(1))) ^ lit("end");
     (single | multi).validate().unwrap()
 });
 
@@ -53,7 +53,7 @@ impl Ruby {
 impl<'d> PrettyDoc<'d> for &'d Ruby {
     type Id = usize;
     type Style = ();
-    type Mark = ();
+    type StyleLabel = ();
 
     fn id(self) -> usize {
         self.id
@@ -67,6 +67,14 @@ impl<'d> PrettyDoc<'d> for &'d Ruby {
             MethodCall(_) => &METHOD_CALL_NOTATION,
             DoLoop(_) => &DO_LOOP_NOTATION,
         }
+    }
+
+    fn node_style(self) -> () {
+        ()
+    }
+
+    fn lookup_style(self, _label: ()) -> () {
+        ()
     }
 
     fn num_children(self) -> Option<usize> {

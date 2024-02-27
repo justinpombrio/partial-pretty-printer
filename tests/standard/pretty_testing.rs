@@ -1,38 +1,41 @@
 use partial_pretty_printer::{
-    notation_constructors::lit, pretty_print, pretty_print_to_string,
-    testing::oracular_pretty_print, Notation, NotationError, PrettyDoc, ValidNotation, Width,
+    pretty_print, pretty_print_to_string, testing::oracular_pretty_print, Notation, NotationError,
+    PrettyDoc, ValidNotation, Width,
 };
-use std::fmt;
-
-pub fn punct(s: &'static str) -> Notation<()> {
-    lit(s, ())
-}
 
 #[derive(Debug, Clone)]
-pub struct SimpleDoc<S>(pub ValidNotation<S>);
+pub struct SimpleDoc(pub ValidNotation<()>);
 
-impl<S> SimpleDoc<S> {
-    pub fn new(notation: Notation<S>) -> SimpleDoc<S> {
+impl SimpleDoc {
+    pub fn new(notation: Notation<()>) -> SimpleDoc {
         SimpleDoc(notation.validate().expect("Invalid notation"))
     }
 
-    pub fn try_new(notation: Notation<S>) -> Result<SimpleDoc<S>, NotationError> {
+    pub fn try_new(notation: Notation<()>) -> Result<SimpleDoc, NotationError> {
         Ok(SimpleDoc(notation.validate()?))
     }
 }
 
-impl<'a, S: fmt::Debug + Default> PrettyDoc<'a> for &'a SimpleDoc<S> {
+impl<'a> PrettyDoc<'a> for &'a SimpleDoc {
     type Id = usize;
-    type Style = S;
-    type Mark = ();
+    type Style = ();
+    type StyleLabel = ();
 
     fn id(self) -> usize {
         // shouldn't be the default of usize
         1
     }
 
-    fn notation(self) -> &'a ValidNotation<S> {
+    fn notation(self) -> &'a ValidNotation<()> {
         &self.0
+    }
+
+    fn node_style(self) -> () {
+        ()
+    }
+
+    fn lookup_style(self, _label: ()) -> () {
+        ()
     }
 
     fn num_children(self) -> Option<usize> {

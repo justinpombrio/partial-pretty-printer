@@ -1,6 +1,6 @@
-use crate::standard::pretty_testing::{assert_pp, punct};
+use crate::standard::pretty_testing::assert_pp;
 use once_cell::sync::Lazy;
-use partial_pretty_printer::notation_constructors::{child, flat, text};
+use partial_pretty_printer::notation_constructors::{child, flat, lit, text};
 use partial_pretty_printer::{PrettyDoc, ValidNotation};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -18,7 +18,7 @@ enum IterChainData {
     Times(Box<[IterChain; 2]>),
 }
 
-static VAR_NOTATION: Lazy<ValidNotation<()>> = Lazy::new(|| text(()).validate().unwrap());
+static VAR_NOTATION: Lazy<ValidNotation<()>> = Lazy::new(|| text().validate().unwrap());
 static METHOD_CALL_NOTATION: Lazy<ValidNotation<()>> = Lazy::new(|| {
     // foobaxxle.bar(arg)
     //
@@ -34,20 +34,20 @@ static METHOD_CALL_NOTATION: Lazy<ValidNotation<()>> = Lazy::new(|| {
     //     .bar(
     //         arg
     //      )
-    let single = punct(".") + child(1) + punct("(") + flat(child(2)) + punct(")");
-    let two_lines = punct(".") + child(1) + punct("(") + flat(child(2)) + punct(")");
-    let multi = (punct(".") + child(1) + punct("(") + (4 >> child(2))) ^ punct(")");
+    let single = lit(".") + child(1) + lit("(") + flat(child(2)) + lit(")");
+    let two_lines = lit(".") + child(1) + lit("(") + flat(child(2)) + lit(")");
+    let multi = (lit(".") + child(1) + lit("(") + (4 >> child(2))) ^ lit(")");
     (child(0) + (single | (4 >> (two_lines | multi))))
         .validate()
         .unwrap()
 });
 static CLOSURE_NOTATION: Lazy<ValidNotation<()>> = Lazy::new(|| {
-    let single = punct("|") + child(0) + punct("| { ") + child(1) + punct(" }");
-    let multi = (punct("|") + child(0) + punct("| {") + (4 >> child(1))) ^ punct("}");
+    let single = lit("|") + child(0) + lit("| { ") + child(1) + lit(" }");
+    let multi = (lit("|") + child(0) + lit("| {") + (4 >> child(1))) ^ lit("}");
     (single | multi).validate().unwrap()
 });
 static TIMES_NOTATION: Lazy<ValidNotation<()>> =
-    Lazy::new(|| (child(0) + punct(" * ") + child(1)).validate().unwrap());
+    Lazy::new(|| (child(0) + lit(" * ") + child(1)).validate().unwrap());
 
 enum Contents<'d> {
     Text(&'d str),
@@ -71,7 +71,7 @@ impl IterChain {
 impl<'d> PrettyDoc<'d> for &'d IterChain {
     type Id = usize;
     type Style = ();
-    type Mark = ();
+    type StyleLabel = ();
 
     fn id(self) -> usize {
         self.id
@@ -86,6 +86,14 @@ impl<'d> PrettyDoc<'d> for &'d IterChain {
             Closure(_) => &CLOSURE_NOTATION,
             Times(_) => &TIMES_NOTATION,
         }
+    }
+
+    fn node_style(self) -> () {
+        ()
+    }
+
+    fn lookup_style(self, _label: ()) -> () {
+        ()
     }
 
     fn num_children(self) -> Option<usize> {

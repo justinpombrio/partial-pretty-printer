@@ -6,16 +6,16 @@ use std::marker::PhantomData;
 
 /// Render a document in plain text.
 #[derive(Debug)]
-pub struct PlainText<S: fmt::Debug + Default, M: fmt::Debug> {
+pub struct PlainText<S: fmt::Debug + Default> {
     lines: Vec<Vec<char>>,
     size: Size,
-    phantom: PhantomData<(S, M)>,
+    phantom: PhantomData<S>,
 }
 
 // Follows each full-width char
 const SENTINEL: char = '\0';
 
-impl<S: fmt::Debug + Default, M: fmt::Debug> fmt::Display for PlainText<S, M> {
+impl<S: fmt::Debug + Default> fmt::Display for PlainText<S> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for line in &self.lines {
             for ch in line {
@@ -29,10 +29,10 @@ impl<S: fmt::Debug + Default, M: fmt::Debug> fmt::Display for PlainText<S, M> {
     }
 }
 
-impl<S: fmt::Debug + Default, M: fmt::Debug> PlainText<S, M> {
+impl<S: fmt::Debug + Default> PlainText<S> {
     /// Construct a screen with the given width and height.
-    pub fn new(width: Width, height: Height) -> PlainText<S, M> {
-        PlainText::<S, M> {
+    pub fn new(width: Width, height: Height) -> PlainText<S> {
+        PlainText::<S> {
             lines: vec![],
             size: Size { width, height },
             phantom: PhantomData,
@@ -40,15 +40,14 @@ impl<S: fmt::Debug + Default, M: fmt::Debug> PlainText<S, M> {
     }
 
     /// Construct a screen with the given width and unbounded height.
-    pub fn new_unbounded_height(width: Width) -> PlainText<S, M> {
-        PlainText::<S, M>::new(width, Height::max_value())
+    pub fn new_unbounded_height(width: Width) -> PlainText<S> {
+        PlainText::<S>::new(width, Height::max_value())
     }
 }
 
-impl<S: fmt::Debug + Default, M: fmt::Debug> PrettyWindow for PlainText<S, M> {
+impl<S: fmt::Debug + Default> PrettyWindow for PlainText<S> {
     type Error = Infallible;
     type Style = S;
-    type Mark = M;
 
     fn size(&self) -> Result<Size, Self::Error> {
         Ok(self.size)
@@ -58,7 +57,6 @@ impl<S: fmt::Debug + Default, M: fmt::Debug> PrettyWindow for PlainText<S, M> {
         &mut self,
         ch: char,
         pos: Pos,
-        _mark: Option<&Self::Mark>,
         _style: &Self::Style,
         full_width: bool,
     ) -> Result<(), Self::Error> {
