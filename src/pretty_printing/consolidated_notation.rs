@@ -36,7 +36,6 @@ pub struct Segment<'d, D: PrettyDoc<'d>> {
     pub str: &'d str,
     pub width: Width,
     pub style: D::Style,
-    pub doc_id: D::Id,
 }
 
 /// A styled piece of text from Notation::Literal or Notation::Text or Notation::Indent.
@@ -100,7 +99,6 @@ impl<'d, D: PrettyDoc<'d>> Clone for Segment<'d, D> {
             str: self.str,
             width: self.width,
             style: self.style.clone(),
-            doc_id: self.doc_id,
         }
     }
 }
@@ -225,7 +223,6 @@ impl<'d, D: PrettyDoc<'d>> DelayedConsolidatedNotation<'d, D> {
                         str: prefix.str(),
                         width: prefix.width(),
                         style,
-                        doc_id: self.doc.id(),
                     },
                     parent: self.indent,
                 });

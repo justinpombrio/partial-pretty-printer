@@ -9,7 +9,6 @@ use partial_pretty_printer::{
 #[derive(Debug)]
 struct RichChar {
     ch: char,
-    id: u32,
     style: BasicStyle,
 }
 
@@ -64,7 +63,6 @@ impl RichText {
             for ch in segment.str.chars() {
                 chars.push(RichChar {
                     ch,
-                    id: segment.doc_id,
                     style: segment.style.clone(),
                 });
             }
@@ -81,18 +79,6 @@ impl RichText {
             s.push('\n');
         }
         // Get rid of the trailing newline
-        s.pop();
-        s
-    }
-
-    fn display_ids(&self) -> String {
-        let mut s = String::new();
-        for line in &self.lines {
-            for rich_char in line {
-                s.push(char::from_digit(rich_char.id % 36, 36).unwrap());
-            }
-            s.push('\n');
-        }
         s.pop();
         s
     }
@@ -167,23 +153,6 @@ fn test_json_styles() {
 
     assert_str_eq(
         &[
-            r#"g"#,
-            r#"gggg888888991111111g"#,
-            r#"ggggaaaaabb22g"#,
-            r#"ggggccccccdd33g"#,
-            r#"ggggeeeeeeeeeeeff7"#,
-            r#"gggg7777444444444447"#,
-            r#"gggg777755555557"#,
-            r#"gggg777766666666"#,
-            r#"gggg7"#,
-            r#"g"#,
-        ]
-        .join("\n"),
-        &rich_text.display_ids(),
-    );
-
-    assert_str_eq(
-        &[
             r#"c"#,
             r#"wwwwmmmmmmwwMMMMMMMw"#,
             r#"wwwwmmmmmwwbbw"#,
@@ -203,11 +172,6 @@ fn test_json_styles() {
     assert_str_eq(
         r#"{"Name": "Alice", "Age": 42, "Pets": [], "Favorites": ["chocolate", "lemon", "almond"]}"#,
         &rich_text.display_text(),
-    );
-
-    assert_str_eq(
-        r#"g888888991111111ggaaaaabb22ggccccccdd33ggeeeeeeeeeeeff74444444444477555555577666666667g"#,
-        &rich_text.display_ids(),
     );
 
     assert_str_eq(

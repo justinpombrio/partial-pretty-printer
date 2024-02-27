@@ -212,12 +212,11 @@ impl<'d, D: PrettyDoc<'d>> Block<'d, D> {
         }
     }
 
-    fn push_text(&mut self, doc_id: D::Id, textual: Textual<'d, D>) {
+    fn push_text(&mut self, textual: Textual<'d, D>) {
         self.segments.push(Segment {
             str: textual.str,
             width: textual.width,
             style: textual.style,
-            doc_id,
         });
         self.prefix_len += textual.width;
     }
@@ -269,7 +268,7 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
         while let Some(chunk) = block.chunks.pop() {
             match chunk.notation {
                 Empty | Newline(_) | Concat(_, _) => panic!("bug in print_next_line"),
-                Textual(textual) => block.push_text(chunk.id, textual),
+                Textual(textual) => block.push_text(textual),
                 Child(_, note) => {
                     self.expand_focusing_first_block(&mut block, Chunk::new(note)?)?
                 }
@@ -293,7 +292,7 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
         while let Some(chunk) = block.chunks.pop() {
             match chunk.notation {
                 Empty | Newline(_) | Concat(_, _) => panic!("bug in print_prev_line"),
-                Textual(textual) => block.push_text(chunk.id, textual),
+                Textual(textual) => block.push_text(textual),
                 Child(_, note) => self.expand_focusing_last_block(&mut block, Chunk::new(note)?)?,
                 Choice(opt1, opt2) => {
                     let choice = self.choose(&block, opt1, opt2)?;
@@ -331,7 +330,7 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
                 let chunk = block.chunks.pop().unwrap();
                 match chunk.notation {
                     Empty | Newline(_) | Concat(_, _) => panic!("bug in seek"),
-                    Textual(textual) => block.push_text(chunk.id, textual),
+                    Textual(textual) => block.push_text(textual),
                     Child(_, note) => {
                         self.expand_focusing_last_block(&mut block, Chunk::new(note)?)?
                     }
@@ -389,7 +388,7 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
             while let Some(chunk) = block.chunks.pop() {
                 match chunk.notation {
                     Empty | Newline(_) | Concat(_, _) => panic!("bug in seek_child"),
-                    Textual(textual) => block.push_text(chunk.id, textual),
+                    Textual(textual) => block.push_text(textual),
                     Child(i, child) if chunk.id == parent_id && i == child_index => {
                         // Found!
                         if expand_child {
