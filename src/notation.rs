@@ -2,6 +2,9 @@ use crate::geometry::{str_width, Width};
 use std::fmt;
 use std::ops::{Add, BitOr, BitXor, Shr};
 
+pub trait StyleLabel: fmt::Debug + Clone {}
+impl<T: fmt::Debug + Clone> StyleLabel for T {}
+
 /// Describes how to display a syntactic construct. When constructing a Notation, you must obey one
 /// requirement. If you do not, the pretty printer may choose poor layouts.
 ///
@@ -14,7 +17,7 @@ use std::ops::{Add, BitOr, BitXor, Shr};
 /// Type parameter `L` is a label used to look up a style in the document. It
 /// corresponds to the `PrettyDoc::StyleLabel` associated type.
 #[derive(Clone, Debug)]
-pub enum Notation<L: fmt::Debug + Clone> {
+pub enum Notation<L: StyleLabel> {
     /// Display nothing.
     Empty,
     /// Display a newline followed by the current indentation. (See [`Notation::Indent`]).
@@ -102,7 +105,7 @@ impl Literal {
 }
 
 // For debugging. Should match impl fmt::Display for ConsolidatedNotation.
-impl<L: fmt::Debug + Clone> fmt::Display for Notation<L> {
+impl<L: StyleLabel> fmt::Display for Notation<L> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use Notation::*;
 
@@ -128,7 +131,7 @@ impl<L: fmt::Debug + Clone> fmt::Display for Notation<L> {
     }
 }
 
-impl<L: fmt::Debug + Clone> Add<Notation<L>> for Notation<L> {
+impl<L: StyleLabel> Add<Notation<L>> for Notation<L> {
     type Output = Notation<L>;
 
     /// `x + y` is shorthand for `Concat(x, y)`.
@@ -137,7 +140,7 @@ impl<L: fmt::Debug + Clone> Add<Notation<L>> for Notation<L> {
     }
 }
 
-impl<L: fmt::Debug + Clone> BitOr<Notation<L>> for Notation<L> {
+impl<L: StyleLabel> BitOr<Notation<L>> for Notation<L> {
     type Output = Notation<L>;
 
     /// `x | y` is shorthand for `Choice(x, y)`.
@@ -146,7 +149,7 @@ impl<L: fmt::Debug + Clone> BitOr<Notation<L>> for Notation<L> {
     }
 }
 
-impl<L: fmt::Debug + Clone> BitXor<Notation<L>> for Notation<L> {
+impl<L: StyleLabel> BitXor<Notation<L>> for Notation<L> {
     type Output = Notation<L>;
 
     /// `x ^ y` is shorthand for `x + Newline + y`.
@@ -155,7 +158,7 @@ impl<L: fmt::Debug + Clone> BitXor<Notation<L>> for Notation<L> {
     }
 }
 
-impl<L: fmt::Debug + Clone> Shr<Notation<L>> for Width {
+impl<L: StyleLabel> Shr<Notation<L>> for Width {
     type Output = Notation<L>;
 
     /// `i >> x` is shorthand for `Indent(i_spaces, Newline + x)` (sometimes called "nesting").

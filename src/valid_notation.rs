@@ -1,10 +1,9 @@
-use crate::notation::Notation;
-use std::fmt;
+use crate::notation::{Notation, StyleLabel};
 
 /// A Notation that has passed validation. Obtain one by constructing a [Notation] and then calling
 /// [`Notation::validate`].
 #[derive(Clone, Debug)]
-pub struct ValidNotation<L: fmt::Debug + Clone>(pub(crate) Notation<L>);
+pub struct ValidNotation<L: StyleLabel>(pub(crate) Notation<L>);
 
 #[derive(thiserror::Error, Debug, Clone)]
 pub enum NotationError {
@@ -72,7 +71,7 @@ impl Context {
     }
 }
 
-impl<L: fmt::Debug + Clone> Notation<L> {
+impl<L: StyleLabel> Notation<L> {
     pub fn validate(mut self) -> Result<ValidNotation<L>, NotationError> {
         self.validate_rec(false, Context::InNothing)?;
         Ok(ValidNotation(self))

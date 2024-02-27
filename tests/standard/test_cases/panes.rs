@@ -20,7 +20,6 @@ struct SimpleLabel<'d, D: PrettyDoc<'d> + Clone + Debug>(
     Option<(D, RenderOptions)>,
     PhantomData<&'d D>,
 );
-impl<'d, D: PrettyDoc<'d> + Clone + Debug> DocLabel for SimpleLabel<'d, D> {}
 
 fn get_content<'d, D: PrettyDoc<'d> + Clone + Debug>(
     label: SimpleLabel<'d, D>,

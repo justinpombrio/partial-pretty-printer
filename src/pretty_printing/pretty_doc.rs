@@ -1,3 +1,4 @@
+use crate::notation::StyleLabel;
 use crate::valid_notation::ValidNotation;
 use std::fmt;
 use std::hash::Hash;
@@ -12,7 +13,7 @@ pub trait PrettyDoc<'d>: Copy {
     /// Arbitrary metadata that's applied to regions of the document.
     type Style: Style + 'd;
     /// Used to look up a style. It should be small and cheap to clone.
-    type StyleLabel: fmt::Debug + Clone + 'd;
+    type StyleLabel: StyleLabel + 'd;
 
     /// An id that uniquely identifies this node. It should not be `Id::default()`.
     fn id(self) -> Self::Id;

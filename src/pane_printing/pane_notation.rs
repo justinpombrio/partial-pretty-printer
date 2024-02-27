@@ -1,7 +1,8 @@
 use std::fmt;
 
 /// Document ids, used to look up documents.
-pub trait DocLabel: Clone + fmt::Debug {}
+pub trait DocLabel: fmt::Debug + Clone {}
+impl<T: fmt::Debug + Clone> DocLabel for T {}
 
 /// Specify the content of a `Pane`.
 #[derive(Clone, Debug)]
