@@ -52,13 +52,13 @@ fn basics_choice() {
 
 #[test]
 fn test_all_paths_fn() {
-    use partial_pretty_printer::examples::json::{json_list, json_string};
+    use partial_pretty_printer::examples::json::{json_array, json_string};
 
-    let doc = json_list(vec![
-        json_list(vec![json_string("0.0"), json_string("0.1")]),
+    let doc = json_array(vec![
+        json_array(vec![json_string("0.0"), json_string("0.1")]),
         json_string("1"),
-        json_list(vec![
-            json_list(vec![json_string("2.0.0")]),
+        json_array(vec![
+            json_array(vec![json_string("2.0.0")]),
             json_string("2.1"),
         ]),
     ]);

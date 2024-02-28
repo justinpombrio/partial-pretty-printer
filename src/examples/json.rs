@@ -3,7 +3,7 @@
 use super::style::BasicStyle;
 use super::tree::{Tree, TreeNotation};
 use crate::notation_constructors::{
-    child, count, empty, flat, fold, left, lit, nl, right, style, text, Count, Fold,
+    child, count, empty, flat, fold, indent, left, lit, nl, right, style, text, Count, Fold,
 };
 use once_cell::sync::Lazy;
 
@@ -30,7 +30,7 @@ static JSON_STRING_NOTATION: Lazy<TreeNotation> = Lazy::new(|| {
 static JSON_NUMBER_NOTATION: Lazy<TreeNotation> =
     Lazy::new(|| style(NUMBER_STYLE, text()).validate().unwrap());
 
-static JSON_LIST_NOTATION: Lazy<TreeNotation> = Lazy::new(|| {
+static JSON_ARRAY_NOTATION: Lazy<TreeNotation> = Lazy::new(|| {
     let single_seq = fold(Fold {
         first: flat(child(0)),
         join: left() + lit(", ") + flat(right()),
@@ -44,21 +44,21 @@ static JSON_LIST_NOTATION: Lazy<TreeNotation> = Lazy::new(|| {
         });
     let multi = style("open", lit("[")) + multi_seq ^ style("close", lit("]"));
 
-    let list = single | multi;
+    let array = single | multi;
 
     count(Count {
         zero: style("open", lit("[")) + style("close", lit("]")),
-        one: list.clone(),
-        many: list,
+        one: array.clone(),
+        many: array,
     })
     .validate()
     .unwrap()
 });
 
-static JSON_DICT_ENTRY_NOTATION: Lazy<TreeNotation> =
+static JSON_OBJECT_PAIR_NOTATION: Lazy<TreeNotation> =
     Lazy::new(|| (child(0) + lit(": ") + child(1)).validate().unwrap());
 
-static JSON_DICT_NOTATION: Lazy<TreeNotation> = Lazy::new(|| {
+static JSON_OBJECT_NOTATION: Lazy<TreeNotation> = Lazy::new(|| {
     let single_seq = fold(Fold {
         first: flat(child(0)),
         join: left() + lit(", ") + flat(right()),
@@ -71,37 +71,46 @@ static JSON_DICT_NOTATION: Lazy<TreeNotation> = Lazy::new(|| {
     });
     let multi = style("open", lit("{")) + (4 >> multi_seq) ^ style("close", lit("}"));
 
-    let dict = single | multi;
+    let object = single | multi;
 
     count(Count {
         zero: style("open", lit("{")) + style("close", lit("}")),
-        one: dict.clone(),
-        many: dict,
+        one: object.clone(),
+        many: object,
     })
     .validate()
     .unwrap()
 });
 
-static JSON_COMMENTED_NOTATION: Lazy<TreeNotation> =
-    Lazy::new(|| (child(0) ^ child(1)).validate().unwrap());
-
 static JSON_COMMENT_NOTATION: Lazy<TreeNotation> = Lazy::new(|| {
+    let comment_body = count(Count {
+        zero: empty(),
+        one: child(0),
+        many: fold(Fold {
+            first: child(0),
+            join: left() + (lit(" ") | nl()) + right(),
+        }),
+    });
     let notation = style(
         COMMENT_STYLE,
-        lit("// ")
-            + count(Count {
-                zero: empty(),
-                one: child(0),
-                many: fold(Fold {
-                    first: child(0),
-                    join: left() + (lit(" ") | nl() + lit("// ")) + right(),
-                }),
-            }),
+        lit("// ") + indent("// ", None, comment_body),
     );
     notation.validate().unwrap()
 });
 
 static JSON_COMMENT_WORD_NOTATION: Lazy<TreeNotation> = Lazy::new(|| text().validate().unwrap());
+
+static JSON_ROOTS_NOTATION: Lazy<TreeNotation> = Lazy::new(|| {
+    let notation = count(Count {
+        zero: empty(),
+        one: child(0),
+        many: fold(Fold {
+            first: child(0),
+            join: left() ^ right(),
+        }),
+    });
+    notation.validate().unwrap()
+});
 
 pub type Json = Tree<BasicStyle>;
 
@@ -125,29 +134,28 @@ pub fn json_number(f: f64) -> Json {
     Tree::new_text(&JSON_NUMBER_NOTATION, f.to_string())
 }
 
-pub fn json_list(elements: Vec<Json>) -> Json {
-    Tree::new_branch(&JSON_LIST_NOTATION, elements)
+pub fn json_array(elements: Vec<Json>) -> Json {
+    Tree::new_branch(&JSON_ARRAY_NOTATION, elements)
 }
 
-pub fn json_dict(entries: Vec<(&str, Json)>) -> Json {
+pub fn json_roots(values: Vec<Json>) -> Json {
+    Tree::new_branch(&JSON_ROOTS_NOTATION, values)
+}
+
+pub fn json_object_pair(key: &str, value: Json) -> Json {
+    Tree::new_branch(&JSON_OBJECT_PAIR_NOTATION, vec![json_string(key), value])
+}
+
+pub fn json_object(entries: Vec<Json>) -> Json {
+    Tree::new_branch(&JSON_OBJECT_NOTATION, entries)
+}
+
+pub fn json_comment(comment: &str) -> Json {
     Tree::new_branch(
-        &JSON_DICT_NOTATION,
-        entries
-            .into_iter()
-            .map(|(key, val)| {
-                Tree::new_branch(&JSON_DICT_ENTRY_NOTATION, vec![json_string(key), val])
-            })
-            .collect::<Vec<_>>(),
-    )
-}
-
-pub fn json_comment(comment: &str, value: Json) -> Json {
-    let comment = Tree::new_branch(
         &JSON_COMMENT_NOTATION,
         comment
             .split_whitespace()
             .map(|word| Tree::new_text(&JSON_COMMENT_WORD_NOTATION, word.to_owned()))
             .collect::<Vec<_>>(),
-    );
-    Tree::new_branch(&JSON_COMMENTED_NOTATION, vec![comment, value])
+    )
 }
