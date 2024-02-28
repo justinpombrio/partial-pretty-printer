@@ -3,7 +3,7 @@ use partial_pretty_printer::notation_constructors::{empty, flat, indent, lit, nl
 
 #[test]
 fn basics_empty() {
-    let notation = empty::<()>();
+    let notation = empty::<(), ()>();
     assert_pp(&SimpleDoc::new(notation), 80, &[""]);
 }
 

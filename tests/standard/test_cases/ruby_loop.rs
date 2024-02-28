@@ -17,8 +17,8 @@ enum RubyData {
     DoLoop(Box<[Ruby; 2]>),
 }
 
-static VAR_NOTATION: Lazy<ValidNotation<()>> = Lazy::new(|| text().validate().unwrap());
-static METHOD_CALL_NOTATION: Lazy<ValidNotation<()>> = Lazy::new(|| {
+static VAR_NOTATION: Lazy<ValidNotation<(), ()>> = Lazy::new(|| text().validate().unwrap());
+static METHOD_CALL_NOTATION: Lazy<ValidNotation<(), ()>> = Lazy::new(|| {
     let single = lit(".") + child(1) + lit(" ") + child(2);
     let two_lines = lit(".") + child(1) + lit(" ") + child(2);
     let multi = lit(".") + child(1) + (4 >> child(2));
@@ -26,7 +26,7 @@ static METHOD_CALL_NOTATION: Lazy<ValidNotation<()>> = Lazy::new(|| {
         .validate()
         .unwrap()
 });
-static DO_LOOP_NOTATION: Lazy<ValidNotation<()>> = Lazy::new(|| {
+static DO_LOOP_NOTATION: Lazy<ValidNotation<(), ()>> = Lazy::new(|| {
     let single = lit("do |") + child(0) + lit("| ") + flat(child(1)) + lit(" end");
     let multi = (lit("do |") + child(0) + lit("|") + (4 >> child(1))) ^ lit("end");
     (single | multi).validate().unwrap()
@@ -54,12 +54,13 @@ impl<'d> PrettyDoc<'d> for &'d Ruby {
     type Id = usize;
     type Style = ();
     type StyleLabel = ();
+    type Condition = ();
 
     fn id(self) -> usize {
         self.id
     }
 
-    fn notation(self) -> &'d ValidNotation<()> {
+    fn notation(self) -> &'d ValidNotation<(), ()> {
         use RubyData::*;
 
         match self.data {
@@ -67,6 +68,10 @@ impl<'d> PrettyDoc<'d> for &'d Ruby {
             MethodCall(_) => &METHOD_CALL_NOTATION,
             DoLoop(_) => &DO_LOOP_NOTATION,
         }
+    }
+
+    fn condition(self, _condition: &()) -> bool {
+        false
     }
 
     fn node_style(self) -> () {

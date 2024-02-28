@@ -4,14 +4,14 @@ use partial_pretty_printer::{
 };
 
 #[derive(Debug, Clone)]
-pub struct SimpleDoc(pub ValidNotation<()>);
+pub struct SimpleDoc(pub ValidNotation<(), ()>);
 
 impl SimpleDoc {
-    pub fn new(notation: Notation<()>) -> SimpleDoc {
+    pub fn new(notation: Notation<(), ()>) -> SimpleDoc {
         SimpleDoc(notation.validate().expect("Invalid notation"))
     }
 
-    pub fn try_new(notation: Notation<()>) -> Result<SimpleDoc, NotationError> {
+    pub fn try_new(notation: Notation<(), ()>) -> Result<SimpleDoc, NotationError> {
         Ok(SimpleDoc(notation.validate()?))
     }
 }
@@ -20,14 +20,19 @@ impl<'a> PrettyDoc<'a> for &'a SimpleDoc {
     type Id = usize;
     type Style = ();
     type StyleLabel = ();
+    type Condition = ();
 
     fn id(self) -> usize {
         // shouldn't be the default of usize
         1
     }
 
-    fn notation(self) -> &'a ValidNotation<()> {
+    fn notation(self) -> &'a ValidNotation<(), ()> {
         &self.0
+    }
+
+    fn condition(self, _condition: &()) -> bool {
+        false
     }
 
     fn node_style(self) -> () {

@@ -67,7 +67,7 @@ pub struct IndentNode<'d, D: PrettyDoc<'d>> {
 #[derive(Debug)]
 pub struct DelayedConsolidatedNotation<'d, D: PrettyDoc<'d>> {
     doc: D,
-    notation: &'d Notation<D::StyleLabel>,
+    notation: &'d Notation<D::StyleLabel, D::Condition>,
     flat: bool,
     indent: Option<Rc<IndentNode<'d, D>>>,
     join_pos: Option<JoinPos<'d, D>>,
@@ -79,8 +79,8 @@ struct JoinPos<'d, D: PrettyDoc<'d>> {
     parent: D,
     child: D,
     index: usize,
-    first: &'d Notation<D::StyleLabel>,
-    join: &'d Notation<D::StyleLabel>,
+    first: &'d Notation<D::StyleLabel, D::Condition>,
+    join: &'d Notation<D::StyleLabel, D::Condition>,
 }
 
 impl<'d, D: PrettyDoc<'d>> Clone for Textual<'d, D> {
@@ -150,8 +150,6 @@ pub enum PrintingError {
     InvalidPath(usize),
     #[error("Notation/doc mismatch: Notation was Text but doc node did not contain text.")]
     TextNotationOnTextlessDoc,
-    #[error("Notation/doc mismatch: Notation was IfEmptyText but doc node did not contain text.")]
-    IfEmptyTextNotationOnTextlessDoc,
     #[error(
         "Notation/doc mismatch: Notation was Child({index}) but doc node only had {len} children."
     )]
@@ -248,11 +246,8 @@ impl<'d, D: PrettyDoc<'d>> DelayedConsolidatedNotation<'d, D> {
                 cnote2.notation = note2;
                 Ok(ConsolidatedNotation::Choice(cnote1, cnote2))
             }
-            IfEmptyText(note1, note2) => {
-                if self.doc.num_children().is_some() {
-                    return Err(PrintingError::IfEmptyTextNotationOnTextlessDoc);
-                }
-                if self.doc.unwrap_text().is_empty() {
+            If(cond, note1, note2) => {
+                if self.doc.condition(cond) {
                     self.notation = note1;
                     self.eval()
                 } else {

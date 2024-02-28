@@ -8,9 +8,9 @@ use partial_pretty_printer::{
 struct NotationGen;
 
 impl Generator for NotationGen {
-    type Value = Notation<()>;
+    type Value = Notation<(), ()>;
 
-    fn generate<P: Picker>(&self, mut size: u32, picker: &mut P) -> Notation<()> {
+    fn generate<P: Picker>(&self, mut size: u32, picker: &mut P) -> Notation<(), ()> {
         assert_ne!(size, 0);
         if size == 1 {
             match picker.pick_int(5) {

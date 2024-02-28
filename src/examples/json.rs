@@ -1,11 +1,10 @@
 #![allow(clippy::precedence)]
 
 use super::style::BasicStyle;
-use super::tree::{StyleLabel, Tree};
+use super::tree::{Tree, TreeNotation};
 use crate::notation_constructors::{
     child, count, empty, flat, fold, left, lit, nl, right, style, text, Count, Fold,
 };
-use crate::valid_notation::ValidNotation;
 use once_cell::sync::Lazy;
 
 const CONSTANT_STYLE: &str = "green_bold";
@@ -13,25 +12,25 @@ const STRING_STYLE: &str = "magenta";
 const NUMBER_STYLE: &str = "blue";
 const COMMENT_STYLE: &str = "yellow";
 
-static JSON_NULL_NOTATION: Lazy<ValidNotation<StyleLabel>> =
+static JSON_NULL_NOTATION: Lazy<TreeNotation> =
     Lazy::new(|| style(CONSTANT_STYLE, lit("null")).validate().unwrap());
 
-static JSON_TRUE_NOTATION: Lazy<ValidNotation<StyleLabel>> =
+static JSON_TRUE_NOTATION: Lazy<TreeNotation> =
     Lazy::new(|| style(CONSTANT_STYLE, lit("true")).validate().unwrap());
 
-static JSON_FALSE_NOTATION: Lazy<ValidNotation<StyleLabel>> =
+static JSON_FALSE_NOTATION: Lazy<TreeNotation> =
     Lazy::new(|| style(CONSTANT_STYLE, lit("false")).validate().unwrap());
 
-static JSON_STRING_NOTATION: Lazy<ValidNotation<StyleLabel>> = Lazy::new(|| {
+static JSON_STRING_NOTATION: Lazy<TreeNotation> = Lazy::new(|| {
     style(STRING_STYLE, lit("\"") + text() + lit("\""))
         .validate()
         .unwrap()
 });
 
-static JSON_NUMBER_NOTATION: Lazy<ValidNotation<StyleLabel>> =
+static JSON_NUMBER_NOTATION: Lazy<TreeNotation> =
     Lazy::new(|| style(NUMBER_STYLE, text()).validate().unwrap());
 
-static JSON_LIST_NOTATION: Lazy<ValidNotation<StyleLabel>> = Lazy::new(|| {
+static JSON_LIST_NOTATION: Lazy<TreeNotation> = Lazy::new(|| {
     let single_seq = fold(Fold {
         first: flat(child(0)),
         join: left() + lit(", ") + flat(right()),
@@ -56,10 +55,10 @@ static JSON_LIST_NOTATION: Lazy<ValidNotation<StyleLabel>> = Lazy::new(|| {
     .unwrap()
 });
 
-static JSON_DICT_ENTRY_NOTATION: Lazy<ValidNotation<StyleLabel>> =
+static JSON_DICT_ENTRY_NOTATION: Lazy<TreeNotation> =
     Lazy::new(|| (child(0) + lit(": ") + child(1)).validate().unwrap());
 
-static JSON_DICT_NOTATION: Lazy<ValidNotation<StyleLabel>> = Lazy::new(|| {
+static JSON_DICT_NOTATION: Lazy<TreeNotation> = Lazy::new(|| {
     let single_seq = fold(Fold {
         first: flat(child(0)),
         join: left() + lit(", ") + flat(right()),
@@ -83,10 +82,10 @@ static JSON_DICT_NOTATION: Lazy<ValidNotation<StyleLabel>> = Lazy::new(|| {
     .unwrap()
 });
 
-static JSON_COMMENTED_NOTATION: Lazy<ValidNotation<StyleLabel>> =
+static JSON_COMMENTED_NOTATION: Lazy<TreeNotation> =
     Lazy::new(|| (child(0) ^ child(1)).validate().unwrap());
 
-static JSON_COMMENT_NOTATION: Lazy<ValidNotation<StyleLabel>> = Lazy::new(|| {
+static JSON_COMMENT_NOTATION: Lazy<TreeNotation> = Lazy::new(|| {
     let notation = style(
         COMMENT_STYLE,
         lit("// ")
@@ -102,8 +101,7 @@ static JSON_COMMENT_NOTATION: Lazy<ValidNotation<StyleLabel>> = Lazy::new(|| {
     notation.validate().unwrap()
 });
 
-static JSON_COMMENT_WORD_NOTATION: Lazy<ValidNotation<StyleLabel>> =
-    Lazy::new(|| text().validate().unwrap());
+static JSON_COMMENT_WORD_NOTATION: Lazy<TreeNotation> = Lazy::new(|| text().validate().unwrap());
 
 pub type Json = Tree<BasicStyle>;
 

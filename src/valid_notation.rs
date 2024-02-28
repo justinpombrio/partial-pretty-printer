@@ -1,9 +1,9 @@
-use crate::notation::{Notation, StyleLabel};
+use crate::notation::{Condition, Notation, StyleLabel};
 
 /// A Notation that has passed validation. Obtain one by constructing a [Notation] and then calling
 /// [`Notation::validate`].
 #[derive(Clone, Debug)]
-pub struct ValidNotation<L: StyleLabel>(pub(crate) Notation<L>);
+pub struct ValidNotation<L: StyleLabel, C: Condition>(pub(crate) Notation<L, C>);
 
 #[derive(thiserror::Error, Debug, Clone)]
 pub enum NotationError {
@@ -27,10 +27,6 @@ pub enum NotationError {
     CountZeroChild,
     #[error("Notation contains a Child with index {} inside of Count.one, but in this case there's guaranteed to be only one child.", 0)]
     CountOneChildIndex(usize),
-    #[error("Notation contains a Child inside of IfEmptyText, but a node can't have both text and children.")]
-    ChildInsideIfEmptyText,
-    #[error("Notation contains an IfEmptyText inside a Count, but a node can't have both text and children.")]
-    IfEmptyTextInsideCount,
     #[error(
         "Notation contains a Text inside a Count, but a node can't have both text and children."
     )]
@@ -40,8 +36,6 @@ pub enum NotationError {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Context {
     InNothing,
-    // in IfEmptyText
-    InIfEmptyText,
     // in Count
     InCountZero,
     InCountOne,
@@ -56,7 +50,7 @@ impl Context {
         use Context::*;
 
         match self {
-            InNothing | InIfEmptyText => false,
+            InNothing => false,
             InCountZero | InCountOne | InCountMany | InFoldFirst | InFoldJoin => true,
         }
     }
@@ -65,14 +59,14 @@ impl Context {
         use Context::*;
 
         match self {
-            InNothing | InIfEmptyText | InCountZero | InCountOne | InCountMany => false,
+            InNothing | InCountZero | InCountOne | InCountMany => false,
             InFoldFirst | InFoldJoin => true,
         }
     }
 }
 
-impl<L: StyleLabel> Notation<L> {
-    pub fn validate(mut self) -> Result<ValidNotation<L>, NotationError> {
+impl<L: StyleLabel, C: Condition> Notation<L, C> {
+    pub fn validate(mut self) -> Result<ValidNotation<L, C>, NotationError> {
         self.validate_rec(false, Context::InNothing)?;
         Ok(ValidNotation(self))
     }
@@ -87,20 +81,10 @@ impl<L: StyleLabel> Notation<L> {
             Empty | Text | Literal(_) | Newline => (),
             Flat(note) => note.validate_rec(true, ctx)?,
             Indent(_, _, note) => note.validate_rec(flat, ctx)?,
-            Concat(note1, note2) => {
+            Concat(note1, note2) | Choice(note1, note2) | If(_, note1, note2) => {
                 note1.validate_rec(flat, ctx)?;
                 note2.validate_rec(flat, ctx)?;
             }
-            Choice(note1, note2) => {
-                note1.validate_rec(flat, ctx)?;
-                note2.validate_rec(flat, ctx)?;
-            }
-            IfEmptyText(_, _) if ctx.in_count() => return Err(IfEmptyTextInsideCount),
-            IfEmptyText(note1, note2) => {
-                note1.validate_rec(flat, InIfEmptyText)?;
-                note2.validate_rec(flat, InIfEmptyText)?;
-            }
-            Child(_) if ctx == InIfEmptyText => return Err(ChildInsideIfEmptyText),
             Child(_) if ctx == InCountZero => return Err(CountZeroChild),
             Child(n) if *n > 0 && ctx == InCountOne => return Err(CountOneChildIndex(*n)),
             Child(_) => (),
