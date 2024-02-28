@@ -1,3 +1,5 @@
+// TODO: doc
+
 use crate::pretty_printing::{PrettyDoc, Style};
 use crate::valid_notation::ValidNotation;
 use std::cell::Cell;

@@ -227,6 +227,83 @@ fn json_big_object() {
     );
 }
 
+#[test]
+fn json_comment_line_breaks() {
+    let array = json_array(vec![
+        json_number(1.0),
+        json_comment("two"),
+        json_number(2.0),
+        json_number(3.0),
+    ]);
+
+    assert_pp(
+        &array,
+        80,
+        &[
+            // force rustfmt
+            "[",
+            "    1,",
+            "    // two",
+            "    2,",
+            "    3",
+            "]",
+        ],
+    );
+}
+
+#[test]
+fn json_comment_commas() {
+    let array = json_array(vec![
+        json_number(1.0),
+        json_comment("two"),
+        json_number(2.0),
+        json_comment("three?"),
+        json_comment("three."),
+        json_number(3.0),
+    ]);
+
+    assert_pp(
+        &array,
+        10,
+        &[
+            // force rustfmt
+            "[",
+            "    1,",
+            "    // two",
+            "    2,",
+            "    // three?",
+            "    // three.",
+            "    3",
+            "]",
+        ],
+    );
+
+    let array = json_array(vec![
+        json_number(1.0),
+        json_comment("two"),
+        json_number(2.0),
+        json_number(3.0),
+        json_comment("^ three?"),
+        json_comment("^ three."),
+    ]);
+
+    assert_pp(
+        &array,
+        20,
+        &[
+            // force rustfmt
+            "[",
+            "    1,",
+            "    // two",
+            "    2,",
+            "    3",
+            "    // ^ three?",
+            "    // ^ three.",
+            "]",
+        ],
+    );
+}
+
 fn make_json_tree(id: u32, size: usize) -> Json {
     let children = (0..size)
         .map(|n| make_json_tree(2u32.pow(n as u32) + id, n))

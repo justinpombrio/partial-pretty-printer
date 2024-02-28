@@ -2,7 +2,7 @@
 
 use super::pretty_doc::{PrettyDoc, Style};
 use crate::geometry::{str_width, Width};
-use crate::notation::Notation;
+use crate::notation::{CheckPos, Notation};
 use std::fmt;
 use std::rc::Rc;
 
@@ -156,6 +156,12 @@ pub enum PrintingError {
     ChildIndexOutOfBounds { index: usize, len: usize },
     #[error("Notation/doc mismatch: Notation was Child but doc node contained text instead.")]
     ChildNotationOnChildlessDoc,
+    #[error(
+        "Notation/doc mismatch: Notation contained CheckPos::Child({index}) but doc node only had {len} children."
+    )]
+    CheckPosChildIndexOutOfBounds { index: usize, len: usize },
+    #[error("Notation/doc mismatch: Notation contained CheckPos::Child(_) but doc node contained text instead.")]
+    CheckPosChildOnChildlessDoc,
     // Count used on texty node
     #[error("Notation/doc mismatch: Notation was Count but doc node contained text instead of children.")]
     CountNotationOnChildlessDoc,
@@ -246,8 +252,29 @@ impl<'d, D: PrettyDoc<'d>> DelayedConsolidatedNotation<'d, D> {
                 cnote2.notation = note2;
                 Ok(ConsolidatedNotation::Choice(cnote1, cnote2))
             }
-            If(cond, note1, note2) => {
-                if self.doc.condition(cond) {
+            Check(cond, pos, note1, note2) => {
+                let doc_to_inspect = match pos {
+                    CheckPos::Here => self.doc,
+                    CheckPos::Child(i) => match self.doc.num_children() {
+                        None => return Err(PrintingError::CheckPosChildOnChildlessDoc),
+                        Some(n) if *i >= n => {
+                            return Err(PrintingError::CheckPosChildIndexOutOfBounds {
+                                index: *i,
+                                len: n,
+                            })
+                        }
+                        Some(_) => self.doc.unwrap_child(*i),
+                    },
+                    // ValidNotation::validate() ensures these unwraps are safe
+                    CheckPos::RightChild => self.join_pos.unwrap().child,
+                    CheckPos::LeftChild => {
+                        let join_pos = self.join_pos.unwrap();
+                        join_pos
+                            .child
+                            .unwrap_prev_sibling(join_pos.parent, join_pos.index - 1)
+                    }
+                };
+                if doc_to_inspect.condition(cond) {
                     self.notation = note1;
                     self.eval()
                 } else {

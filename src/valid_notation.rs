@@ -1,4 +1,4 @@
-use crate::notation::{Condition, Notation, StyleLabel};
+use crate::notation::{CheckPos, Condition, Notation, StyleLabel};
 
 /// A Notation that has passed validation. Obtain one by constructing a [Notation] and then calling
 /// [`Notation::validate`].
@@ -19,6 +19,14 @@ pub enum NotationError {
         "Notation contains a Right outside of Fold.join, but it's only meaningful inside of that."
     )]
     RightOutsideJoin,
+    #[error(
+        "Notation contains a CheckPos::LeftChild outside of Fold.join, but it's only meaningful inside of that."
+    )]
+    CheckPosLeftOutsideJoin,
+    #[error(
+        "Notation contains a CheckPos::RightChild outside of Fold.join, but it's only meaningful inside of that."
+    )]
+    CheckPosRightOutsideJoin,
     #[error("Notation contains a Fold inside a Fold, but those aren't allowed to be nested.")]
     NestedFold,
     #[error("Notation contains a Count inside a Count, but those aren't allowed to be nested.")]
@@ -27,6 +35,10 @@ pub enum NotationError {
     CountZeroChild,
     #[error("Notation contains a Child with index {} inside of Count.one, but in this case there's guaranteed to be only one child.", 0)]
     CountOneChildIndex(usize),
+    #[error("Notation contains a CheckPos::Child inside Count.zero, but in this case there are guaranteed to be zero children.")]
+    CountZeroCheckPosChild,
+    #[error("Notation contains a CheckPos::Child with index {} inside of Count.one, but in this case there's guaranteed to be only one child.", 0)]
+    CountOneCheckPosChildIndex(usize),
     #[error(
         "Notation contains a Text inside a Count, but a node can't have both text and children."
     )]
@@ -81,7 +93,26 @@ impl<L: StyleLabel, C: Condition> Notation<L, C> {
             Empty | Text | Literal(_) | Newline => (),
             Flat(note) => note.validate_rec(true, ctx)?,
             Indent(_, _, note) => note.validate_rec(flat, ctx)?,
-            Concat(note1, note2) | Choice(note1, note2) | If(_, note1, note2) => {
+            Concat(note1, note2) | Choice(note1, note2) => {
+                note1.validate_rec(flat, ctx)?;
+                note2.validate_rec(flat, ctx)?;
+            }
+            Check(_, pos, note1, note2) => {
+                match pos {
+                    CheckPos::Here => (),
+                    CheckPos::Child(_) if ctx == InCountZero => return Err(CountZeroCheckPosChild),
+                    CheckPos::Child(n) if *n > 0 && ctx == InCountOne => {
+                        return Err(CountOneCheckPosChildIndex(*n))
+                    }
+                    CheckPos::Child(_) => (),
+                    CheckPos::LeftChild if ctx != InFoldJoin => {
+                        return Err(CheckPosLeftOutsideJoin)
+                    }
+                    CheckPos::RightChild if ctx != InFoldJoin => {
+                        return Err(CheckPosRightOutsideJoin)
+                    }
+                    CheckPos::LeftChild | CheckPos::RightChild => (),
+                }
                 note1.validate_rec(flat, ctx)?;
                 note2.validate_rec(flat, ctx)?;
             }

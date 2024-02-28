@@ -46,11 +46,12 @@ pub enum Notation<L: StyleLabel, C: Condition> {
     /// last character of the left notation. Note that the column at which the right notation
     /// starts does not affect its indentation level.
     Concat(Box<Notation<L, C>>, Box<Notation<L, C>>),
+    // TODO: doc
     /// If we're inside a `Flat`, _or_ the first line of the left notation fits within the required
     /// width, then display the left notation. Otherwise, display the right notation.
     Choice(Box<Notation<L, C>>, Box<Notation<L, C>>),
     // TODO: doc
-    If(C, Box<Notation<L, C>>, Box<Notation<L, C>>),
+    Check(C, CheckPos, Box<Notation<L, C>>, Box<Notation<L, C>>),
     /// Display the `i`th child of this node.  Can only be used on a [`PrettyDoc`] node for which
     /// `.num_children()` returns `Some(n)`, with `i < n`.
     Child(usize),
@@ -63,6 +64,7 @@ pub enum Notation<L: StyleLabel, C: Condition> {
         one: Box<Notation<L, C>>,
         many: Box<Notation<L, C>>,
     },
+    // Folds must be left-folds for flow wrap to work.
     /// Fold (a.k.a. reduce) over the node's children. This is a left-fold. May only be used in
     /// `Notation::Count.many`.
     Fold {
@@ -79,6 +81,15 @@ pub enum Notation<L: StyleLabel, C: Condition> {
     /// Used in `Fold.join` to refer to the next child.
     /// Illegal outside of `Fold`.
     Right,
+}
+
+// TODO: doc
+#[derive(Clone, Debug)]
+pub enum CheckPos {
+    Here,
+    Child(usize),
+    LeftChild,
+    RightChild,
 }
 
 /// Literal text, to be displayed as-is. Cannot contain a newline.
@@ -120,7 +131,9 @@ impl<L: StyleLabel, C: Condition> fmt::Display for Notation<L, C> {
             Indent(lit, _style_label, note) => write!(f, "'{}'⇒({})", lit.string, note),
             Concat(left, right) => write!(f, "{} + {}", left, right),
             Choice(opt1, opt2) => write!(f, "({} | {})", opt1, opt2),
-            If(cond, opt1, opt2) => write!(f, "({:?} ? {} | {})", cond, opt1, opt2),
+            Check(cond, pos, opt1, opt2) => {
+                write!(f, "({:?}@{:?} ? {} | {})", cond, pos, opt1, opt2)
+            }
             Child(i) => write!(f, "${}", i),
             Style(style_label, note) => write!(f, "Style({:?}, {})", style_label, note),
             Count { zero, one, many } => {

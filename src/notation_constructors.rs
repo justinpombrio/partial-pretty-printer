@@ -1,6 +1,6 @@
 // TODO: docs
 
-use super::notation::{Condition, Literal, Notation, StyleLabel};
+use super::notation::{CheckPos, Condition, Literal, Notation, StyleLabel};
 
 pub fn empty<L: StyleLabel, C: Condition>() -> Notation<L, C> {
     Notation::Empty
@@ -36,6 +36,20 @@ pub fn indent<L: StyleLabel, C: Condition>(
     n: Notation<L, C>,
 ) -> Notation<L, C> {
     Notation::Indent(Literal::new(s), style_label, Box::new(n))
+}
+
+pub fn check<L: StyleLabel, C: Condition>(
+    condition: C,
+    pos: CheckPos,
+    then_notation: Notation<L, C>,
+    else_notation: Notation<L, C>,
+) -> Notation<L, C> {
+    Notation::Check(
+        condition,
+        pos,
+        Box::new(then_notation),
+        Box::new(else_notation),
+    )
 }
 
 /* Count */

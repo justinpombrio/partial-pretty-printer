@@ -1,9 +1,10 @@
 #![allow(clippy::precedence)]
 
 use super::style::BasicStyle;
-use super::tree::{Tree, TreeNotation};
+use super::tree::{Tree, TreeCondition, TreeNotation};
+use crate::notation::CheckPos;
 use crate::notation_constructors::{
-    child, count, empty, flat, fold, indent, left, lit, nl, right, style, text, Count, Fold,
+    check, child, count, empty, flat, fold, indent, left, lit, nl, right, style, text, Count, Fold,
 };
 use once_cell::sync::Lazy;
 
@@ -37,10 +38,16 @@ static JSON_ARRAY_NOTATION: Lazy<TreeNotation> = Lazy::new(|| {
     });
     let single = style("open", lit("[")) + single_seq + style("close", lit("]"));
 
+    let separator = check(
+        TreeCondition::NeedsSeparator,
+        CheckPos::LeftChild,
+        lit(","),
+        empty(),
+    );
     let multi_seq = 4
         >> fold(Fold {
             first: child(0),
-            join: left() + lit(",") ^ right(),
+            join: left() + separator ^ right(),
         });
     let multi = style("open", lit("[")) + multi_seq ^ style("close", lit("]"));
 
@@ -65,9 +72,15 @@ static JSON_OBJECT_NOTATION: Lazy<TreeNotation> = Lazy::new(|| {
     });
     let single = style("open", lit("{")) + single_seq + style("close", lit("}"));
 
+    let separator = check(
+        TreeCondition::NeedsSeparator,
+        CheckPos::LeftChild,
+        lit(","),
+        empty(),
+    );
     let multi_seq = fold(Fold {
         first: child(0),
-        join: left() + lit(",") ^ right(),
+        join: left() + separator ^ right(),
     });
     let multi = style("open", lit("{")) + (4 >> multi_seq) ^ style("close", lit("}"));
 
@@ -158,4 +171,5 @@ pub fn json_comment(comment: &str) -> Json {
             .map(|word| Tree::new_text(&JSON_COMMENT_WORD_NOTATION, word.to_owned()))
             .collect::<Vec<_>>(),
     )
+    .into_comment()
 }
