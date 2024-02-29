@@ -10,6 +10,10 @@ pub fn nl<L: StyleLabel, C: Condition>() -> Notation<L, C> {
     Notation::Newline
 }
 
+pub fn eol<L: StyleLabel, C: Condition>() -> Notation<L, C> {
+    Notation::EndOfLine
+}
+
 pub fn child<L: StyleLabel, C: Condition>(i: usize) -> Notation<L, C> {
     Notation::Child(i)
 }

@@ -90,7 +90,7 @@ impl<L: StyleLabel, C: Condition> Notation<L, C> {
 
         match self {
             Text if ctx.in_count() => return Err(TextInsideCount),
-            Empty | Text | Literal(_) | Newline => (),
+            Empty | Text | Literal(_) | Newline | EndOfLine => (),
             Flat(note) => note.validate_rec(true, ctx)?,
             Indent(_, _, note) => note.validate_rec(flat, ctx)?,
             Concat(note1, note2) | Choice(note1, note2) => {

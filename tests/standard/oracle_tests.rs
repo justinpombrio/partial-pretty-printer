@@ -1,7 +1,7 @@
 use crate::standard::generative_testing::{generate_all, generate_random, Generator, Picker};
 use crate::standard::pretty_testing::{assert_pp_without_expectation, SimpleDoc};
 use partial_pretty_printer::{
-    notation_constructors::{empty, flat, lit, nl},
+    notation_constructors::{empty, eol, flat, lit, nl},
     Notation,
 };
 
@@ -13,12 +13,13 @@ impl Generator for NotationGen {
     fn generate<P: Picker>(&self, mut size: u32, picker: &mut P) -> Notation<(), ()> {
         assert_ne!(size, 0);
         if size == 1 {
-            match picker.pick_int(5) {
+            match picker.pick_int(6) {
                 0 => empty(),
                 1 => nl(),
-                2 => lit("a"),
-                3 => lit("bb"),
-                4 => lit("cccc"),
+                2 => eol(),
+                3 => lit("a"),
+                4 => lit("bb"),
+                5 => lit("cccc"),
                 _ => unreachable!(),
             }
         } else if size == 2 {

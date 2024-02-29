@@ -25,6 +25,8 @@ pub enum Notation<L: StyleLabel, C: Condition> {
     Empty,
     /// Display a newline followed by the current indentation. (See [`Notation::Indent`]).
     Newline,
+    // TODO: doc
+    EndOfLine,
     /// Display a piece of text. Can only be used on a [`PrettyDoc`] node for which
     /// `.num_children()` returns `None` (implying that it contains text).
     Text,
@@ -125,6 +127,7 @@ impl<L: StyleLabel, C: Condition> fmt::Display for Notation<L, C> {
         match self {
             Empty => write!(f, "ε"),
             Newline => write!(f, "↵"),
+            EndOfLine => write!(f, "EOL"),
             Text => write!(f, "TEXT"),
             Literal(lit) => write!(f, "'{}'", lit.string),
             Flat(note) => write!(f, "Flat({})", note),

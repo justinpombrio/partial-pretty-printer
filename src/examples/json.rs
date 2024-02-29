@@ -4,7 +4,8 @@ use super::style::BasicStyle;
 use super::tree::{Tree, TreeCondition, TreeNotation};
 use crate::notation::CheckPos;
 use crate::notation_constructors::{
-    check, child, count, empty, flat, fold, indent, left, lit, nl, right, style, text, Count, Fold,
+    check, child, count, empty, eol, flat, fold, indent, left, lit, nl, right, style, text, Count,
+    Fold,
 };
 use once_cell::sync::Lazy;
 
@@ -106,7 +107,7 @@ static JSON_COMMENT_NOTATION: Lazy<TreeNotation> = Lazy::new(|| {
     });
     let notation = style(
         COMMENT_STYLE,
-        lit("// ") + indent("// ", None, comment_body),
+        lit("// ") + indent("// ", None, comment_body) + eol(),
     );
     notation.validate().unwrap()
 });

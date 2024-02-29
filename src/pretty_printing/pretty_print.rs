@@ -188,6 +188,7 @@ impl<'d, D: PrettyDoc<'d>> ToString for FocusedLine<'d, D> {
 /// ^^^^^^^^^^^^^^
 /// prefix_len
 struct Block<'d, D: PrettyDoc<'d>> {
+    is_eol: bool,
     /// Resolved text. Last element is the rightmost text.
     segments: Vec<Segment<'d, D>>,
     prefix_len: Width,
@@ -196,7 +197,11 @@ struct Block<'d, D: PrettyDoc<'d>> {
 }
 
 impl<'d, D: PrettyDoc<'d>> Block<'d, D> {
-    fn new(indentation: Option<Rc<IndentNode<'d, D>>>, chunks: Vec<Chunk<'d, D>>) -> Block<'d, D> {
+    fn new(
+        is_eol: bool,
+        indentation: Option<Rc<IndentNode<'d, D>>>,
+        chunks: Vec<Chunk<'d, D>>,
+    ) -> Block<'d, D> {
         let mut remaining_indentation = &indentation;
         let mut indent_segments = Vec::new();
         while let Some(indent_node) = remaining_indentation {
@@ -206,6 +211,7 @@ impl<'d, D: PrettyDoc<'d>> Block<'d, D> {
         indent_segments.reverse();
 
         Block {
+            is_eol,
             prefix_len: indent_segments.iter().map(|seg| seg.width).sum(),
             segments: indent_segments,
             chunks,
@@ -219,6 +225,8 @@ impl<'d, D: PrettyDoc<'d>> Block<'d, D> {
             style: textual.style,
         });
         self.prefix_len += textual.width;
+        // Text has been appended to the EOL, so it turns into a real newline
+        self.is_eol = false;
     }
 
     fn print(self) -> Line<'d, D> {
@@ -245,13 +253,13 @@ struct Printer<'d, D: PrettyDoc<'d>> {
 
 impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
     fn new(doc: D, width: Width) -> Result<Printer<'d, D>, PrintingError> {
-        let chunk = Chunk::new(DelayedConsolidatedNotation::new(doc))?;
-        let mut block = Block::new(None, Vec::new());
         let mut printer = Printer {
             width,
             prev_blocks: Vec::new(),
             next_blocks: Vec::new(),
         };
+        let chunk = Chunk::new(DelayedConsolidatedNotation::new(doc))?;
+        let mut block = Block::new(false, None, Vec::new());
         printer.expand_focusing_first_block(&mut block, chunk)?;
         printer.next_blocks.push(block);
         Ok(printer)
@@ -261,48 +269,59 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
         use ConsolidatedNotation::*;
         span!("print_next_line");
 
-        let mut block = match self.next_blocks.pop() {
-            None => return Ok(None),
-            Some(block) => block,
-        };
-        while let Some(chunk) = block.chunks.pop() {
-            match chunk.notation {
-                Empty | Newline(_) | Concat(_, _) => panic!("bug in print_next_line"),
-                Textual(textual) => block.push_text(textual),
-                Child(_, note) => {
-                    self.expand_focusing_first_block(&mut block, Chunk::new(note)?)?
-                }
-                Choice(opt1, opt2) => {
-                    let choice = self.choose(&block, opt1, opt2)?;
-                    self.expand_focusing_first_block(&mut block, choice)?;
+        loop {
+            let mut block = match self.next_blocks.pop() {
+                None => return Ok(None),
+                Some(block) => block,
+            };
+            while let Some(chunk) = block.chunks.pop() {
+                match chunk.notation {
+                    Empty | Newline(_, _) | Concat(_, _) => panic!("bug in print_next_line"),
+                    Textual(textual) => block.push_text(textual),
+                    Child(_, note) => {
+                        self.expand_focusing_first_block(&mut block, Chunk::new(note)?)?
+                    }
+                    Choice(opt1, opt2) => {
+                        let choice = self.choose(&block, opt1, opt2)?;
+                        self.expand_focusing_first_block(&mut block, choice)?;
+                    }
                 }
             }
+            if !block.is_eol {
+                return Ok(Some(block.print()));
+            }
         }
-        Ok(Some(block.print()))
     }
 
     fn print_prev_line(&mut self) -> Result<Option<Line<'d, D>>, PrintingError> {
         use ConsolidatedNotation::*;
         span!("print_next_line");
 
-        let mut block = match self.prev_blocks.pop() {
-            None => return Ok(None),
-            Some(block) => block,
-        };
-        while let Some(chunk) = block.chunks.pop() {
-            match chunk.notation {
-                Empty | Newline(_) | Concat(_, _) => panic!("bug in print_prev_line"),
-                Textual(textual) => block.push_text(textual),
-                Child(_, note) => self.expand_focusing_last_block(&mut block, Chunk::new(note)?)?,
-                Choice(opt1, opt2) => {
-                    let choice = self.choose(&block, opt1, opt2)?;
-                    self.expand_focusing_last_block(&mut block, choice)?;
+        loop {
+            let mut block = match self.prev_blocks.pop() {
+                None => return Ok(None),
+                Some(block) => block,
+            };
+            while let Some(chunk) = block.chunks.pop() {
+                match chunk.notation {
+                    Empty | Newline(_, _) | Concat(_, _) => panic!("bug in print_prev_line"),
+                    Textual(textual) => block.push_text(textual),
+                    Child(_, note) => {
+                        self.expand_focusing_last_block(&mut block, Chunk::new(note)?)?
+                    }
+                    Choice(opt1, opt2) => {
+                        let choice = self.choose(&block, opt1, opt2)?;
+                        self.expand_focusing_last_block(&mut block, choice)?;
+                    }
                 }
             }
+            if !block.is_eol {
+                return Ok(Some(block.print()));
+            }
         }
-        Ok(Some(block.print()))
     }
 
+    // TODO: update docs
     /// Moves the focus to the left or right of the node at the given path,
     /// relative to the node to the right of the current focus.
     /// (You don't want to seek twice.)
@@ -314,6 +333,7 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
             self.seek_child(*child_index, i + 1 < path.len())?;
         }
         if seek_end && path.is_empty() {
+            // TODO: wrong
             while self.next_blocks.len() > 1 {
                 let block = self.next_blocks.pop().unwrap();
                 self.prev_blocks.push(block);
@@ -329,7 +349,7 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
             while block.chunks.len() > num_chunks_after {
                 let chunk = block.chunks.pop().unwrap();
                 match chunk.notation {
-                    Empty | Newline(_) | Concat(_, _) => panic!("bug in seek"),
+                    Empty | Newline(_, _) | Concat(_, _) => panic!("bug in seek"),
                     Textual(textual) => block.push_text(textual),
                     Child(_, note) => {
                         self.expand_focusing_last_block(&mut block, Chunk::new(note)?)?
@@ -345,8 +365,7 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
         Ok(())
     }
 
-    // 1. A B C
-
+    // TODO: update docs
     /// Moves the focus to the left of the i'th child of the chunk that is immediately to the right
     /// of the current focus.
     fn seek_child(&mut self, child_index: usize, expand_child: bool) -> Result<(), PrintingError> {
@@ -387,7 +406,7 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
             // If we hit end of doc, panic (every child must be present).
             while let Some(chunk) = block.chunks.pop() {
                 match chunk.notation {
-                    Empty | Newline(_) | Concat(_, _) => panic!("bug in seek_child"),
+                    Empty | Newline(_, _) | Concat(_, _) => panic!("bug in seek_child"),
                     Textual(textual) => block.push_text(textual),
                     Child(i, child) if chunk.id == parent_id && i == child_index => {
                         // Found!
@@ -439,9 +458,10 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
             match chunk.notation {
                 Empty => (),
                 Textual(_) | Choice(_, _) | Child(_, _) => block.chunks.push(chunk),
-                Newline(indentation) => {
+                Newline(is_eol, indentation) => {
                     let chunks = mem::take(&mut block.chunks);
-                    self.next_blocks.push(Block::new(indentation, chunks));
+                    self.next_blocks
+                        .push(Block::new(is_eol, indentation, chunks));
                 }
                 Concat(left, right) => {
                     stack.push(Chunk::new(left)?);
@@ -473,15 +493,16 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
             match chunk.notation {
                 Empty => (),
                 Textual(_) | Choice(_, _) | Child(_, _) => chunks.push(chunk),
-                Newline(indentation) => {
+                Newline(is_eol, indentation) => {
                     chunks.reverse();
                     let prev_block = Block {
+                        is_eol: block.is_eol,
                         segments: mem::take(&mut block.segments),
                         prefix_len: block.prefix_len,
                         chunks: mem::take(&mut chunks),
                     };
                     self.prev_blocks.push(prev_block);
-                    *block = Block::new(indentation, mem::take(&mut block.chunks));
+                    *block = Block::new(is_eol, indentation, mem::take(&mut block.chunks));
                 }
                 Concat(left, right) => {
                     stack.push(Chunk::new(right)?);
@@ -585,6 +606,7 @@ fn fits<'d, D: PrettyDoc<'d>>(
     let mut next_chunks = next_chunks;
     let mut remaining = width;
     let mut notations = vec![notation];
+    let mut at_eol = false;
 
     loop {
         let notation = match notations.pop() {
@@ -601,13 +623,19 @@ fn fits<'d, D: PrettyDoc<'d>>(
         match notation {
             Empty => (),
             Textual(textual) => {
-                if textual.width <= remaining {
+                if !at_eol && textual.width <= remaining {
                     remaining -= textual.width;
                 } else {
                     return Ok(false);
                 }
             }
-            Newline(_) => return Ok(true),
+            Newline(is_eol, _) => {
+                if is_eol {
+                    at_eol = true;
+                } else {
+                    return Ok(true);
+                }
+            }
             Child(_, note) => notations.push(note.eval()?),
             Concat(note1, note2) => {
                 notations.push(note2.eval()?);

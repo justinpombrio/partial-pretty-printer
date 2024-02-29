@@ -11,7 +11,10 @@ const MAX_WIDTH: Width = 10_000;
 /// A list of lines.
 ///
 /// **Invariant:** there's always at least one line.
-struct Layout(Vec<String>);
+struct Layout {
+    eol_indentation: Option<String>,
+    lines: Vec<String>,
+}
 
 /// For testing!
 ///
@@ -21,14 +24,15 @@ pub fn oracular_pretty_print<'d, D: PrettyDoc<'d>>(doc: D, width: Width) -> Stri
     let note = DelayedConsolidatedNotation::new(doc)
         .eval()
         .expect("Notation mismatch in oracle test (root)");
-    let layout = pp(Layout::empty(), note, 0, width).expect("Notation mismatch in oracle test");
+    let layout =
+        pp(Layout::empty(), note, Some(0), width).expect("Notation mismatch in oracle test");
     format!("{}", layout)
 }
 
 fn pp<'d, D: PrettyDoc<'d>>(
     prefix: Layout,
     note: ConsolidatedNotation<'d, D>,
-    suffix_len: Width,
+    suffix_len: Option<Width>,
     width: Width,
 ) -> Result<Layout, PrintingError> {
     use ConsolidatedNotation::*;
@@ -45,7 +49,7 @@ fn pp<'d, D: PrettyDoc<'d>>(
     match note {
         Empty => Ok(prefix),
         Textual(textual) => Ok(prefix.append_text(textual.str)),
-        Newline(indentation) => {
+        Newline(is_eol, indentation) => {
             let mut remaining_indentation = &indentation;
             let mut indent_strings = Vec::new();
             while let Some(indent_node) = remaining_indentation {
@@ -53,26 +57,25 @@ fn pp<'d, D: PrettyDoc<'d>>(
                 remaining_indentation = &indent_node.parent;
             }
             indent_strings.reverse();
-            Ok(prefix.append_newline(indent_strings.join("")))
+            Ok(prefix.append_newline(is_eol, indent_strings.join("")))
         }
         Child(_, x) => pp(prefix, x.eval()?, suffix_len, width),
         Concat(x, y) => {
             let x = x.eval()?;
             let y = y.eval()?;
-            let x_suffix_len = first_line_len(y.clone(), suffix_len)?.min(MAX_WIDTH);
+            let x_suffix_len = first_line_len(y.clone(), suffix_len)?.map(|w| w.min(MAX_WIDTH));
             let y_prefix = pp(prefix, x, x_suffix_len, width)?;
             pp(y_prefix, y, suffix_len, width)
         }
         Choice(x, y) => {
             let x = x.eval()?;
             let last_len = prefix.last_line_len();
-            let first_len = first_line_len(x.clone(), suffix_len)?;
-            let fits = last_len + first_len <= width;
+            let fits = match first_line_len(x.clone(), suffix_len)? {
+                None => false,
+                Some(first_len) => last_len + first_len <= width,
+            };
             if DEBUG_PRINT {
-                println!(
-                    "fits: {} + {:?} <= {} ? {}",
-                    last_len, first_len, width, fits
-                );
+                println!("fits: {:?} + ? <= {} ? {}", last_len, width, fits);
             }
             let z = if fits { x } else { y.eval()? };
             pp(prefix, z, suffix_len, width)
@@ -85,17 +88,27 @@ fn pp<'d, D: PrettyDoc<'d>>(
 /// than x's.
 fn first_line_len<'d, D: PrettyDoc<'d>>(
     note: ConsolidatedNotation<'d, D>,
-    suffix_len: Width,
-) -> Result<Width, PrintingError> {
+    suffix_len: Option<Width>,
+) -> Result<Option<Width>, PrintingError> {
     use ConsolidatedNotation::*;
 
     match note {
         Empty => Ok(suffix_len),
-        Textual(textual) => Ok(textual.width + suffix_len),
-        Newline(_) => Ok(0),
+        Textual(textual) => Ok(suffix_len.map(|w| textual.width + w)),
+        Newline(is_eol, _) => {
+            if is_eol {
+                match suffix_len {
+                    None => Ok(None),
+                    Some(0) => Ok(Some(0)),
+                    Some(_) => Ok(None),
+                }
+            } else {
+                Ok(Some(0))
+            }
+        }
         Child(_, x) => first_line_len(x.eval()?, suffix_len),
         Concat(x, y) => {
-            let suffix_len = first_line_len(y.eval()?, suffix_len)?.min(MAX_WIDTH);
+            let suffix_len = first_line_len(y.eval()?, suffix_len)?.map(|w| w.min(MAX_WIDTH));
             first_line_len(x.eval()?, suffix_len)
         }
         Choice(_, y) => {
@@ -108,28 +121,39 @@ fn first_line_len<'d, D: PrettyDoc<'d>>(
 
 impl Layout {
     fn empty() -> Layout {
-        Layout(vec![String::new()])
+        Layout {
+            eol_indentation: None,
+            lines: vec![String::new()],
+        }
     }
 
-    fn append_newline(mut self, indentation: String) -> Layout {
-        self.0.push(indentation);
+    fn append_newline(mut self, is_eol: bool, indentation: String) -> Layout {
+        if is_eol {
+            self.eol_indentation = Some(indentation);
+        } else {
+            self.lines.push(indentation);
+            self.eol_indentation = None;
+        }
         self
     }
 
     fn append_text(mut self, text: &str) -> Layout {
-        self.0.last_mut().unwrap().push_str(text); // relies on invariant
+        if let Some(indentation) = self.eol_indentation.take() {
+            self.lines.push(indentation);
+        }
+        self.lines.last_mut().unwrap().push_str(text); // relies on invariant
         self
     }
 
     fn last_line_len(&self) -> Width {
-        let last_line = self.0.last().unwrap(); // relies on invariant
+        let last_line = self.lines.last().unwrap(); // relies on invariant
         str_width(&last_line)
     }
 }
 
 impl fmt::Display for Layout {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        for (i, line) in self.0.iter().enumerate() {
+        for (i, line) in self.lines.iter().enumerate() {
             if i > 0 {
                 writeln!(f)?;
             }
