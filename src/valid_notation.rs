@@ -1,4 +1,5 @@
 use crate::notation::{CheckPos, Condition, Notation, StyleLabel};
+use std::fmt;
 
 /// A Notation that has passed validation. Obtain one by constructing a [Notation] and then calling
 /// [`Notation::validate`].
@@ -43,6 +44,8 @@ pub enum NotationError {
         "Notation contains a Text inside a Count, but a node can't have both text and children."
     )]
     TextInsideCount,
+    #[error("Notation contains Text or Literal after an EndOfLine, which is a printing error.")]
+    TextAfterEol,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -79,23 +82,44 @@ impl Context {
 
 impl<L: StyleLabel, C: Condition> Notation<L, C> {
     pub fn validate(mut self) -> Result<ValidNotation<L, C>, NotationError> {
-        self.validate_rec(false, Context::InNothing)?;
+        self.validate_rec(false, false, Context::InNothing)?;
         Ok(ValidNotation(self))
     }
 
-    fn validate_rec(&mut self, flat: bool, ctx: Context) -> Result<(), NotationError> {
+    #[doc(hidden)]
+    pub fn cheat_validation_for_testing_only(self) -> ValidNotation<L, C> {
+        ValidNotation(self)
+    }
+
+    // Returns whether any way of making Choices and Checks will end with an EOL
+    fn validate_rec(
+        &mut self,
+        flat: bool,
+        // whether this notation may have been preceded by an EOL
+        eol: bool,
+        ctx: Context,
+    ) -> Result<bool, NotationError> {
         use Context::*;
         use Notation::*;
         use NotationError::*;
 
         match self {
-            Text if ctx.in_count() => return Err(TextInsideCount),
-            Empty | Text | Literal(_) | Newline | EndOfLine => (),
-            Flat(note) => note.validate_rec(true, ctx)?,
-            Indent(_, _, note) => note.validate_rec(flat, ctx)?,
-            Concat(note1, note2) | Choice(note1, note2) => {
-                note1.validate_rec(flat, ctx)?;
-                note2.validate_rec(flat, ctx)?;
+            Text if ctx.in_count() => Err(TextInsideCount),
+            Empty => Ok(eol),
+            Text | Literal(_) if eol => Err(TextAfterEol),
+            Text | Literal(_) => Ok(false),
+            Newline => Ok(false),
+            EndOfLine => Ok(true),
+            Flat(note) => note.validate_rec(true, eol, ctx),
+            Indent(_, _, note) => note.validate_rec(flat, eol, ctx),
+            Concat(note1, note2) => {
+                let eol = note1.validate_rec(flat, eol, ctx)?;
+                note2.validate_rec(flat, eol, ctx)
+            }
+            Choice(note1, note2) => {
+                let eol_1 = note1.validate_rec(flat, eol, ctx)?;
+                let eol_2 = note2.validate_rec(flat, eol, ctx)?;
+                Ok(eol_1 || eol_2)
             }
             Check(_, pos, note1, note2) => {
                 match pos {
@@ -113,32 +137,38 @@ impl<L: StyleLabel, C: Condition> Notation<L, C> {
                     }
                     CheckPos::LeftChild | CheckPos::RightChild => (),
                 }
-                note1.validate_rec(flat, ctx)?;
-                note2.validate_rec(flat, ctx)?;
+                let eol_1 = note1.validate_rec(flat, eol, ctx)?;
+                let eol_2 = note2.validate_rec(flat, eol, ctx)?;
+                Ok(eol_1 || eol_2)
             }
-            Child(_) if ctx == InCountZero => return Err(CountZeroChild),
-            Child(n) if *n > 0 && ctx == InCountOne => return Err(CountOneChildIndex(*n)),
-            Child(_) => (),
-            Style(_, note) => note.validate_rec(flat, ctx)?,
-            Count { .. } if ctx.in_count() => return Err(NestedCount),
+            Child(_) if ctx == InCountZero => Err(CountZeroChild),
+            Child(n) if *n > 0 && ctx == InCountOne => Err(CountOneChildIndex(*n)),
+            Child(_) => Ok(false),
+            Style(_, note) => note.validate_rec(flat, eol, ctx),
+            Count { .. } if ctx.in_count() => Err(NestedCount),
             Count { zero, one, many } => {
-                zero.validate_rec(flat, InCountZero)?;
-                one.validate_rec(flat, InCountOne)?;
-                many.validate_rec(flat, InCountMany)?;
+                let eol_1 = zero.validate_rec(flat, eol, InCountZero)?;
+                let eol_2 = one.validate_rec(flat, eol, InCountOne)?;
+                let eol_3 = many.validate_rec(flat, eol, InCountMany)?;
+                Ok(eol_1 || eol_2 || eol_3)
             }
-            Fold { .. } if ctx.in_fold() => return Err(NestedFold),
-            Fold { .. } if !matches!(ctx, InCountMany | InCountOne) => {
-                return Err(FoldOutsideCount)
-            }
+            Fold { .. } if ctx.in_fold() => Err(NestedFold),
+            Fold { .. } if !matches!(ctx, InCountMany | InCountOne) => Err(FoldOutsideCount),
             Fold { first, join } => {
-                first.validate_rec(flat, InFoldFirst)?;
-                join.validate_rec(flat, InFoldJoin)?;
+                // Can't easily check for EOL here
+                first.validate_rec(flat, false, InFoldFirst)?;
+                join.validate_rec(flat, false, InFoldJoin)?;
+                Ok(false)
             }
-            Left if ctx != InFoldJoin => return Err(LeftOutsideJoin),
-            Right if ctx != InFoldJoin => return Err(RightOutsideJoin),
-            Left | Right => (),
+            Left if ctx != InFoldJoin => Err(LeftOutsideJoin),
+            Right if ctx != InFoldJoin => Err(RightOutsideJoin),
+            Left | Right => Ok(false),
         }
+    }
+}
 
-        Ok(())
+impl<L: StyleLabel, C: Condition> fmt::Display for ValidNotation<L, C> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.0)
     }
 }

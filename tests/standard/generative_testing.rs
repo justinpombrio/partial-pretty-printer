@@ -6,7 +6,7 @@ use rand::{rngs::StdRng, Rng, SeedableRng};
 /// - `generate` must be a pure function. That is, it must behave deterministically (given the
 ///   output of `gen`), and it cannot have side effects.
 /// - For any given `size`, `generate` must produce only finitely many possible values.
-pub trait Generator {
+pub trait Generator: Copy {
     type Value;
 
     fn generate<P: Picker>(&self, size: u32, picker: &mut P) -> Self::Value;
@@ -67,8 +67,19 @@ impl<G: Generator> Iterator for GenRandom<G> {
  * Deterministic Generation *
  ****************************/
 
+/// Construct a finite stream of all values of type `G::Value` of up to the given size.
+pub fn generate_all_up_to_size<G: Generator>(
+    generator: G,
+    max_size: u32,
+) -> impl Iterator<Item = G::Value> {
+    (1..max_size).flat_map(move |size| generate_all_of_size(generator, size))
+}
+
 /// Construct a finite stream of all values of type `G::Value` of the given size.
-pub fn generate_all<G: Generator>(generator: G, size: u32) -> impl Iterator<Item = G::Value> {
+pub fn generate_all_of_size<G: Generator>(
+    generator: G,
+    size: u32,
+) -> impl Iterator<Item = G::Value> {
     GenAll::new(generator, size)
 }
 
@@ -163,6 +174,7 @@ fn test_generative_testing() {
         }
     }
 
+    #[derive(Clone, Copy)]
     struct TreeGenerator;
 
     impl Generator for TreeGenerator {
@@ -184,7 +196,7 @@ fn test_generative_testing() {
         }
     }
 
-    let trees = generate_all(TreeGenerator, 5).collect::<Vec<_>>();
+    let trees = generate_all_of_size(TreeGenerator, 5).collect::<Vec<_>>();
     // for tree in &trees {
     // println!("{}", tree);
     // }

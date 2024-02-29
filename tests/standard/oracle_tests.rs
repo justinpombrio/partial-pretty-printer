@@ -1,10 +1,13 @@
-use crate::standard::generative_testing::{generate_all, generate_random, Generator, Picker};
+use crate::standard::generative_testing::{
+    generate_all_up_to_size, generate_random, Generator, Picker,
+};
 use crate::standard::pretty_testing::{assert_pp_without_expectation, SimpleDoc};
 use partial_pretty_printer::{
     notation_constructors::{empty, eol, flat, lit, nl},
     Notation,
 };
 
+#[derive(Clone, Copy)]
 struct NotationGen;
 
 impl Generator for NotationGen {
@@ -55,7 +58,7 @@ impl Generator for NotationGen {
 
 #[test]
 fn oracle_tests() {
-    let notations = generate_all(NotationGen, 6)
+    let notations = generate_all_up_to_size(NotationGen, 6)
         .chain(generate_random(NotationGen, 10, [0; 32]).take(1000))
         .chain(generate_random(NotationGen, 20, [0; 32]).take(1000))
         .chain(generate_random(NotationGen, 30, [0; 32]).take(1000))

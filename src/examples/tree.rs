@@ -1,4 +1,4 @@
-// TODO: doc
+//! A sample implementation of `PrettyDoc`.
 
 use crate::pretty_printing::{PrettyDoc, Style};
 use crate::valid_notation::ValidNotation;

@@ -7,8 +7,13 @@ use partial_pretty_printer::{
 pub struct SimpleDoc(pub ValidNotation<(), ()>);
 
 impl SimpleDoc {
+    #[track_caller]
     pub fn new(notation: Notation<(), ()>) -> SimpleDoc {
         SimpleDoc(notation.validate().expect("Invalid notation"))
+    }
+
+    pub fn cheat_validation(notation: Notation<(), ()>) -> SimpleDoc {
+        SimpleDoc(notation.cheat_validation_for_testing_only())
     }
 
     pub fn try_new(notation: Notation<(), ()>) -> Result<SimpleDoc, NotationError> {
@@ -149,11 +154,23 @@ fn assert_pp_impl<'d, D: PrettyDoc<'d>>(doc: D, width: Width, expected_lines: Op
         .split('\n')
         .map(|s| s.to_owned())
         .collect::<Vec<_>>();
-    compare_lines(
-        &format!("IN PRETTY PRINTING WITH WIDTH {}", width),
-        ("EXPECTED", oracle_result.clone()),
-        ("ACTUAL", lines.join("\n")),
-    );
+    if expected_lines.is_none() {
+        compare_lines(
+            &format!(
+                "IN PRETTY PRINTING WITH WIDTH {}\nNOTATION\n{}",
+                width,
+                doc.notation()
+            ),
+            ("ORACLE", oracle_result.clone()),
+            ("ACTUAL", lines.join("\n")),
+        );
+    } else {
+        compare_lines(
+            &format!("IN PRETTY PRINTING WITH WIDTH {}", width),
+            ("EXPECTED", oracle_result.clone()),
+            ("ACTUAL", lines.join("\n")),
+        );
+    }
     for path in all_paths(doc) {
         for seek_end in [false, true] {
             let (lines_above, left_string, right_string, lines_below) =

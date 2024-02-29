@@ -17,8 +17,8 @@ use std::rc::Rc;
 #[derive(Debug)]
 pub enum ConsolidatedNotation<'d, D: PrettyDoc<'d>> {
     Empty,
-    // (is_end_of_line, indentation)
-    Newline(bool, Option<Rc<IndentNode<'d, D>>>),
+    EndOfLine,
+    Newline(Option<Rc<IndentNode<'d, D>>>),
     Textual(Textual<'d, D>),
     Concat(
         DelayedConsolidatedNotation<'d, D>,
@@ -110,7 +110,8 @@ impl<'d, D: PrettyDoc<'d>> Clone for ConsolidatedNotation<'d, D> {
 
         match self {
             Empty => Empty,
-            Newline(is_eol, ind) => Newline(*is_eol, ind.clone()),
+            EndOfLine => EndOfLine,
+            Newline(ind) => Newline(ind.clone()),
             Textual(textual) => Textual(textual.clone()),
             Concat(note1, note2) => Concat(note1.clone(), note2.clone()),
             Choice(note1, note2) => Choice(note1.clone(), note2.clone()),
@@ -170,6 +171,8 @@ pub enum PrintingError {
     NumChildrenChanged,
     #[error("Notation/doc mismatch: Notation was Fold but doc node was childless.")]
     FoldNotationOnChildlessDoc,
+    #[error("Pretty printing encountered a Text or Literal after an EndOfLine.")]
+    TextAfterEndOfLine,
 }
 
 impl<'d, D: PrettyDoc<'d>> DelayedConsolidatedNotation<'d, D> {
@@ -194,8 +197,8 @@ impl<'d, D: PrettyDoc<'d>> DelayedConsolidatedNotation<'d, D> {
 
         match self.notation {
             Empty => Ok(ConsolidatedNotation::Empty),
-            EndOfLine => Ok(ConsolidatedNotation::Newline(true, self.indent)),
-            Newline => Ok(ConsolidatedNotation::Newline(false, self.indent)),
+            EndOfLine => Ok(ConsolidatedNotation::EndOfLine),
+            Newline => Ok(ConsolidatedNotation::Newline(self.indent)),
             Literal(lit) => Ok(ConsolidatedNotation::Textual(Textual {
                 str: lit.str(),
                 width: lit.width(),
@@ -383,7 +386,8 @@ impl<'d, D: PrettyDoc<'d>> fmt::Display for ConsolidatedNotation<'d, D> {
 
         match self {
             Empty => write!(f, "ε"),
-            Newline(_, _) => write!(f, "↵"),
+            EndOfLine => write!(f, "EOL"),
+            Newline(_) => write!(f, "↵"),
             Textual(textual) => write!(f, "'{}'", textual.str),
             Concat(left, right) => write!(f, "{} + {}", left, right),
             Choice(opt1, opt2) => write!(f, "({} | {})", opt1, opt2),

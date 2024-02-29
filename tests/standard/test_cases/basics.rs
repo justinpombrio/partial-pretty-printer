@@ -1,5 +1,5 @@
 use crate::standard::pretty_testing::{all_paths, assert_pp, SimpleDoc};
-use partial_pretty_printer::notation_constructors::{empty, flat, indent, lit, nl};
+use partial_pretty_printer::notation_constructors::{empty, eol, flat, indent, lit, nl};
 
 #[test]
 fn basics_empty() {
@@ -48,6 +48,21 @@ fn basics_choice() {
     let notation = lit("Hello world!") | lit("Hello") ^ lit("world!");
     assert_pp(&SimpleDoc::new(notation.clone()), 12, &["Hello world!"]);
     assert_pp(&SimpleDoc::new(notation), 11, &["Hello", "world!"]);
+}
+
+#[test]
+fn basics_eol() {
+    let notation = eol() + (lit("a") | nl());
+    assert_pp(&SimpleDoc::cheat_validation(notation), 80, &["", ""]);
+
+    let notation = (eol() + lit("a")) | lit("b");
+    assert_pp(&SimpleDoc::cheat_validation(notation), 80, &["b"]);
+
+    let notation = eol() + nl() + (lit("a") | nl());
+    assert_pp(&SimpleDoc::new(notation), 80, &["", "a"]);
+
+    let notation = (eol() | lit("a")) + lit("b");
+    assert_pp(&SimpleDoc::cheat_validation(notation), 80, &["ab"]);
 }
 
 #[test]

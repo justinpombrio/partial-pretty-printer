@@ -2,30 +2,44 @@ use crate::geometry::{str_width, Width};
 use std::fmt;
 use std::ops::{Add, BitOr, BitXor, Shr};
 
+/// A label used to look up a style in the document.
+/// It corresponds to the `PrettyDoc::StyleLabel` associated type.
 pub trait StyleLabel: fmt::Debug + Clone {}
 impl<T: fmt::Debug + Clone> StyleLabel for T {}
 
+/// Arbitrary property of a document node that can be checked with `Notation::Check`.
+/// It corresponds to the `PrettyDoc::Condition` associated type.
 pub trait Condition: fmt::Debug + Clone {}
 impl<T: fmt::Debug + Clone> Condition for T {}
 
-/// Describes how to display a syntactic construct. When constructing a Notation, you must obey one
-/// requirement. If you do not, the pretty printer may choose poor layouts.
+/// Describes how to display a syntactic construct. When constructing `Notation::Choice`s,
+/// you must obey an important requirement. If you do not, the pretty printer may choose
+/// poor layouts or throw a "spurious" `PrintingError::TextAfterEndOfLine`.
 ///
-/// > For every choice `(x | y)`, the first line of `x` is shorter than (or equal to) the first
-///   line of `y`.
+/// > For every choice `(x | y)`, if `x` "fits on the current line" then `y` does too.
+/// > A notation "fits on the current line" if both of the following are true:
+/// >
+/// > - The first line of the notation does not cause the current line to
+/// >   exceed the width limit
+/// > - The first line of the notation does not cause the current line to
+/// >   contain an EndOfLine followed by a Text or Literal
 ///
-/// Additionally, whenever possible, `x` should be flat (contain no newlines). This allows
+/// Additionally, whenever possible, `x` should not contain newlines. This allows
 /// notations to use the `Flat` variant to attempt to fit `(x | y)` all on one line.
 ///
 /// Type parameter `L` is a label used to look up a style in the document. It
 /// corresponds to the `PrettyDoc::StyleLabel` associated type.
+///
+/// Type parameter `C`
 #[derive(Clone, Debug)]
 pub enum Notation<L: StyleLabel, C: Condition> {
     /// Display nothing.
     Empty,
     /// Display a newline followed by the current indentation. (See [`Notation::Indent`]).
     Newline,
-    // TODO: doc
+    /// The printer will resolve choices such that this EndOfLine is followed by
+    /// a Newline (or end of the document), and not by a Text or Literal. If that's
+    /// not possible, it will produce a `PrintingError::TextAfterEndOfLine`.
     EndOfLine,
     /// Display a piece of text. Can only be used on a [`PrettyDoc`] node for which
     /// `.num_children()` returns `None` (implying that it contains text).
@@ -48,11 +62,18 @@ pub enum Notation<L: StyleLabel, C: Condition> {
     /// last character of the left notation. Note that the column at which the right notation
     /// starts does not affect its indentation level.
     Concat(Box<Notation<L, C>>, Box<Notation<L, C>>),
-    // TODO: doc
-    /// If we're inside a `Flat`, _or_ the first line of the left notation fits within the required
-    /// width, then display the left notation. Otherwise, display the right notation.
+    /// Pick the left notation if we're inside a `Flat`, or it "fits on the current line".
+    /// Otherwise, pick the right.
+    ///
+    /// A notation "fits on the current line" if both of the following are true:
+    ///
+    /// - The first line of the notation does not cause the current line to
+    ///   exceed the width limit
+    /// - The first line of the notation does not cause the current line to
+    ///   contain an EndOfLine followed by a Text or Literal
     Choice(Box<Notation<L, C>>, Box<Notation<L, C>>),
-    // TODO: doc
+    /// Check whether the condition `C` is true for the document node located at `CheckPos`.
+    /// If so, display the first notation, otherwise display the second.
     Check(C, CheckPos, Box<Notation<L, C>>, Box<Notation<L, C>>),
     /// Display the `i`th child of this node.  Can only be used on a [`PrettyDoc`] node for which
     /// `.num_children()` returns `Some(n)`, with `i < n`.
@@ -85,12 +106,18 @@ pub enum Notation<L: StyleLabel, C: Condition> {
     Right,
 }
 
-// TODO: doc
+/// Which document node to check a Condition on.
 #[derive(Clone, Debug)]
 pub enum CheckPos {
+    /// The current document node.
     Here,
+    /// The i'th child of the current document node.
     Child(usize),
+    /// The previous child.
+    /// May only be used inside of Fold.join.
     LeftChild,
+    /// The next child.
+    /// May only be used inside of Fold.join.
     RightChild,
 }
 

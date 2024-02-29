@@ -14,7 +14,7 @@ pub trait PrettyDoc<'d>: Copy {
     type Style: Style + 'd;
     /// Used to look up a style. It should be small and cheap to clone.
     type StyleLabel: StyleLabel + 'd;
-    // TODO: doc
+    /// Arbitrary property of the node that can be checked with `Self.condition()`.
     type Condition: Condition + 'd;
 
     /// An id that uniquely identifies this node. It should not be `Id::default()`.
