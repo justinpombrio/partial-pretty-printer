@@ -16,17 +16,19 @@ fn next_id() -> u32 {
     id
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum TreeCondition {
     /// Whether this node should be followed by a separator.
     NeedsSeparator,
     /// Whether this node is a text node containing the empty string.
     IsEmptyText,
+    /// Whether this node is marked as a comment (by `.into_comment()`)
+    IsComment,
 }
 pub type TreeStyleLabel = &'static str;
 pub type TreeNotation = ValidNotation<TreeStyleLabel, TreeCondition>;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Tree<S>
 where
     S: Style + From<TreeStyleLabel> + Default + 'static,
@@ -40,7 +42,7 @@ where
     pub needs_separator: bool,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Contents<S>
 where
     S: Style + From<TreeStyleLabel> + Default + 'static,
@@ -166,6 +168,7 @@ where
                 _ => false,
             },
             TreeCondition::NeedsSeparator => self.needs_separator,
+            TreeCondition::IsComment => self.is_comment,
         }
     }
 }

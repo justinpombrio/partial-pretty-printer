@@ -161,7 +161,7 @@ pub enum PrintingError {
     #[error(
         "Notation/doc mismatch: Notation contained CheckPos::Child({index}) but doc node only had {len} children."
     )]
-    CheckPosChildIndexOutOfBounds { index: usize, len: usize },
+    CheckPosChildIndexOutOfBounds { index: isize, len: usize },
     #[error("Notation/doc mismatch: Notation contained CheckPos::Child(_) but doc node contained text instead.")]
     CheckPosChildOnChildlessDoc,
     // Count used on texty node
@@ -169,8 +169,6 @@ pub enum PrintingError {
     CountNotationOnChildlessDoc,
     #[error("Doc node's num_children() changed between invocations!")]
     NumChildrenChanged,
-    #[error("Notation/doc mismatch: Notation was Fold but doc node was childless.")]
-    FoldNotationOnChildlessDoc,
     #[error("Pretty printing encountered a Text or Literal after an EndOfLine.")]
     TextAfterEndOfLine,
 }
@@ -262,13 +260,15 @@ impl<'d, D: PrettyDoc<'d>> DelayedConsolidatedNotation<'d, D> {
                     CheckPos::Here => self.doc,
                     CheckPos::Child(i) => match self.doc.num_children() {
                         None => return Err(PrintingError::CheckPosChildOnChildlessDoc),
-                        Some(n) if *i >= n => {
-                            return Err(PrintingError::CheckPosChildIndexOutOfBounds {
-                                index: *i,
-                                len: n,
-                            })
-                        }
-                        Some(_) => self.doc.unwrap_child(*i),
+                        Some(n) => match pos.child_index(n) {
+                            None => {
+                                return Err(PrintingError::CheckPosChildIndexOutOfBounds {
+                                    index: *i,
+                                    len: n,
+                                })
+                            }
+                            Some(index) => self.doc.unwrap_child(index),
+                        },
                     },
                     // ValidNotation::validate() ensures these unwraps are safe
                     CheckPos::RightChild => self.join_pos.unwrap().child,
@@ -322,7 +322,7 @@ impl<'d, D: PrettyDoc<'d>> DelayedConsolidatedNotation<'d, D> {
             },
             Fold { first, join } => match self.doc.num_children() {
                 None => Err(PrintingError::NumChildrenChanged),
-                Some(0) => Err(PrintingError::FoldNotationOnChildlessDoc),
+                Some(0) => Ok(ConsolidatedNotation::Empty),
                 Some(1) => {
                     self.notation = first;
                     self.eval()

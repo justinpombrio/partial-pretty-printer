@@ -88,8 +88,9 @@ pub enum Notation<L: StyleLabel, C: Condition> {
         many: Box<Notation<L, C>>,
     },
     // Folds must be left-folds for flow wrap to work.
-    /// Fold (a.k.a. reduce) over the node's children. This is a left-fold. May only be used in
-    /// `Notation::Count.many`.
+    /// Fold (a.k.a. reduce) over the node's children. This is a left-fold.
+    /// Should typically be used in `Notation::Count.many`. If there are zero
+    /// children, display nothing.
     Fold {
         /// How to display the first child on its own.
         first: Box<Notation<L, C>>,
@@ -111,8 +112,9 @@ pub enum Notation<L: StyleLabel, C: Condition> {
 pub enum CheckPos {
     /// The current document node.
     Here,
-    /// The i'th child of the current document node.
-    Child(usize),
+    /// The i'th child of the current document node. If the index is negative,
+    /// the length of the list is added to it.
+    Child(isize),
     /// The previous child.
     /// May only be used inside of Fold.join.
     LeftChild,
@@ -127,6 +129,22 @@ pub struct Literal {
     string: String,
     /// Width of the string in [`Col`]s. See [`Width`].
     width: Width,
+}
+
+impl CheckPos {
+    pub fn child_index(&self, len: usize) -> Option<usize> {
+        let len = len as isize;
+        if let CheckPos::Child(i) = self {
+            let index: isize = if *i < 0 { *i + len } else { *i };
+            if index < 0 || index >= len {
+                None
+            } else {
+                Some(index as usize)
+            }
+        } else {
+            None
+        }
+    }
 }
 
 impl Literal {

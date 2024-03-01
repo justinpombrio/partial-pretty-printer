@@ -9,10 +9,6 @@ pub struct ValidNotation<L: StyleLabel, C: Condition>(pub(crate) Notation<L, C>)
 #[derive(thiserror::Error, Debug, Clone)]
 pub enum NotationError {
     #[error(
-        "Notation contains a Fold outside of Count.many or Count.one, but it's only meaningful inside of those."
-    )]
-    FoldOutsideCount,
-    #[error(
         "Notation contains a Left outside of Fold.join, but it's only meaningful inside of that."
     )]
     LeftOutsideJoin,
@@ -39,50 +35,85 @@ pub enum NotationError {
     #[error("Notation contains a CheckPos::Child inside Count.zero, but in this case there are guaranteed to be zero children.")]
     CountZeroCheckPosChild,
     #[error("Notation contains a CheckPos::Child with index {} inside of Count.one, but in this case there's guaranteed to be only one child.", 0)]
-    CountOneCheckPosChildIndex(usize),
+    CountOneCheckPosChildIndex(isize),
     #[error(
         "Notation contains a Text inside a Count, but a node can't have both text and children."
     )]
     TextInsideCount,
+    #[error(
+        "Notation contains a Text inside a Fold, but a node can't have both text and children."
+    )]
+    TextInsideFold,
     #[error("Notation contains Text or Literal after an EndOfLine, which is a printing error.")]
     TextAfterEol,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Context {
-    InNothing,
-    // in Count
+enum CountContext {
     InCountZero,
     InCountOne,
     InCountMany,
-    // in Count _and_ Fold
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FoldContext {
     InFoldFirst,
     InFoldJoin,
 }
 
-impl Context {
-    fn in_count(&self) -> bool {
-        use Context::*;
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Context {
+    count: Option<CountContext>,
+    fold: Option<FoldContext>,
+}
 
-        match self {
-            InNothing => false,
-            InCountZero | InCountOne | InCountMany | InFoldFirst | InFoldJoin => true,
+impl Context {
+    fn new() -> Self {
+        Context {
+            count: None,
+            fold: None,
         }
     }
 
-    fn in_fold(&self) -> bool {
-        use Context::*;
+    fn count_zero(self) -> Self {
+        Context {
+            count: Some(CountContext::InCountZero),
+            fold: self.fold,
+        }
+    }
 
-        match self {
-            InNothing | InCountZero | InCountOne | InCountMany => false,
-            InFoldFirst | InFoldJoin => true,
+    fn count_one(self) -> Self {
+        Context {
+            count: Some(CountContext::InCountOne),
+            fold: self.fold,
+        }
+    }
+
+    fn count_many(self) -> Self {
+        Context {
+            count: Some(CountContext::InCountMany),
+            fold: self.fold,
+        }
+    }
+
+    fn fold_first(self) -> Self {
+        Context {
+            count: self.count,
+            fold: Some(FoldContext::InFoldFirst),
+        }
+    }
+
+    fn fold_join(self) -> Self {
+        Context {
+            count: self.count,
+            fold: Some(FoldContext::InFoldJoin),
         }
     }
 }
 
 impl<L: StyleLabel, C: Condition> Notation<L, C> {
     pub fn validate(mut self) -> Result<ValidNotation<L, C>, NotationError> {
-        self.validate_rec(false, false, Context::InNothing)?;
+        self.validate_rec(false, false, Context::new())?;
         Ok(ValidNotation(self))
     }
 
@@ -99,12 +130,14 @@ impl<L: StyleLabel, C: Condition> Notation<L, C> {
         eol: bool,
         ctx: Context,
     ) -> Result<bool, NotationError> {
-        use Context::*;
+        use CountContext::*;
+        use FoldContext::*;
         use Notation::*;
         use NotationError::*;
 
         match self {
-            Text if ctx.in_count() => Err(TextInsideCount),
+            Text if ctx.count.is_some() => Err(TextInsideCount),
+            Text if ctx.fold.is_some() => Err(TextInsideFold),
             Empty => Ok(eol),
             Text | Literal(_) if eol => Err(TextAfterEol),
             Text | Literal(_) => Ok(false),
@@ -122,17 +155,21 @@ impl<L: StyleLabel, C: Condition> Notation<L, C> {
                 Ok(eol_1 || eol_2)
             }
             Check(_, pos, note1, note2) => {
-                match pos {
+                match &pos {
                     CheckPos::Here => (),
-                    CheckPos::Child(_) if ctx == InCountZero => return Err(CountZeroCheckPosChild),
-                    CheckPos::Child(n) if *n > 0 && ctx == InCountOne => {
-                        return Err(CountOneCheckPosChildIndex(*n))
+                    CheckPos::Child(_) if ctx.count == Some(InCountZero) => {
+                        return Err(CountZeroCheckPosChild)
+                    }
+                    CheckPos::Child(i)
+                        if ctx.count == Some(InCountOne) && pos.child_index(1).is_none() =>
+                    {
+                        return Err(CountOneCheckPosChildIndex(*i))
                     }
                     CheckPos::Child(_) => (),
-                    CheckPos::LeftChild if ctx != InFoldJoin => {
+                    CheckPos::LeftChild if ctx.fold != Some(InFoldJoin) => {
                         return Err(CheckPosLeftOutsideJoin)
                     }
-                    CheckPos::RightChild if ctx != InFoldJoin => {
+                    CheckPos::RightChild if ctx.fold != Some(InFoldJoin) => {
                         return Err(CheckPosRightOutsideJoin)
                     }
                     CheckPos::LeftChild | CheckPos::RightChild => (),
@@ -141,27 +178,26 @@ impl<L: StyleLabel, C: Condition> Notation<L, C> {
                 let eol_2 = note2.validate_rec(flat, eol, ctx)?;
                 Ok(eol_1 || eol_2)
             }
-            Child(_) if ctx == InCountZero => Err(CountZeroChild),
-            Child(n) if *n > 0 && ctx == InCountOne => Err(CountOneChildIndex(*n)),
+            Child(_) if ctx.count == Some(InCountZero) => Err(CountZeroChild),
+            Child(n) if *n > 0 && ctx.count == Some(InCountOne) => Err(CountOneChildIndex(*n)),
             Child(_) => Ok(false),
             Style(_, note) => note.validate_rec(flat, eol, ctx),
-            Count { .. } if ctx.in_count() => Err(NestedCount),
+            Count { .. } if ctx.count.is_some() => Err(NestedCount),
             Count { zero, one, many } => {
-                let eol_1 = zero.validate_rec(flat, eol, InCountZero)?;
-                let eol_2 = one.validate_rec(flat, eol, InCountOne)?;
-                let eol_3 = many.validate_rec(flat, eol, InCountMany)?;
+                let eol_1 = zero.validate_rec(flat, eol, ctx.count_zero())?;
+                let eol_2 = one.validate_rec(flat, eol, ctx.count_one())?;
+                let eol_3 = many.validate_rec(flat, eol, ctx.count_many())?;
                 Ok(eol_1 || eol_2 || eol_3)
             }
-            Fold { .. } if ctx.in_fold() => Err(NestedFold),
-            Fold { .. } if !matches!(ctx, InCountMany | InCountOne) => Err(FoldOutsideCount),
+            Fold { .. } if ctx.fold.is_some() => Err(NestedFold),
             Fold { first, join } => {
                 // Can't easily check for EOL here
-                first.validate_rec(flat, false, InFoldFirst)?;
-                join.validate_rec(flat, false, InFoldJoin)?;
+                first.validate_rec(flat, false, ctx.fold_first())?;
+                join.validate_rec(flat, false, ctx.fold_join())?;
                 Ok(false)
             }
-            Left if ctx != InFoldJoin => Err(LeftOutsideJoin),
-            Right if ctx != InFoldJoin => Err(RightOutsideJoin),
+            Left if ctx.fold != Some(InFoldJoin) => Err(LeftOutsideJoin),
+            Right if ctx.fold != Some(InFoldJoin) => Err(RightOutsideJoin),
             Left | Right => Ok(false),
         }
     }
