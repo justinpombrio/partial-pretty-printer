@@ -1,4 +1,4 @@
-use crate::notation::{CheckPos, Condition, Notation, StyleLabel};
+use crate::notation::{normalize_child_index, CheckPos, Condition, Notation, StyleLabel};
 use std::fmt;
 
 /// A Notation that has passed validation. Obtain one by constructing a [Notation] and then calling
@@ -31,7 +31,7 @@ pub enum NotationError {
     #[error("Notation contains a Child inside Count.zero, but in this case there are guaranteed to be zero children.")]
     CountZeroChild,
     #[error("Notation contains a Child with index {} inside of Count.one, but in this case there's guaranteed to be only one child.", 0)]
-    CountOneChildIndex(usize),
+    CountOneChildIndex(isize),
     #[error("Notation contains a CheckPos::Child inside Count.zero, but in this case there are guaranteed to be zero children.")]
     CountZeroCheckPosChild,
     #[error("Notation contains a CheckPos::Child with index {} inside of Count.one, but in this case there's guaranteed to be only one child.", 0)]
@@ -161,7 +161,8 @@ impl<L: StyleLabel, C: Condition> Notation<L, C> {
                         return Err(CountZeroCheckPosChild)
                     }
                     CheckPos::Child(i)
-                        if ctx.count == Some(InCountOne) && pos.child_index(1).is_none() =>
+                        if ctx.count == Some(InCountOne)
+                            && normalize_child_index(*i, 1).is_none() =>
                     {
                         return Err(CountOneCheckPosChildIndex(*i))
                     }
@@ -179,7 +180,9 @@ impl<L: StyleLabel, C: Condition> Notation<L, C> {
                 Ok(eol_1 || eol_2)
             }
             Child(_) if ctx.count == Some(InCountZero) => Err(CountZeroChild),
-            Child(n) if *n > 0 && ctx.count == Some(InCountOne) => Err(CountOneChildIndex(*n)),
+            Child(i) if ctx.count == Some(InCountOne) && normalize_child_index(*i, 1).is_none() => {
+                Err(CountOneChildIndex(*i))
+            }
             Child(_) => Ok(false),
             Style(_, note) => note.validate_rec(flat, eol, ctx),
             Count { .. } if ctx.count.is_some() => Err(NestedCount),

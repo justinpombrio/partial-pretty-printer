@@ -139,3 +139,18 @@ fn test_condition_positions() {
         ],
     );
 }
+
+#[test]
+fn test_negative_child_indices() {
+    static NEGATIVE_NOTATION: Lazy<TreeNotation> =
+        Lazy::new(|| (child(-1) + child(-2) + child(-3)).validate().unwrap());
+
+    assert_pp(
+        &Tree::new_branch(
+            &NEGATIVE_NOTATION,
+            vec![element("a"), element("b"), element("c")],
+        ),
+        80,
+        &["cba"],
+    );
+}

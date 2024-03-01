@@ -75,9 +75,11 @@ pub enum Notation<L: StyleLabel, C: Condition> {
     /// Check whether the condition `C` is true for the document node located at `CheckPos`.
     /// If so, display the first notation, otherwise display the second.
     Check(C, CheckPos, Box<Notation<L, C>>, Box<Notation<L, C>>),
-    /// Display the `i`th child of this node.  Can only be used on a [`PrettyDoc`] node for which
-    /// `.num_children()` returns `Some(n)`, with `i < n`.
-    Child(usize),
+    /// Display the `i`th child of this node. If the index is negative, the
+    /// number of children is added to it (so that -1 accesses the last child).
+    /// Can only be used on a [`PrettyDoc`] node for which `.num_children()`
+    /// returns `Some(n)`, with `-n <= i < n`.
+    Child(isize),
     /// Look up the style with the given label in the current document node and apply it to this
     /// notation. (The lookup happens via `PrettyDoc::lookup_style()`.)
     Style(L, Box<Notation<L, C>>),
@@ -113,7 +115,8 @@ pub enum CheckPos {
     /// The current document node.
     Here,
     /// The i'th child of the current document node. If the index is negative,
-    /// the length of the list is added to it.
+    /// the length of the list is added to it (so that -1 accesses the last
+    /// child).
     Child(isize),
     /// The previous child.
     /// May only be used inside of Fold.join.
@@ -131,19 +134,19 @@ pub struct Literal {
     width: Width,
 }
 
-impl CheckPos {
-    pub fn child_index(&self, len: usize) -> Option<usize> {
-        let len = len as isize;
-        if let CheckPos::Child(i) = self {
-            let index: isize = if *i < 0 { *i + len } else { *i };
-            if index < 0 || index >= len {
-                None
-            } else {
-                Some(index as usize)
-            }
-        } else {
-            None
-        }
+/// Normalizes the index so that negative indices count back from the end of the list.
+/// Returns `None` if the index would be out of bounds.
+pub(crate) fn normalize_child_index(signed_index: isize, num_children: usize) -> Option<usize> {
+    let len = num_children as isize;
+    let index: isize = if signed_index < 0 {
+        signed_index + len
+    } else {
+        signed_index
+    };
+    if index < 0 || index >= len {
+        None
+    } else {
+        Some(index as usize)
     }
 }
 

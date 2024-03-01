@@ -2,7 +2,7 @@
 
 use super::pretty_doc::{PrettyDoc, Style};
 use crate::geometry::{str_width, Width};
-use crate::notation::{CheckPos, Notation};
+use crate::notation::{normalize_child_index, CheckPos, Notation};
 use std::fmt;
 use std::rc::Rc;
 
@@ -155,7 +155,7 @@ pub enum PrintingError {
     #[error(
         "Notation/doc mismatch: Notation was Child({index}) but doc node only had {len} children."
     )]
-    ChildIndexOutOfBounds { index: usize, len: usize },
+    ChildIndexOutOfBounds { index: isize, len: usize },
     #[error("Notation/doc mismatch: Notation was Child but doc node contained text instead.")]
     ChildNotationOnChildlessDoc,
     #[error(
@@ -260,7 +260,7 @@ impl<'d, D: PrettyDoc<'d>> DelayedConsolidatedNotation<'d, D> {
                     CheckPos::Here => self.doc,
                     CheckPos::Child(i) => match self.doc.num_children() {
                         None => return Err(PrintingError::CheckPosChildOnChildlessDoc),
-                        Some(n) => match pos.child_index(n) {
+                        Some(n) => match normalize_child_index(*i, n) {
                             None => {
                                 return Err(PrintingError::CheckPosChildIndexOutOfBounds {
                                     index: *i,
@@ -289,15 +289,15 @@ impl<'d, D: PrettyDoc<'d>> DelayedConsolidatedNotation<'d, D> {
             }
             Child(i) => match self.doc.num_children() {
                 None => Err(PrintingError::ChildNotationOnChildlessDoc),
-                Some(n) if *i >= n => {
-                    Err(PrintingError::ChildIndexOutOfBounds { index: *i, len: n })
-                }
-                Some(_) => {
-                    self.doc = self.doc.unwrap_child(*i);
-                    self.notation = &self.doc.notation().0;
-                    self.style = D::Style::combine(&self.style, &self.doc.node_style());
-                    Ok(ConsolidatedNotation::Child(*i, self))
-                }
+                Some(n) => match normalize_child_index(*i, n) {
+                    None => Err(PrintingError::ChildIndexOutOfBounds { index: *i, len: n }),
+                    Some(index) => {
+                        self.doc = self.doc.unwrap_child(index);
+                        self.notation = &self.doc.notation().0;
+                        self.style = D::Style::combine(&self.style, &self.doc.node_style());
+                        Ok(ConsolidatedNotation::Child(index, self))
+                    }
+                },
             },
             Style(style_label, note) => {
                 self.style =
