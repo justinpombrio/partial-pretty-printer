@@ -1,6 +1,6 @@
 use partial_pretty_printer::{
     examples::{
-        json::{json_dict, json_list, json_number, json_string, Json},
+        json::{json_array, json_number, json_object, json_object_pair, json_string, Json},
         BasicStyle, Color,
     },
     pretty_print, Line, Width,
@@ -105,18 +105,18 @@ fn assert_str_eq(expected: &str, actual: &str) {
     }
 }
 
-fn make_json_dictionary() -> Json {
+fn make_json_object() -> Json {
     Json::reset_id();
-    json_dict(vec![
-        (
+    json_object(vec![
+        json_object_pair(
             "Name",
             json_string("Alice").with_style(BasicStyle::new().bold()),
         ),
-        ("Age", json_number(42.0)),
-        ("Pets", json_list(Vec::new())),
-        (
+        json_object_pair("Age", json_number(42.0)),
+        json_object_pair("Pets", json_array(Vec::new())),
+        json_object_pair(
             "Favorites",
-            json_list(vec![
+            json_array(vec![
                 json_string("chocolate"),
                 json_string("lemon").with_style(BasicStyle::new().color(Color::Yellow)),
                 json_string("almond"),
@@ -132,7 +132,7 @@ fn make_json_dictionary() -> Json {
 
 #[test]
 fn test_json_styles() {
-    let json = make_json_dictionary();
+    let json = make_json_object();
     let rich_text = print(&json, 27);
     assert_str_eq(
         &[

@@ -1,9 +1,9 @@
 use crate::standard::pretty_testing::{all_paths, assert_pp, SimpleDoc};
-use partial_pretty_printer::notation_constructors::{empty, flat, indent, lit, nl};
+use partial_pretty_printer::notation_constructors::{empty, eol, flat, indent, lit, nl};
 
 #[test]
 fn basics_empty() {
-    let notation = empty::<()>();
+    let notation = empty::<(), ()>();
     assert_pp(&SimpleDoc::new(notation), 80, &[""]);
 }
 
@@ -51,14 +51,29 @@ fn basics_choice() {
 }
 
 #[test]
-fn test_all_paths_fn() {
-    use partial_pretty_printer::examples::json::{json_list, json_string};
+fn basics_eol() {
+    let notation = eol() + (lit("a") | nl());
+    assert_pp(&SimpleDoc::cheat_validation(notation), 80, &["", ""]);
 
-    let doc = json_list(vec![
-        json_list(vec![json_string("0.0"), json_string("0.1")]),
+    let notation = (eol() + lit("a")) | lit("b");
+    assert_pp(&SimpleDoc::cheat_validation(notation), 80, &["b"]);
+
+    let notation = eol() + nl() + (lit("a") | nl());
+    assert_pp(&SimpleDoc::new(notation), 80, &["", "a"]);
+
+    let notation = (eol() | lit("a")) + lit("b");
+    assert_pp(&SimpleDoc::cheat_validation(notation), 80, &["ab"]);
+}
+
+#[test]
+fn test_all_paths_fn() {
+    use partial_pretty_printer::examples::json::{json_array, json_string};
+
+    let doc = json_array(vec![
+        json_array(vec![json_string("0.0"), json_string("0.1")]),
         json_string("1"),
-        json_list(vec![
-            json_list(vec![json_string("2.0.0")]),
+        json_array(vec![
+            json_array(vec![json_string("2.0.0")]),
             json_string("2.1"),
         ]),
     ]);

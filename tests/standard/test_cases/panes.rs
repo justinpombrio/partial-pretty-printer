@@ -1,7 +1,7 @@
 use crate::standard::pretty_testing::SimpleDoc;
 use partial_pretty_printer::{
     examples::{
-        json::{json_list, json_number, json_string, Json},
+        json::{json_array, json_number, json_string, Json},
         BasicStyle,
     },
     pane::{
@@ -214,7 +214,7 @@ fn test_doc_pane() {
         width_strategy: WidthStrategy::Full,
         focus_side: FocusSide::Start,
     };
-    let doc = json_list(vec![json_string("Hello"), json_string("world")]);
+    let doc = json_array(vec![json_string("Hello"), json_string("world")]);
     let contents = SimpleLabel(Some((&doc, render_options)), PhantomData);
     pane_test(
         PaneNotation::Doc { label: contents },
@@ -302,7 +302,7 @@ fn test_pane_widths() {
             width_strategy,
             focus_side: FocusSide::Start,
         };
-        let doc = json_list(vec![json_string("Hello"), json_string("world")]);
+        let doc = json_array(vec![json_string("Hello"), json_string("world")]);
         let contents = SimpleLabel(Some((&doc, render_options)), PhantomData);
         pane_test(PaneNotation::Doc { label: contents }, expected);
     }
@@ -314,8 +314,8 @@ fn test_pane_widths() {
     test_with_width(WidthStrategy::NoMoreThan(5), "[\n    \"He\n    \"wo\n]\n");
 }
 
-fn make_list(start: usize, end: usize) -> Json {
-    json_list(
+fn make_array(start: usize, end: usize) -> Json {
+    json_array(
         (start..end)
             .into_iter()
             .map(|x| json_number(x as f64))
@@ -341,7 +341,7 @@ fn test_seek() {
             label: SimpleLabel(Some((&doc, render_options)), PhantomData),
         }
     }
-    let doc10 = make_list(0, 8);
+    let doc10 = make_array(0, 8);
     pane_test(
         make_note(&doc10, &[], FocusSide::Start),
         &[
@@ -408,8 +408,8 @@ fn test_dynamic() {
         }
     }
 
-    let doc8 = make_list(0, 6);
-    let doc5 = make_list(6, 9);
+    let doc8 = make_array(0, 6);
+    let doc5 = make_array(6, 9);
     let doc_num = json_number(42.0);
     let doc_unicode = json_string("一1");
 

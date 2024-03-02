@@ -1,6 +1,7 @@
 use crate::standard::pretty_testing::{assert_pp, assert_pp_region, assert_pp_seek};
 use partial_pretty_printer::examples::json::{
-    json_bool, json_comment, json_dict, json_list, json_null, json_number, json_string, Json,
+    json_array, json_bool, json_comment, json_null, json_number, json_object, json_object_pair,
+    json_roots, json_string, Json,
 };
 
 static NUMERALS: &[&str] = &[
@@ -10,16 +11,17 @@ static NUMERALS: &[&str] = &[
 
 #[test]
 fn json_constants() {
-    let doc = json_list(vec![json_bool(true), json_null(), json_bool(false)]);
+    let doc = json_array(vec![json_bool(true), json_null(), json_bool(false)]);
     assert_pp(&doc, 80, &["[true, null, false]"]);
 }
 
 #[test]
 fn json_flow() {
-    let doc = json_comment(
-        "Truth is much too complicated to allow anything but approximations. — John Von Neumann",
-        json_list(vec![json_bool(true), json_bool(false)]),
-    );
+    let doc = json_roots(vec![
+        json_comment(
+        "Truth is much too complicated to allow anything but approximations. — John Von Neumann"),
+        json_array(vec![json_bool(true), json_bool(false)])
+    ]);
     assert_pp(
         &doc,
         40,
@@ -35,9 +37,9 @@ fn json_flow() {
 
 #[test]
 fn json_seek() {
-    let doc = json_dict(vec![
-        ("Name", json_string("Alice")),
-        ("Age", json_number(42.0)),
+    let doc = json_object(vec![
+        json_object_pair("Name", json_string("Alice")),
+        json_object_pair("Age", json_number(42.0)),
     ]);
     let refn = &doc;
     assert_pp(
@@ -125,30 +127,33 @@ fn json_seek() {
 #[test]
 #[should_panic(expected = "InvalidPath")]
 fn json_invalid_path() {
-    let doc = json_dict(vec![("x", json_number(1.0)), ("y", json_number(2.0))]);
+    let doc = json_object(vec![
+        json_object_pair("x", json_number(1.0)),
+        json_object_pair("y", json_number(2.0)),
+    ]);
     assert_pp_seek(&doc, 80, &[0, 2], &[]);
 }
 
-fn favorites_list() -> Json {
-    json_list(vec![
+fn favorites_array() -> Json {
+    json_array(vec![
         json_string("chocolate"),
         json_string("lemon"),
         json_string("almond"),
     ])
 }
 
-fn dictionary() -> Json {
-    json_dict(vec![
-        ("Name", json_string("Alice")),
-        ("Age", json_number(42.0)),
-        ("Favorites", favorites_list()),
+fn make_object() -> Json {
+    json_object(vec![
+        json_object_pair("Name", json_string("Alice")),
+        json_object_pair("Age", json_number(42.0)),
+        json_object_pair("Favorites", favorites_array()),
     ])
 }
 
 #[test]
-fn json_flow_wrapped_list() {
+fn json_flow_wrapped_array() {
     assert_pp(
-        &favorites_list(),
+        &favorites_array(),
         24,
         &[
             // force rustfmt
@@ -162,9 +167,9 @@ fn json_flow_wrapped_list() {
 }
 
 #[test]
-fn json_list_of_dicts() {
+fn json_array_of_objects() {
     assert_pp(
-        &json_list(vec![dictionary(), dictionary()]),
+        &json_array(vec![make_object(), make_object()]),
         40,
         &[
             "[",
@@ -192,9 +197,9 @@ fn json_list_of_dicts() {
 }
 
 #[test]
-fn json_big_dict() {
+fn json_big_object() {
     assert_pp(
-        &dictionary(),
+        &make_object(),
         27,
         &[
             "{",
@@ -210,7 +215,7 @@ fn json_big_dict() {
     );
 
     assert_pp(
-        &dictionary(),
+        &make_object(),
         60,
         &[
             "{",
@@ -222,6 +227,83 @@ fn json_big_dict() {
     );
 }
 
+#[test]
+fn json_comment_line_breaks() {
+    let array = json_array(vec![
+        json_number(1.0),
+        json_comment("two"),
+        json_number(2.0),
+        json_number(3.0),
+    ]);
+
+    assert_pp(
+        &array,
+        80,
+        &[
+            // force rustfmt
+            "[",
+            "    1,",
+            "    // two",
+            "    2,",
+            "    3",
+            "]",
+        ],
+    );
+}
+
+#[test]
+fn json_comment_commas() {
+    let array = json_array(vec![
+        json_number(1.0),
+        json_comment("two"),
+        json_number(2.0),
+        json_comment("three?"),
+        json_comment("three."),
+        json_number(3.0),
+    ]);
+
+    assert_pp(
+        &array,
+        10,
+        &[
+            // force rustfmt
+            "[",
+            "    1,",
+            "    // two",
+            "    2,",
+            "    // three?",
+            "    // three.",
+            "    3",
+            "]",
+        ],
+    );
+
+    let array = json_array(vec![
+        json_number(1.0),
+        json_comment("two"),
+        json_number(2.0),
+        json_number(3.0),
+        json_comment("^ three?"),
+        json_comment("^ three."),
+    ]);
+
+    assert_pp(
+        &array,
+        20,
+        &[
+            // force rustfmt
+            "[",
+            "    1,",
+            "    // two",
+            "    2,",
+            "    3",
+            "    // ^ three?",
+            "    // ^ three.",
+            "]",
+        ],
+    );
+}
+
 fn make_json_tree(id: u32, size: usize) -> Json {
     let children = (0..size)
         .map(|n| make_json_tree(2u32.pow(n as u32) + id, n))
@@ -229,11 +311,11 @@ fn make_json_tree(id: u32, size: usize) -> Json {
     let children_lengths = (0..size)
         .map(|n| json_string(&format!("child_number_{}", NUMERALS[n])))
         .collect::<Vec<_>>();
-    json_dict(vec![
-        ("id", json_number(id as f64)),
-        ("children_lengths", json_list(children_lengths)),
-        ("number_of_children", json_number(size as f64)),
-        ("children", json_list(children)),
+    json_object(vec![
+        json_object_pair("id", json_number(id as f64)),
+        json_object_pair("children_lengths", json_array(children_lengths)),
+        json_object_pair("number_of_children", json_number(size as f64)),
+        json_object_pair("children", json_array(children)),
     ])
 }
 

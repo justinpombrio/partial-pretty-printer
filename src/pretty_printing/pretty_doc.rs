@@ -1,4 +1,4 @@
-use crate::notation::StyleLabel;
+use crate::notation::{Condition, StyleLabel};
 use crate::valid_notation::ValidNotation;
 use std::fmt;
 use std::hash::Hash;
@@ -14,12 +14,17 @@ pub trait PrettyDoc<'d>: Copy {
     type Style: Style + 'd;
     /// Used to look up a style. It should be small and cheap to clone.
     type StyleLabel: StyleLabel + 'd;
+    /// Arbitrary property of the node that can be checked with `Self.condition()`.
+    type Condition: Condition + 'd;
 
     /// An id that uniquely identifies this node. It should not be `Id::default()`.
     fn id(self) -> Self::Id;
 
     /// The node's notation.
-    fn notation(self) -> &'d ValidNotation<Self::StyleLabel>;
+    fn notation(self) -> &'d ValidNotation<Self::StyleLabel, Self::Condition>;
+
+    /// Check whether the condition holds for this node.
+    fn condition(self, condition: &Self::Condition) -> bool;
 
     /// Returns the style associated with this label, in the context of this node.
     fn lookup_style(self, style_label: Self::StyleLabel) -> Self::Style;

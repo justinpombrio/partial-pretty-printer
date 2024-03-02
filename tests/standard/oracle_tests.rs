@@ -1,24 +1,28 @@
-use crate::standard::generative_testing::{generate_all, generate_random, Generator, Picker};
+use crate::standard::generative_testing::{
+    generate_all_up_to_size, generate_random, Generator, Picker,
+};
 use crate::standard::pretty_testing::{assert_pp_without_expectation, SimpleDoc};
 use partial_pretty_printer::{
-    notation_constructors::{empty, flat, lit, nl},
+    notation_constructors::{empty, eol, flat, lit, nl},
     Notation,
 };
 
+#[derive(Clone, Copy)]
 struct NotationGen;
 
 impl Generator for NotationGen {
-    type Value = Notation<()>;
+    type Value = Notation<(), ()>;
 
-    fn generate<P: Picker>(&self, mut size: u32, picker: &mut P) -> Notation<()> {
+    fn generate<P: Picker>(&self, mut size: u32, picker: &mut P) -> Notation<(), ()> {
         assert_ne!(size, 0);
         if size == 1 {
-            match picker.pick_int(5) {
+            match picker.pick_int(6) {
                 0 => empty(),
                 1 => nl(),
-                2 => lit("a"),
-                3 => lit("bb"),
-                4 => lit("cccc"),
+                2 => eol(),
+                3 => lit("a"),
+                4 => lit("bb"),
+                5 => lit("cccc"),
                 _ => unreachable!(),
             }
         } else if size == 2 {
@@ -54,7 +58,7 @@ impl Generator for NotationGen {
 
 #[test]
 fn oracle_tests() {
-    let notations = generate_all(NotationGen, 6)
+    let notations = generate_all_up_to_size(NotationGen, 6)
         .chain(generate_random(NotationGen, 10, [0; 32]).take(1000))
         .chain(generate_random(NotationGen, 20, [0; 32]).take(1000))
         .chain(generate_random(NotationGen, 30, [0; 32]).take(1000))

@@ -2,7 +2,7 @@
 
 use super::pretty_doc::{PrettyDoc, Style};
 use crate::geometry::{str_width, Width};
-use crate::notation::Notation;
+use crate::notation::{normalize_child_index, CheckPos, Notation};
 use std::fmt;
 use std::rc::Rc;
 
@@ -17,6 +17,7 @@ use std::rc::Rc;
 #[derive(Debug)]
 pub enum ConsolidatedNotation<'d, D: PrettyDoc<'d>> {
     Empty,
+    EndOfLine,
     Newline(Option<Rc<IndentNode<'d, D>>>),
     Textual(Textual<'d, D>),
     Concat(
@@ -67,7 +68,7 @@ pub struct IndentNode<'d, D: PrettyDoc<'d>> {
 #[derive(Debug)]
 pub struct DelayedConsolidatedNotation<'d, D: PrettyDoc<'d>> {
     doc: D,
-    notation: &'d Notation<D::StyleLabel>,
+    notation: &'d Notation<D::StyleLabel, D::Condition>,
     flat: bool,
     indent: Option<Rc<IndentNode<'d, D>>>,
     join_pos: Option<JoinPos<'d, D>>,
@@ -79,8 +80,8 @@ struct JoinPos<'d, D: PrettyDoc<'d>> {
     parent: D,
     child: D,
     index: usize,
-    first: &'d Notation<D::StyleLabel>,
-    join: &'d Notation<D::StyleLabel>,
+    first: &'d Notation<D::StyleLabel, D::Condition>,
+    join: &'d Notation<D::StyleLabel, D::Condition>,
 }
 
 impl<'d, D: PrettyDoc<'d>> Clone for Textual<'d, D> {
@@ -109,6 +110,7 @@ impl<'d, D: PrettyDoc<'d>> Clone for ConsolidatedNotation<'d, D> {
 
         match self {
             Empty => Empty,
+            EndOfLine => EndOfLine,
             Newline(ind) => Newline(ind.clone()),
             Textual(textual) => Textual(textual.clone()),
             Concat(note1, note2) => Concat(note1.clone(), note2.clone()),
@@ -150,21 +152,25 @@ pub enum PrintingError {
     InvalidPath(usize),
     #[error("Notation/doc mismatch: Notation was Text but doc node did not contain text.")]
     TextNotationOnTextlessDoc,
-    #[error("Notation/doc mismatch: Notation was IfEmptyText but doc node did not contain text.")]
-    IfEmptyTextNotationOnTextlessDoc,
     #[error(
         "Notation/doc mismatch: Notation was Child({index}) but doc node only had {len} children."
     )]
-    ChildIndexOutOfBounds { index: usize, len: usize },
+    ChildIndexOutOfBounds { index: isize, len: usize },
     #[error("Notation/doc mismatch: Notation was Child but doc node contained text instead.")]
     ChildNotationOnChildlessDoc,
+    #[error(
+        "Notation/doc mismatch: Notation contained CheckPos::Child({index}) but doc node only had {len} children."
+    )]
+    CheckPosChildIndexOutOfBounds { index: isize, len: usize },
+    #[error("Notation/doc mismatch: Notation contained CheckPos::Child(_) but doc node contained text instead.")]
+    CheckPosChildOnChildlessDoc,
     // Count used on texty node
     #[error("Notation/doc mismatch: Notation was Count but doc node contained text instead of children.")]
     CountNotationOnChildlessDoc,
     #[error("Doc node's num_children() changed between invocations!")]
     NumChildrenChanged,
-    #[error("Notation/doc mismatch: Notation was Fold but doc node was childless.")]
-    FoldNotationOnChildlessDoc,
+    #[error("Pretty printing encountered a Text or Literal after an EndOfLine.")]
+    TextAfterEndOfLine,
 }
 
 impl<'d, D: PrettyDoc<'d>> DelayedConsolidatedNotation<'d, D> {
@@ -189,6 +195,7 @@ impl<'d, D: PrettyDoc<'d>> DelayedConsolidatedNotation<'d, D> {
 
         match self.notation {
             Empty => Ok(ConsolidatedNotation::Empty),
+            EndOfLine => Ok(ConsolidatedNotation::EndOfLine),
             Newline => Ok(ConsolidatedNotation::Newline(self.indent)),
             Literal(lit) => Ok(ConsolidatedNotation::Textual(Textual {
                 str: lit.str(),
@@ -248,11 +255,31 @@ impl<'d, D: PrettyDoc<'d>> DelayedConsolidatedNotation<'d, D> {
                 cnote2.notation = note2;
                 Ok(ConsolidatedNotation::Choice(cnote1, cnote2))
             }
-            IfEmptyText(note1, note2) => {
-                if self.doc.num_children().is_some() {
-                    return Err(PrintingError::IfEmptyTextNotationOnTextlessDoc);
-                }
-                if self.doc.unwrap_text().is_empty() {
+            Check(cond, pos, note1, note2) => {
+                let doc_to_inspect = match pos {
+                    CheckPos::Here => self.doc,
+                    CheckPos::Child(i) => match self.doc.num_children() {
+                        None => return Err(PrintingError::CheckPosChildOnChildlessDoc),
+                        Some(n) => match normalize_child_index(*i, n) {
+                            None => {
+                                return Err(PrintingError::CheckPosChildIndexOutOfBounds {
+                                    index: *i,
+                                    len: n,
+                                })
+                            }
+                            Some(index) => self.doc.unwrap_child(index),
+                        },
+                    },
+                    // ValidNotation::validate() ensures these unwraps are safe
+                    CheckPos::RightChild => self.join_pos.unwrap().child,
+                    CheckPos::LeftChild => {
+                        let join_pos = self.join_pos.unwrap();
+                        join_pos
+                            .child
+                            .unwrap_prev_sibling(join_pos.parent, join_pos.index - 1)
+                    }
+                };
+                if doc_to_inspect.condition(cond) {
                     self.notation = note1;
                     self.eval()
                 } else {
@@ -262,15 +289,15 @@ impl<'d, D: PrettyDoc<'d>> DelayedConsolidatedNotation<'d, D> {
             }
             Child(i) => match self.doc.num_children() {
                 None => Err(PrintingError::ChildNotationOnChildlessDoc),
-                Some(n) if *i >= n => {
-                    Err(PrintingError::ChildIndexOutOfBounds { index: *i, len: n })
-                }
-                Some(_) => {
-                    self.doc = self.doc.unwrap_child(*i);
-                    self.notation = &self.doc.notation().0;
-                    self.style = D::Style::combine(&self.style, &self.doc.node_style());
-                    Ok(ConsolidatedNotation::Child(*i, self))
-                }
+                Some(n) => match normalize_child_index(*i, n) {
+                    None => Err(PrintingError::ChildIndexOutOfBounds { index: *i, len: n }),
+                    Some(index) => {
+                        self.doc = self.doc.unwrap_child(index);
+                        self.notation = &self.doc.notation().0;
+                        self.style = D::Style::combine(&self.style, &self.doc.node_style());
+                        Ok(ConsolidatedNotation::Child(index, self))
+                    }
+                },
             },
             Style(style_label, note) => {
                 self.style =
@@ -295,7 +322,7 @@ impl<'d, D: PrettyDoc<'d>> DelayedConsolidatedNotation<'d, D> {
             },
             Fold { first, join } => match self.doc.num_children() {
                 None => Err(PrintingError::NumChildrenChanged),
-                Some(0) => Err(PrintingError::FoldNotationOnChildlessDoc),
+                Some(0) => Ok(ConsolidatedNotation::Empty),
                 Some(1) => {
                     self.notation = first;
                     self.eval()
@@ -359,6 +386,7 @@ impl<'d, D: PrettyDoc<'d>> fmt::Display for ConsolidatedNotation<'d, D> {
 
         match self {
             Empty => write!(f, "ε"),
+            EndOfLine => write!(f, "EOL"),
             Newline(_) => write!(f, "↵"),
             Textual(textual) => write!(f, "'{}'", textual.str),
             Concat(left, right) => write!(f, "{} + {}", left, right),

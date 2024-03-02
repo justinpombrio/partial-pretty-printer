@@ -1,3 +1,5 @@
+//! A sample implementation of `PrettyDoc`.
+
 use crate::pretty_printing::{PrettyDoc, Style};
 use crate::valid_notation::ValidNotation;
 use std::cell::Cell;
@@ -14,24 +16,36 @@ fn next_id() -> u32 {
     id
 }
 
-pub type StyleLabel = &'static str;
+#[derive(Debug, Clone, Copy)]
+pub enum TreeCondition {
+    /// Whether this node should be followed by a separator.
+    NeedsSeparator,
+    /// Whether this node is a text node containing the empty string.
+    IsEmptyText,
+    /// Whether this node is marked as a comment (by `.into_comment()`)
+    IsComment,
+}
+pub type TreeStyleLabel = &'static str;
+pub type TreeNotation = ValidNotation<TreeStyleLabel, TreeCondition>;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Tree<S>
 where
-    S: Style + From<StyleLabel> + Default + 'static,
+    S: Style + From<TreeStyleLabel> + Default + 'static,
 {
     pub id: u32,
-    pub notation: &'static ValidNotation<StyleLabel>,
+    pub notation: &'static TreeNotation,
     pub contents: Contents<S>,
     pub node_style: S,
-    pub style_overrides: Vec<(StyleLabel, S)>,
+    pub style_overrides: Vec<(TreeStyleLabel, S)>,
+    pub is_comment: bool,
+    pub needs_separator: bool,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Contents<S>
 where
-    S: Style + From<StyleLabel> + Default + 'static,
+    S: Style + From<TreeStyleLabel> + Default + 'static,
 {
     Text(String),
     Children(Vec<Tree<S>>),
@@ -39,26 +53,45 @@ where
 
 impl<S> Tree<S>
 where
-    S: Style + From<StyleLabel> + Default + 'static,
+    S: Style + From<TreeStyleLabel> + Default + 'static,
 {
-    pub fn new_text(notation: &'static ValidNotation<StyleLabel>, text: String) -> Self {
+    pub fn new_text(notation: &'static TreeNotation, text: String) -> Self {
         Tree {
             id: next_id(),
             notation,
             contents: Contents::Text(text),
             node_style: S::default(),
             style_overrides: Vec::new(),
+            is_comment: false,
+            needs_separator: false,
         }
     }
 
-    pub fn new_branch(notation: &'static ValidNotation<StyleLabel>, children: Vec<Self>) -> Self {
+    pub fn new_branch(notation: &'static TreeNotation, mut children: Vec<Self>) -> Self {
+        // A child needs a separator iff it's not a comment, and not the last non-comment child
+        for child in children
+            .iter_mut()
+            .rev()
+            .filter(|child| !child.is_comment)
+            .skip(1)
+        {
+            child.needs_separator = true;
+        }
+
         Tree {
             id: next_id(),
             notation,
             contents: Contents::Children(children),
             node_style: S::default(),
             style_overrides: Vec::new(),
+            is_comment: false,
+            needs_separator: false,
         }
+    }
+
+    pub fn into_comment(mut self) -> Self {
+        self.is_comment = true;
+        self
     }
 
     pub fn with_style(mut self, style: S) -> Self {
@@ -66,7 +99,7 @@ where
         self
     }
 
-    pub fn with_style_override(mut self, label: StyleLabel, style: S) -> Self {
+    pub fn with_style_override(mut self, label: TreeStyleLabel, style: S) -> Self {
         self.style_overrides.push((label, style));
         self
     }
@@ -79,17 +112,18 @@ where
 
 impl<'d, S> PrettyDoc<'d> for &'d Tree<S>
 where
-    S: Style + From<StyleLabel> + Default + 'static,
+    S: Style + From<TreeStyleLabel> + Default + 'static,
 {
     type Id = u32;
     type Style = S;
-    type StyleLabel = StyleLabel;
+    type StyleLabel = TreeStyleLabel;
+    type Condition = TreeCondition;
 
     fn id(self) -> u32 {
         self.id
     }
 
-    fn notation(self) -> &'d ValidNotation<StyleLabel> {
+    fn notation(self) -> &'d TreeNotation {
         self.notation
     }
 
@@ -97,7 +131,7 @@ where
         self.node_style.clone()
     }
 
-    fn lookup_style(self, label: StyleLabel) -> Self::Style {
+    fn lookup_style(self, label: TreeStyleLabel) -> Self::Style {
         for (l, style) in &self.style_overrides {
             if *l == label {
                 return style.clone();
@@ -124,6 +158,17 @@ where
         match &self.contents {
             Contents::Text(_) => panic!("Tree: invalid invocation of unwrap_child"),
             Contents::Children(children) => &children[i],
+        }
+    }
+
+    fn condition(self, condition: &TreeCondition) -> bool {
+        match condition {
+            TreeCondition::IsEmptyText => match &self.contents {
+                Contents::Text(text) if text.is_empty() => true,
+                _ => false,
+            },
+            TreeCondition::NeedsSeparator => self.needs_separator,
+            TreeCondition::IsComment => self.is_comment,
         }
     }
 }

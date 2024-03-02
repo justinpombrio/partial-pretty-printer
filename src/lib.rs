@@ -140,8 +140,11 @@ pub mod examples;
 pub mod notation_constructors;
 
 pub use geometry::{Col, Height, Pos, Row, Size, Width};
-pub use notation::Notation;
-pub use pretty_printing::{pretty_print, pretty_print_to_string, Line, PrettyDoc, Segment};
+pub use notation::{CheckPos, Condition, Literal, Notation, StyleLabel};
+pub use pretty_printing::{
+    pretty_print, pretty_print_to_string, FocusedLine, Line, PrettyDoc, PrintingError, Segment,
+    Style,
+};
 pub use valid_notation::{NotationError, ValidNotation};
 
 pub mod testing {

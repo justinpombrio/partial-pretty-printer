@@ -39,8 +39,8 @@ pub fn pretty_print<'d, D: PrettyDoc<'d>>(
 > {
     span!("Pretty Print");
 
-    let mut printer = Printer::new(doc, width)?;
-    printer.seek(path, seek_end)?;
+    let mut printer = Printer::new(width)?;
+    printer.seek(doc, path, seek_end)?;
 
     let num_left_segs = printer.next_blocks.last().unwrap().segments.len();
     let mut line = printer.print_next_line()?.unwrap();
@@ -181,8 +181,9 @@ impl<'d, D: PrettyDoc<'d>> ToString for FocusedLine<'d, D> {
 }
 
 /// INVARIANTS:
-/// - prefix_len is always sum(segment width)
-/// - chunks only contains Textual, Choice, Child
+/// - `prefix_len` is always sum(segment width)
+/// - `chunks` only contains Textual, Choice, Child as top-level notations.
+///   These are called _expanded_ chunks.
 ///
 /// | segments ->|<- chunks |
 /// ^^^^^^^^^^^^^^
@@ -191,6 +192,8 @@ struct Block<'d, D: PrettyDoc<'d>> {
     /// Resolved text. Last element is the rightmost text.
     segments: Vec<Segment<'d, D>>,
     prefix_len: Width,
+    /// Whether the focal point of this block is an EOL
+    at_eol: bool,
     /// Unresolved notations. Last element is the _leftmost_ chunk.
     chunks: Vec<Chunk<'d, D>>,
 }
@@ -208,17 +211,22 @@ impl<'d, D: PrettyDoc<'d>> Block<'d, D> {
         Block {
             prefix_len: indent_segments.iter().map(|seg| seg.width).sum(),
             segments: indent_segments,
+            at_eol: false,
             chunks,
         }
     }
 
-    fn push_text(&mut self, textual: Textual<'d, D>) {
+    fn push_text(&mut self, textual: Textual<'d, D>) -> Result<(), PrintingError> {
+        if self.at_eol {
+            return Err(PrintingError::TextAfterEndOfLine);
+        }
         self.segments.push(Segment {
             str: textual.str,
             width: textual.width,
             style: textual.style,
         });
         self.prefix_len += textual.width;
+        Ok(())
     }
 
     fn print(self) -> Line<'d, D> {
@@ -244,17 +252,13 @@ struct Printer<'d, D: PrettyDoc<'d>> {
 }
 
 impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
-    fn new(doc: D, width: Width) -> Result<Printer<'d, D>, PrintingError> {
-        let chunk = Chunk::new(DelayedConsolidatedNotation::new(doc))?;
-        let mut block = Block::new(None, Vec::new());
-        let mut printer = Printer {
+    fn new(width: Width) -> Result<Printer<'d, D>, PrintingError> {
+        let empty_block = Block::new(None, Vec::new());
+        Ok(Printer {
             width,
             prev_blocks: Vec::new(),
-            next_blocks: Vec::new(),
-        };
-        printer.expand_focusing_first_block(&mut block, chunk)?;
-        printer.next_blocks.push(block);
-        Ok(printer)
+            next_blocks: vec![empty_block],
+        })
     }
 
     fn print_next_line(&mut self) -> Result<Option<Line<'d, D>>, PrintingError> {
@@ -268,7 +272,8 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
         while let Some(chunk) = block.chunks.pop() {
             match chunk.notation {
                 Empty | Newline(_) | Concat(_, _) => panic!("bug in print_next_line"),
-                Textual(textual) => block.push_text(textual),
+                EndOfLine => block.at_eol = true,
+                Textual(textual) => block.push_text(textual)?,
                 Child(_, note) => {
                     self.expand_focusing_first_block(&mut block, Chunk::new(note)?)?
                 }
@@ -283,7 +288,7 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
 
     fn print_prev_line(&mut self) -> Result<Option<Line<'d, D>>, PrintingError> {
         use ConsolidatedNotation::*;
-        span!("print_next_line");
+        span!("print_prev_line");
 
         let mut block = match self.prev_blocks.pop() {
             None => return Ok(None),
@@ -292,7 +297,8 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
         while let Some(chunk) = block.chunks.pop() {
             match chunk.notation {
                 Empty | Newline(_) | Concat(_, _) => panic!("bug in print_prev_line"),
-                Textual(textual) => block.push_text(textual),
+                EndOfLine => block.at_eol = true,
+                Textual(textual) => block.push_text(textual)?,
                 Child(_, note) => self.expand_focusing_last_block(&mut block, Chunk::new(note)?)?,
                 Choice(opt1, opt2) => {
                     let choice = self.choose(&block, opt1, opt2)?;
@@ -303,59 +309,77 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
         Ok(Some(block.print()))
     }
 
-    /// Moves the focus to the left or right of the node at the given path,
-    /// relative to the node to the right of the current focus.
+    /// Focus on the left or right of the node at the given path.
     /// (You don't want to seek twice.)
-    fn seek(&mut self, path: &[usize], seek_end: bool) -> Result<(), PrintingError> {
-        use ConsolidatedNotation::*;
+    fn seek(&mut self, doc: D, path: &[usize], seek_end: bool) -> Result<(), PrintingError> {
         span!("seek");
 
-        for (i, child_index) in path.iter().enumerate() {
-            self.seek_child(*child_index, i + 1 < path.len())?;
-        }
-        if seek_end && path.is_empty() {
-            while self.next_blocks.len() > 1 {
-                let block = self.next_blocks.pop().unwrap();
-                self.prev_blocks.push(block);
-            }
+        let mut chunk = Chunk::new(DelayedConsolidatedNotation::new(doc))?;
+        for child_index in path {
+            chunk = self.seek_child(chunk, *child_index)?;
         }
         if seek_end {
-            let mut block = self.next_blocks.pop().unwrap();
-            let num_chunks_after = if path.is_empty() {
-                0
-            } else {
-                block.chunks.len() - 1
-            };
-            while block.chunks.len() > num_chunks_after {
-                let chunk = block.chunks.pop().unwrap();
-                match chunk.notation {
-                    Empty | Newline(_) | Concat(_, _) => panic!("bug in seek"),
-                    Textual(textual) => block.push_text(textual),
-                    Child(_, note) => {
-                        self.expand_focusing_last_block(&mut block, Chunk::new(note)?)?
-                    }
-                    Choice(opt1, opt2) => {
-                        let choice = self.choose(&block, opt1, opt2)?;
-                        self.expand_focusing_last_block(&mut block, choice)?;
-                    }
+            self.seek_end(chunk)
+        } else {
+            self.seek_start(chunk)
+        }
+    }
+
+    /// Given an _unexpanded_ chunk that belongs at the focus, move the focus to
+    /// just past the end of it.
+    fn seek_end(&mut self, chunk: Chunk<'d, D>) -> Result<(), PrintingError> {
+        use ConsolidatedNotation::*;
+        span!("seek_end");
+
+        // | segments ->| chunk |<- chunks |
+
+        let mut block = self.next_blocks.pop().unwrap();
+        let num_chunks_after = block.chunks.len();
+        self.expand_focusing_last_block(&mut block, chunk)?;
+
+        while block.chunks.len() > num_chunks_after {
+            let chunk = block.chunks.pop().unwrap();
+            match chunk.notation {
+                Empty | Newline(_) | Concat(_, _) => panic!("bug in seek"),
+                EndOfLine => block.at_eol = true,
+                Textual(textual) => block.push_text(textual)?,
+                Child(_, note) => self.expand_focusing_last_block(&mut block, Chunk::new(note)?)?,
+                Choice(opt1, opt2) => {
+                    let choice = self.choose(&block, opt1, opt2)?;
+                    self.expand_focusing_last_block(&mut block, choice)?;
                 }
             }
-            self.next_blocks.push(block);
         }
+        self.next_blocks.push(block);
         Ok(())
     }
 
-    // 1. A B C
+    /// Given an _unexpanded_ chunk that belongs at the focus, move the focus to
+    /// just before the start of it.
+    fn seek_start(&mut self, chunk: Chunk<'d, D>) -> Result<(), PrintingError> {
+        span!("seek_start");
 
-    /// Moves the focus to the left of the i'th child of the chunk that is immediately to the right
-    /// of the current focus.
-    fn seek_child(&mut self, child_index: usize, expand_child: bool) -> Result<(), PrintingError> {
+        let mut block = self.next_blocks.pop().unwrap();
+        self.expand_focusing_first_block(&mut block, chunk)?;
+        self.next_blocks.push(block);
+        Ok(())
+    }
+
+    /// Given an _unexpanded_ chunk that belongs at the focus, find its i'th `Child`
+    /// and return the notation that child contains as another _unexpanded_ chunk.
+    /// The focus will be around the location of that notation.
+    fn seek_child(
+        &mut self,
+        parent: Chunk<'d, D>,
+        child_index: usize,
+    ) -> Result<Chunk<'d, D>, PrintingError> {
         use ConsolidatedNotation::*;
         span!("seek_child");
 
-        // Get the doc node id of the chunk that is immediately to the right of the current focus
-        // point
-        let parent_id = self.next_blocks.last().unwrap().chunks.last().unwrap().id;
+        let parent_id = parent.id;
+        let mut block = self.next_blocks.pop().unwrap();
+        self.expand_focusing_first_block(&mut block, parent)?;
+        self.next_blocks.push(block);
         loop {
             // 1. Walk forward to the block containing the nearest `Choice` or `Child`
             // belonging to `parent_doc`.
@@ -388,20 +412,12 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
             while let Some(chunk) = block.chunks.pop() {
                 match chunk.notation {
                     Empty | Newline(_) | Concat(_, _) => panic!("bug in seek_child"),
-                    Textual(textual) => block.push_text(textual),
+                    EndOfLine => block.at_eol = true,
+                    Textual(textual) => block.push_text(textual)?,
                     Child(i, child) if chunk.id == parent_id && i == child_index => {
                         // Found!
-                        if expand_child {
-                            self.expand_focusing_first_block(&mut block, Chunk::new(child)?)?;
-                        } else {
-                            // Put the chunk back. Can't clone directly b.c. partly moved.
-                            block.chunks.push(Chunk {
-                                notation: Child(i, child),
-                                id: chunk.id,
-                            });
-                        }
                         self.next_blocks.push(block);
-                        return Ok(());
+                        return Chunk::new(child);
                     }
                     Child(_i, child) => {
                         self.expand_focusing_first_block(&mut block, Chunk::new(child)?)?;
@@ -438,7 +454,7 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
         while let Some(chunk) = stack.pop() {
             match chunk.notation {
                 Empty => (),
-                Textual(_) | Choice(_, _) | Child(_, _) => block.chunks.push(chunk),
+                Textual(_) | Choice(_, _) | Child(_, _) | EndOfLine => block.chunks.push(chunk),
                 Newline(indentation) => {
                     let chunks = mem::take(&mut block.chunks);
                     self.next_blocks.push(Block::new(indentation, chunks));
@@ -472,12 +488,13 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
         while let Some(chunk) = stack.pop() {
             match chunk.notation {
                 Empty => (),
-                Textual(_) | Choice(_, _) | Child(_, _) => chunks.push(chunk),
+                Textual(_) | Choice(_, _) | Child(_, _) | EndOfLine => chunks.push(chunk),
                 Newline(indentation) => {
                     chunks.reverse();
                     let prev_block = Block {
                         segments: mem::take(&mut block.segments),
                         prefix_len: block.prefix_len,
+                        at_eol: block.at_eol,
                         chunks: mem::take(&mut chunks),
                     };
                     self.prev_blocks.push(prev_block);
@@ -510,6 +527,7 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
         if self.width >= block.prefix_len
             && fits(
                 self.width - block.prefix_len,
+                block.at_eol,
                 chunk1.notation.clone(),
                 &block.chunks,
             )?
@@ -571,20 +589,21 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
     }
 }
 
-/// Determine whether the first line of the notations (`notation` followed by `chunks`) fits within
-/// `width`.
+/// Determine whether the first line of the notations (`notation` followed by `chunks`)
+/// fits within `width`, and does not cause there to be an EOL followed by text.
 fn fits<'d, D: PrettyDoc<'d>>(
     width: Width,
+    at_eol: bool,
     notation: ConsolidatedNotation<'d, D>,
     next_chunks: &[Chunk<'d, D>],
 ) -> Result<bool, PrintingError> {
     use ConsolidatedNotation::*;
-
     span!("fits");
 
     let mut next_chunks = next_chunks;
     let mut remaining = width;
     let mut notations = vec![notation];
+    let mut at_eol = at_eol;
 
     loop {
         let notation = match notations.pop() {
@@ -601,12 +620,16 @@ fn fits<'d, D: PrettyDoc<'d>>(
         match notation {
             Empty => (),
             Textual(textual) => {
+                if at_eol {
+                    return Ok(false);
+                }
                 if textual.width <= remaining {
                     remaining -= textual.width;
                 } else {
                     return Ok(false);
                 }
             }
+            EndOfLine => at_eol = true,
             Newline(_) => return Ok(true),
             Child(_, note) => notations.push(note.eval()?),
             Concat(note1, note2) => {

@@ -22,8 +22,8 @@ enum FlowWrapData {
 const START: &str = "始";
 const END: &str = "端";
 
-static WORD_NOTATION: Lazy<ValidNotation<()>> = Lazy::new(|| text().validate().unwrap());
-static WORDS_NOTATION: Lazy<ValidNotation<()>> = Lazy::new(|| {
+static WORD_NOTATION: Lazy<ValidNotation<(), ()>> = Lazy::new(|| text().validate().unwrap());
+static WORDS_NOTATION: Lazy<ValidNotation<(), ()>> = Lazy::new(|| {
     let soft_break = lit(" ") | nl();
     count(Count {
         zero: lit(""),
@@ -37,7 +37,7 @@ static WORDS_NOTATION: Lazy<ValidNotation<()>> = Lazy::new(|| {
     .validate()
     .unwrap()
 });
-static PARAGRAPH_NOTATION: Lazy<ValidNotation<()>> =
+static PARAGRAPH_NOTATION: Lazy<ValidNotation<(), ()>> =
     Lazy::new(|| (lit(START) + child(0) + lit(END)).validate().unwrap());
 
 enum Contents<'d> {
@@ -61,12 +61,13 @@ impl<'d> PrettyDoc<'d> for &'d FlowWrap {
     type Id = usize;
     type Style = ();
     type StyleLabel = ();
+    type Condition = ();
 
     fn id(self) -> usize {
         self.id
     }
 
-    fn notation(self) -> &'d ValidNotation<()> {
+    fn notation(self) -> &'d ValidNotation<(), ()> {
         use FlowWrapData::*;
 
         match &self.data {
@@ -74,6 +75,10 @@ impl<'d> PrettyDoc<'d> for &'d FlowWrap {
             Words(_) => &WORDS_NOTATION,
             Paragraph(_) => &PARAGRAPH_NOTATION,
         }
+    }
+
+    fn condition(self, _condition: &()) -> bool {
+        false
     }
 
     fn node_style(self) -> () {

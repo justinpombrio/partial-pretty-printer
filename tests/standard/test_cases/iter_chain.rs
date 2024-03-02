@@ -18,8 +18,8 @@ enum IterChainData {
     Times(Box<[IterChain; 2]>),
 }
 
-static VAR_NOTATION: Lazy<ValidNotation<()>> = Lazy::new(|| text().validate().unwrap());
-static METHOD_CALL_NOTATION: Lazy<ValidNotation<()>> = Lazy::new(|| {
+static VAR_NOTATION: Lazy<ValidNotation<(), ()>> = Lazy::new(|| text().validate().unwrap());
+static METHOD_CALL_NOTATION: Lazy<ValidNotation<(), ()>> = Lazy::new(|| {
     // foobaxxle.bar(arg)
     //
     // -- Disallowing this layout:
@@ -41,12 +41,12 @@ static METHOD_CALL_NOTATION: Lazy<ValidNotation<()>> = Lazy::new(|| {
         .validate()
         .unwrap()
 });
-static CLOSURE_NOTATION: Lazy<ValidNotation<()>> = Lazy::new(|| {
+static CLOSURE_NOTATION: Lazy<ValidNotation<(), ()>> = Lazy::new(|| {
     let single = lit("|") + child(0) + lit("| { ") + child(1) + lit(" }");
     let multi = (lit("|") + child(0) + lit("| {") + (4 >> child(1))) ^ lit("}");
     (single | multi).validate().unwrap()
 });
-static TIMES_NOTATION: Lazy<ValidNotation<()>> =
+static TIMES_NOTATION: Lazy<ValidNotation<(), ()>> =
     Lazy::new(|| (child(0) + lit(" * ") + child(1)).validate().unwrap());
 
 enum Contents<'d> {
@@ -72,12 +72,13 @@ impl<'d> PrettyDoc<'d> for &'d IterChain {
     type Id = usize;
     type Style = ();
     type StyleLabel = ();
+    type Condition = ();
 
     fn id(self) -> usize {
         self.id
     }
 
-    fn notation(self) -> &'d ValidNotation<()> {
+    fn notation(self) -> &'d ValidNotation<(), ()> {
         use IterChainData::*;
 
         match self.data {
@@ -86,6 +87,10 @@ impl<'d> PrettyDoc<'d> for &'d IterChain {
             Closure(_) => &CLOSURE_NOTATION,
             Times(_) => &TIMES_NOTATION,
         }
+    }
+
+    fn condition(self, _condition: &()) -> bool {
+        false
     }
 
     fn node_style(self) -> () {
