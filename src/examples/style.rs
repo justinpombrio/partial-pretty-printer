@@ -6,6 +6,19 @@ pub struct BasicStyle {
     pub bold: bool,
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+pub enum Color {
+    #[default]
+    White,
+    Black,
+    Red,
+    Green,
+    Yellow,
+    Blue,
+    Magenta,
+    Cyan,
+}
+
 impl BasicStyle {
     pub fn new() -> BasicStyle {
         BasicStyle {
@@ -45,6 +58,8 @@ impl From<&'static str> for BasicStyle {
         match label {
             "white" => BasicStyle::new().color(White),
             "bold_white" => BasicStyle::new().color(White).bold(),
+            "black" => BasicStyle::new().color(Black),
+            "bold_black" => BasicStyle::new().color(Black).bold(),
             "red" => BasicStyle::new().color(Red),
             "bold_red" => BasicStyle::new().color(Red).bold(),
             "green" => BasicStyle::new().color(Green),
@@ -60,16 +75,4 @@ impl From<&'static str> for BasicStyle {
             _ => BasicStyle::new(),
         }
     }
-}
-
-#[derive(Debug, Clone, Copy, Default)]
-pub enum Color {
-    #[default]
-    White,
-    Red,
-    Green,
-    Yellow,
-    Blue,
-    Magenta,
-    Cyan,
 }
