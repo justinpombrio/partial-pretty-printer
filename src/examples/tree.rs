@@ -12,8 +12,7 @@ use crate::Notation; // for links in rustdocs
 // counter across threads would break unit tests that are run in parallel and expect a node to have
 // a particular id.
 thread_local! {
-    // id 0 reserved for Default
-    static ID_COUNTER: Cell<u32> = Cell::new(1);
+    static ID_COUNTER: Cell<u32> = Cell::new(0);
 }
 
 fn next_id() -> u32 {
@@ -49,8 +48,8 @@ where
     /// The text or children that the node contains.
     pub contents: Contents<S>,
     /// A unique id for this node. Each thread has a global id counter that
-    /// starts at 1 and is incremented each time a node is created.
-    /// The id counter can be reset to 1 with [`Tree::reset_id()`].
+    /// starts at 0 and is incremented each time a node is created.
+    /// The id counter can be reset with [`Tree::reset_id()`].
     pub id: u32,
     /// How to display this node.
     pub notation: &'static TreeNotation,
@@ -138,12 +137,12 @@ where
     }
 
     /// Reset the global id counter, so that the next `Tree` that's created will
-    /// have the id `1`. This is intended for use in unit tests that rely on
+    /// have the id `0`. This is intended for use in unit tests that rely on
     /// nodes having particular ids. It must only be called between
     /// constructions of distinct documents, to ensure ids are unique within a
     /// document.
     pub fn reset_id() {
-        ID_COUNTER.set(1);
+        ID_COUNTER.set(0);
     }
 }
 

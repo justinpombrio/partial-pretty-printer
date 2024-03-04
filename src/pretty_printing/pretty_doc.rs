@@ -15,7 +15,7 @@ use crate::Notation; // for links in rustdocs
 /// you may be to write much more efficient implementations.
 pub trait PrettyDoc<'d>: Copy {
     /// Used to uniquely identify a node.
-    type Id: Eq + Hash + Copy + Default + fmt::Debug;
+    type Id: Eq + Hash + Copy + fmt::Debug;
     /// Arbitrary metadata that's applied to regions of the document.
     type Style: Style + 'd;
     /// Used to look up a style. It should be small and cheap to clone.
@@ -24,7 +24,7 @@ pub trait PrettyDoc<'d>: Copy {
     /// [`PrettyDoc::condition()`]/[`Notation::Check`].
     type Condition: Condition + 'd;
 
-    /// Get an id that uniquely identifies this node. It should not be `Id::default()`.
+    /// Get an id that uniquely identifies this node.
     fn id(self) -> Self::Id;
 
     /// Get the node's notation.
