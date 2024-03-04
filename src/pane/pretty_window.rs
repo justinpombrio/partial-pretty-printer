@@ -3,7 +3,7 @@ use std::fmt;
 
 /// A "window" that can display a set of pretty-printed [`PrettyDoc`](crate::PrettyDoc)s.
 pub trait PrettyWindow: Sized {
-    /// An error that can happen when printing to the window. It is forbidden from containing
+    /// An error that can happen when displaying to the window. It is forbidden from containing
     /// non-static references, so that `PrettyWindow` can be used as a trait object.
     type Error: std::error::Error + 'static;
 
@@ -13,10 +13,10 @@ pub trait PrettyWindow: Sized {
     /// Get the size of this window.
     fn size(&self) -> Result<Size, Self::Error>;
 
-    /// Print a character at the given window position in the given style. `full_width` indicates
+    /// Display a character at the given window position in the given style. `full_width` indicates
     /// whether the character is 1 (`false`) or 2 (`true`) columns wide. The character is guaranteed
     /// to fit in the window.
-    fn print_char(
+    fn display_char(
         &mut self,
         ch: char,
         pos: Pos,

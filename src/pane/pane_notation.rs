@@ -13,8 +13,8 @@ pub enum PaneNotation<L: DocLabel, S> {
     /// Split the pane into multiple subpanes from top to bottom, each with its own `PaneNotation`.
     /// Each subpane has the same width as this pane, and a height determined by its [`PaneSize`].
     Vert(Vec<(PaneSize, PaneNotation<L, S>)>),
-    /// Render a document into this pane. The given [`DocLabel`] will be used to dynamically look up
-    /// the [`PrettyDoc`](crate::PrettyDoc) when the pane is rendered.
+    /// Pretty print a document and display it in this pane. The given [`DocLabel`] will be used to dynamically look up
+    /// the [`PrettyDoc`](crate::PrettyDoc) when the pane is displayed.
     Doc { label: L },
     /// Fill the entire pane by repeating the given character and style.
     Fill { ch: char, style: S },
@@ -23,7 +23,7 @@ pub enum PaneNotation<L: DocLabel, S> {
 }
 
 /// Specify the size of a subpane within a vertically ([`PaneNotation::Vert`]) or horizontally
-/// ([`PaneNotation::Horz`]) concatenated set of subpanes. Space is divvied up among all the panes
+/// ([`PaneNotation::Horz`]) concatenated list of subpanes. Space is divvied up among all the panes
 /// in a `Vert` or `Horz` in this priority order:
 ///
 /// 1. `Fixed`
@@ -36,7 +36,7 @@ pub enum PaneSize {
     Fixed(usize),
 
     /// Try to give the subpane exactly the amount of height or width needed to fit its content. If
-    /// that's not possible, give it all of the remaining height or width. Note that notations are
+    /// that's not possible, give it all of the remaining height or width. Note that documents are
     /// typically very greedy for width, so you should only use `Dynamic` width in unusual
     /// circumstances.
     ///

@@ -5,7 +5,7 @@ use partial_pretty_printer::{
         BasicStyle,
     },
     pane::{
-        pane_print, DocLabel, FocusSide, PaneNotation, PaneSize, PlainText, RenderOptions,
+        display_pane, DocLabel, FocusSide, PaneNotation, PaneSize, PlainText, PrintingOptions,
         WidthStrategy,
     },
     PrettyDoc, Size,
@@ -17,13 +17,13 @@ type NoStyle = ();
 
 #[derive(Debug, Clone)]
 struct SimpleLabel<'d, D: PrettyDoc<'d> + Clone + Debug>(
-    Option<(D, RenderOptions)>,
+    Option<(D, PrintingOptions)>,
     PhantomData<&'d D>,
 );
 
 fn get_content<'d, D: PrettyDoc<'d> + Clone + Debug>(
     label: SimpleLabel<'d, D>,
-) -> Option<(D, RenderOptions)> {
+) -> Option<(D, PrintingOptions)> {
     label.0
 }
 
@@ -49,7 +49,7 @@ fn pane_test_with_size<'d, S: Debug + Default, D: PrettyDoc<'d, Style = S> + Clo
     expected: &str,
 ) {
     let mut screen = PlainText::new(size.width, size.height);
-    pane_print(&mut screen, &notation, &get_content).unwrap();
+    display_pane(&mut screen, &notation, &get_content).unwrap();
     let actual = screen.to_string();
     if actual != expected {
         eprintln!("ACTUAL:\n{}", actual);
@@ -208,14 +208,14 @@ fn test_mixed_split_pane() {
 
 #[test]
 fn test_doc_pane() {
-    let render_options = RenderOptions {
+    let options = PrintingOptions {
         focus_path: Vec::new(),
         focus_height: 0.0,
         width_strategy: WidthStrategy::Full,
         focus_side: FocusSide::Start,
     };
     let doc = json_array(vec![json_string("Hello"), json_string("world")]);
-    let contents = SimpleLabel(Some((&doc, render_options)), PhantomData);
+    let contents = SimpleLabel(Some((&doc, options)), PhantomData);
     pane_test(
         PaneNotation::Doc { label: contents },
         "[\n    \"He\n    \"wo\n]\n",
@@ -224,14 +224,14 @@ fn test_doc_pane() {
 
 #[test]
 fn test_doc_pane_full_width_cutoff() {
-    let render_options = RenderOptions {
+    let options = PrintingOptions {
         focus_path: Vec::new(),
         focus_height: 0.0,
         width_strategy: WidthStrategy::Full,
         focus_side: FocusSide::Start,
     };
     let doc = json_string("一二三");
-    let contents = SimpleLabel(Some((&doc, render_options)), PhantomData);
+    let contents = SimpleLabel(Some((&doc, options)), PhantomData);
     let note = PaneNotation::Doc { label: contents };
 
     pane_test_with_size(
@@ -272,14 +272,14 @@ fn test_doc_pane_full_width_cutoff() {
 fn test_pane_cursor_heights() {
     #[track_caller]
     fn test_at_height(focus_height: f32, expected: &str) {
-        let render_options = RenderOptions {
+        let options = PrintingOptions {
             focus_path: Vec::new(),
             focus_height,
             width_strategy: WidthStrategy::Full,
             focus_side: FocusSide::Start,
         };
         let doc = json_string("Hi");
-        let contents = SimpleLabel(Some((&doc, render_options)), PhantomData);
+        let contents = SimpleLabel(Some((&doc, options)), PhantomData);
         pane_test(PaneNotation::Doc { label: contents }, expected);
     }
 
@@ -296,14 +296,14 @@ fn test_pane_cursor_heights() {
 fn test_pane_widths() {
     #[track_caller]
     fn test_with_width(width_strategy: WidthStrategy, expected: &str) {
-        let render_options = RenderOptions {
+        let options = PrintingOptions {
             focus_path: Vec::new(),
             focus_height: 0.0,
             width_strategy,
             focus_side: FocusSide::Start,
         };
         let doc = json_array(vec![json_string("Hello"), json_string("world")]);
-        let contents = SimpleLabel(Some((&doc, render_options)), PhantomData);
+        let contents = SimpleLabel(Some((&doc, options)), PhantomData);
         pane_test(PaneNotation::Doc { label: contents }, expected);
     }
 
@@ -330,7 +330,7 @@ fn test_seek() {
         path: &[usize],
         focus_side: FocusSide,
     ) -> PaneNotation<SimpleLabel<'a, &'a Json>, BasicStyle> {
-        let render_options = RenderOptions {
+        let options = PrintingOptions {
             focus_path: path.to_owned(),
             focus_height: 0.5,
             width_strategy: WidthStrategy::Full,
@@ -338,7 +338,7 @@ fn test_seek() {
         };
 
         PaneNotation::Doc {
-            label: SimpleLabel(Some((&doc, render_options)), PhantomData),
+            label: SimpleLabel(Some((&doc, options)), PhantomData),
         }
     }
     let doc10 = make_array(0, 8);
@@ -396,7 +396,7 @@ fn test_seek() {
 #[test]
 fn test_dynamic() {
     fn make_note<'a>(doc: &'a Json) -> PaneNotation<SimpleLabel<'a, &'a Json>, BasicStyle> {
-        let render_options = RenderOptions {
+        let options = PrintingOptions {
             focus_path: Vec::new(),
             focus_height: 0.0,
             width_strategy: WidthStrategy::Full,
@@ -404,7 +404,7 @@ fn test_dynamic() {
         };
 
         PaneNotation::Doc {
-            label: SimpleLabel(Some((&doc, render_options)), PhantomData),
+            label: SimpleLabel(Some((&doc, options)), PhantomData),
         }
     }
 

@@ -3,8 +3,8 @@ use std::convert::Infallible;
 use std::fmt;
 use std::marker::PhantomData;
 
-/// A simple [`PrettyWindow`] that renders documents as plain text. Use [`fmt::Display`] to view the
-/// text.
+/// A simple [`PrettyWindow`] that outputs the contents of the "window" as plain text. Use
+/// [`fmt::Display`] to view the text.
 #[derive(Debug)]
 pub struct PlainText<S: fmt::Debug + Default> {
     /// A line is stored as a vector of characters. Each element represents one column position, so
@@ -58,7 +58,7 @@ impl<S: fmt::Debug + Default> PrettyWindow for PlainText<S> {
         Ok(self.size)
     }
 
-    fn print_char(
+    fn display_char(
         &mut self,
         ch: char,
         pos: Pos,

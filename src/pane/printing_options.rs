@@ -1,8 +1,8 @@
 use crate::{Height, Row, Width};
 
-/// Options for how to display a document within a pane.
+/// Options for how to print a document within a pane.
 #[derive(Debug, Clone)]
-pub struct RenderOptions {
+pub struct PrintingOptions {
     /// Set the focus of the document to be at the start or end of this node. Each `usize` is the
     /// index of a child node, starting from the root.
     pub focus_path: Vec<usize>,
@@ -33,7 +33,7 @@ pub enum WidthStrategy {
     NoMoreThan(Width),
 }
 
-impl RenderOptions {
+impl PrintingOptions {
     /// Choose which row of the pane the focus line should be displayed on.
     pub(crate) fn choose_focus_line_row(&self, pane_height: Height) -> Row {
         assert!(self.focus_height >= 0.0);

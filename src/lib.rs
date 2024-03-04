@@ -52,12 +52,11 @@
 //! as you need from the iterators. For example, an interactive file viewer would only take as many
 //! lines as fit on the screen.
 //!
-//! ## Pane Printing
+//! ## Panes
 //!
-//! Besides pretty printing a single document, this library can also perform "pane printing". This
-//! is a mechanism for splitting a window into multiple rectangular panes, each of which can display
-//! a different pretty-printed document. This is meant for implementing terminal UIs. For more
-//! details see the [`pane`] module.
+//! Besides pretty printing a single document, this library has a mechanism for splitting a window
+//! into multiple rectangular panes, and displaying a different document in each one. This is meant
+//! for implementing terminal UIs. For more details see the [`pane`] module.
 
 mod consolidated_notation;
 mod geometry;
