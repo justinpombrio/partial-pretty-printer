@@ -1,4 +1,4 @@
-use crate::geometry::{Pos, Size};
+use crate::{Pos, Size};
 use std::fmt;
 
 /// A "window" that can display a set of pretty-printed [`PrettyDoc`](crate::PrettyDoc)s.

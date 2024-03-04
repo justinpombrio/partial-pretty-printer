@@ -1,6 +1,6 @@
 //! Convenient functions for constructing [`Notation`]s.
 
-use super::notation::{CheckPos, Condition, Literal, Notation, StyleLabel};
+use crate::{CheckPos, Condition, Literal, Notation, StyleLabel};
 
 /// Construct a [`Notation::Empty`].
 pub fn empty<L: StyleLabel, C: Condition>() -> Notation<L, C> {

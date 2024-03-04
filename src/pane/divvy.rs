@@ -1,4 +1,4 @@
-use super::pane_notation::PaneSize;
+use crate::pane::PaneSize;
 
 /// A utility for fairly dividing up space (either width or height) between multiple panes.
 pub struct Divvier {

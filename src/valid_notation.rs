@@ -1,4 +1,4 @@
-use crate::notation::{normalize_child_index, CheckPos, Condition, Notation, StyleLabel};
+use crate::{notation::normalize_child_index, CheckPos, Condition, Notation, StyleLabel};
 use std::fmt;
 
 /// A notation that has passed validation and does not have any detectable flaws. Obtain one by

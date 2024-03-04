@@ -1,4 +1,4 @@
-use crate::geometry::{Height, Row, Width};
+use crate::{Height, Row, Width};
 
 /// Options for how to display a document within a pane.
 #[derive(Debug, Clone)]

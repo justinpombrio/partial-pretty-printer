@@ -1,5 +1,4 @@
-use super::pretty_window::PrettyWindow;
-use crate::geometry::{Height, Pos, Size, Width};
+use crate::{pane::PrettyWindow, Height, Pos, Size, Width};
 use std::convert::Infallible;
 use std::fmt;
 use std::marker::PhantomData;

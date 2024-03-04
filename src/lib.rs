@@ -129,69 +129,27 @@
 //! pretty printing. This is meant for implementing terminal UIs. For more details see the [`pane`]
 //! module.
 
+mod consolidated_notation;
 mod geometry;
 mod infra;
 mod notation;
-mod pane_printing;
-mod pretty_printing;
+mod oracle;
+mod pretty_doc;
+mod pretty_print;
 mod valid_notation;
 
 pub mod examples;
 pub mod notation_constructors;
+pub mod pane;
 
+pub use consolidated_notation::{PrintingError, Segment};
 pub use geometry::{Col, Height, Pos, Row, Size, Width};
 pub use notation::{CheckPos, Condition, Literal, Notation, StyleLabel};
-pub use pretty_printing::{
-    pretty_print, pretty_print_to_string, FocusedLine, Line, PrettyDoc, PrintingError, Segment,
-    Style,
-};
+pub use pretty_doc::{PrettyDoc, Style};
+pub use pretty_print::{pretty_print, pretty_print_to_string, FocusedLine, Line};
 pub use valid_notation::{NotationError, ValidNotation};
 
 pub mod testing {
     pub use super::geometry::str_width;
-    pub use super::pretty_printing::oracular_pretty_print;
-}
-
-pub mod pane {
-    //! Print to multiple rectangular sub-panes of a window.
-    //!
-    //! This module performs "pane printing": a way to split a window into multiple rectangular
-    //! panes, each of which can display a document via pretty printing. This is primarily meant
-    //! for implementing a terminal UI.
-    //!
-    //! Pane printing involves rendering a _pane notation_ onto a _window_.
-    //!
-    //! The [`PaneNotation`] says how to divide a window into multiple rectangular panes. For example,
-    //! it could say to show two different documents side by side.
-    //!
-    //! A [`PrettyWindow`] knows how to render styled strings. This library only supplies a simple
-    //! implementation of `PrettyWindow` called [`PlainText`], which ignores styling and prints to
-    //! a string. If you use pane printing, you will probably want to provide your own
-    //! implementation of `PrettyWindow`, for whatever medium you want to display to.
-    //!
-    //! With a pane notation and window, you can _pane print_:
-    //!
-    //! ```ignore
-    //! pub fn pane_print<'d, L, D, W>(
-    //!     window: &mut W,
-    //!     notation: &PaneNotation<L, D::Style>,
-    //!     get_content: &impl Fn(L) -> Option<(D, RenderOptions)>,
-    //! ) -> Result<(), PaneError<W>>
-    //! where
-    //!     L: DocLabel,
-    //!     D: PrettyDoc<'d>,
-    //!     W: PrettyWindow<Style = D::Style>;
-    //! ```
-    //!
-    //! - `window` is the `PrettyWindow` to display to.
-    //! - `notation` is the `PaneNotation` to render. It says how to break up
-    //!   the screen into rectangular "panes", and which document to display in
-    //!   each pane. It does not contain the Documents directly, instead it
-    //!   references them by `DocLabel`.
-    //! - `get_content()` is a function to look up a document by label. It
-    //!   returns both the document, and information about how to render it.
-    pub use super::pane_printing::{
-        pane_print, DocLabel, FocusSide, PaneError, PaneNotation, PaneSize, PlainText,
-        PrettyWindow, RenderOptions, WidthStrategy,
-    };
+    pub use super::oracle::oracular_pretty_print;
 }

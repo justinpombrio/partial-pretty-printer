@@ -3,13 +3,15 @@
 
 #![allow(clippy::precedence)]
 
-use super::style::BasicStyle;
-use super::tree::{Tree, TreeCondition, TreeNotation};
-use crate::notation::CheckPos;
+use super::{
+    style::BasicStyle,
+    tree::{Tree, TreeCondition, TreeNotation},
+};
 use crate::notation_constructors::{
     check, child, count, empty, eol, flat, fold, indent, left, lit, nl, right, style, text, Count,
     Fold,
 };
+use crate::CheckPos;
 use once_cell::sync::Lazy;
 
 const CONSTANT_STYLE: &str = "green_bold";

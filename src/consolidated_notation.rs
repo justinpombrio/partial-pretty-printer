@@ -1,8 +1,9 @@
 //! Walk along the notation tree, skipping the boring parts.
 
-use super::pretty_doc::{PrettyDoc, Style};
-use crate::geometry::{str_width, Width};
-use crate::notation::{normalize_child_index, CheckPos, Notation};
+use crate::{
+    geometry::str_width, notation::normalize_child_index, CheckPos, Notation, PrettyDoc, Style,
+    Width,
+};
 use std::fmt;
 use std::rc::Rc;
 

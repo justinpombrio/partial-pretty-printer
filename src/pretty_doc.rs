@@ -1,5 +1,4 @@
-use crate::notation::{Condition, StyleLabel};
-use crate::valid_notation::ValidNotation;
+use crate::{Condition, StyleLabel, ValidNotation};
 use std::fmt;
 use std::hash::Hash;
 

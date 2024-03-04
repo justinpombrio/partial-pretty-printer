@@ -1,8 +1,8 @@
-use super::consolidated_notation::{
-    ConsolidatedNotation, DelayedConsolidatedNotation, PrintingError,
+use crate::{
+    consolidated_notation::{ConsolidatedNotation, DelayedConsolidatedNotation, PrintingError},
+    geometry::str_width,
+    PrettyDoc, Width,
 };
-use super::pretty_doc::PrettyDoc;
-use crate::geometry::{str_width, Width};
 use std::fmt;
 
 const DEBUG_PRINT: bool = false;

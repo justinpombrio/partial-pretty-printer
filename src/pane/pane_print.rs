@@ -1,9 +1,10 @@
-use super::divvy::Divvier;
-use super::pane_notation::{DocLabel, PaneNotation, PaneSize};
-use super::pretty_window::PrettyWindow;
-use super::render_options::{FocusSide, RenderOptions};
-use crate::geometry::{is_char_full_width, Height, Pos, Rectangle, Row, Size, Width};
-use crate::pretty_printing::{pretty_print, Line, PrettyDoc, PrintingError};
+use crate::{
+    geometry::{is_char_full_width, Rectangle},
+    pane::{
+        divvy::Divvier, DocLabel, FocusSide, PaneNotation, PaneSize, PrettyWindow, RenderOptions,
+    },
+    pretty_print, Height, Line, Pos, PrettyDoc, PrintingError, Row, Size, Width,
+};
 
 /// Errors that can occur during pane-printing.
 #[derive(thiserror::Error, Debug)]

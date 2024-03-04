@@ -1,9 +1,10 @@
-use super::consolidated_notation::{
-    ConsolidatedNotation, DelayedConsolidatedNotation, IndentNode, PrintingError, Segment, Textual,
+use crate::{
+    consolidated_notation::{
+        ConsolidatedNotation, DelayedConsolidatedNotation, IndentNode, Textual,
+    },
+    infra::span,
+    PrettyDoc, PrintingError, Segment, Width,
 };
-use super::pretty_doc::PrettyDoc;
-use crate::geometry::Width;
-use crate::infra::span;
 use std::convert::From;
 use std::iter::Iterator;
 use std::mem;

@@ -1,4 +1,4 @@
-use crate::pretty_printing::Style;
+use crate::Style;
 
 /// An example of a basic style struct that implements [`Style`] can be applied to text in a
 /// [`PrettyDoc`](crate::PrettyDoc).

@@ -1,7 +1,6 @@
 //! A sample implementation of the [`PrettyDoc`] trait.
 
-use crate::pretty_printing::{PrettyDoc, Style};
-use crate::valid_notation::ValidNotation;
+use crate::{PrettyDoc, Style, ValidNotation};
 use std::cell::Cell;
 use std::thread_local;
 
