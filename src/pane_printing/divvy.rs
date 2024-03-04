@@ -1,12 +1,17 @@
 use super::pane_notation::PaneSize;
 
+/// A utility for fairly dividing up space (either width or height) between multiple panes.
 pub struct Divvier {
+    /// Each pane's size request
     pane_sizes: Vec<PaneSize>,
+    /// Already allocated cookies/space, for each pane in `pane_sizes`.
     allocations: Vec<usize>,
+    /// Remaining unallocated cookies/space
     cookies: usize,
 }
 
 impl Divvier {
+    /// Construct a Divvier and immediately allocate space to the `Fixed` panes.
     pub fn new(available_size: usize, pane_sizes: Vec<PaneSize>) -> Divvier {
         let mut divvier = Divvier {
             allocations: vec![0; pane_sizes.len()],
@@ -17,10 +22,15 @@ impl Divvier {
         divvier
     }
 
+    /// Get the remaining unallocated space. If called right after constructing the Divvier with
+    /// `new()`, this will be the space available for the `Dynamic` and `Proportional` panes.
     pub fn remaining(&self) -> usize {
         self.cookies
     }
 
+    /// Compute and return the final allocation for each pane. `dynamic_sizes` must contain the size
+    /// of the document inside each `Dynamic` pane, given in the same order as in `pane_sizes` (but
+    /// with non-`Dynamic` panes omitted).
     pub fn finish(mut self, dynamic_sizes: Vec<usize>) -> Vec<usize> {
         self.allocate_dynamic(dynamic_sizes);
         self.allocate_proportional();
@@ -47,8 +57,8 @@ impl Divvier {
     }
 
     /// Divvy `cookies` up among children, where each child requires a fixed number of cookies,
-    /// returning the allocation and the number of remaining cookies. If there aren't enough cookies,
-    /// it's first-come first-serve. ("Children" = "fixed PaneSizes")
+    /// returning the allocation and the number of remaining cookies. If there aren't enough
+    /// cookies, it's first-come first-serve. ("Children" = "fixed PaneSizes")
     fn allocate_fixed(&mut self) {
         for (i, pane_size) in self.pane_sizes.iter().enumerate() {
             if let PaneSize::Fixed(hunger) = pane_size {
@@ -59,10 +69,10 @@ impl Divvier {
         }
     }
 
-    /// Divvy `cookies` up among children as fairly as possible, where the `i`th
-    /// child has `child_hungers[i]` hunger. Children should receive cookies in proportion
-    /// to their hunger, with the difficulty that cookies cannot be split into
-    /// pieces. Exact ties go to the leftmost tied child. ("Children" = "proportional PaneSizes")
+    /// Divvy `cookies` up among children as fairly as possible, where the `i`th child has
+    /// `child_hungers[i]` hunger. Children should receive cookies in proportion to their hunger,
+    /// with the difficulty that cookies cannot be split into pieces. Exact ties go to the leftmost
+    /// tied child. ("Children" = "proportional PaneSizes")
     fn allocate_proportional(&mut self) {
         let mut child_hungers = Vec::new();
         for pane_size in &self.pane_sizes {

@@ -191,7 +191,7 @@ pub mod pane {
     //! - `get_content()` is a function to look up a document by label. It
     //!   returns both the document, and information about how to render it.
     pub use super::pane_printing::{
-        pane_print, DocLabel, FocusSide, PaneError, PaneNotation, PaneSize, Path, PlainText,
+        pane_print, DocLabel, FocusSide, PaneError, PaneNotation, PaneSize, PlainText,
         PrettyWindow, RenderOptions, WidthStrategy,
     };
 }

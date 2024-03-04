@@ -5,34 +5,34 @@ use super::render_options::{FocusSide, RenderOptions};
 use crate::geometry::{is_char_full_width, Height, Pos, Rectangle, Row, Size, Width};
 use crate::pretty_printing::{pretty_print, Line, PrettyDoc, PrintingError};
 
-/// A list of child indices describing the path from the root to a node in the document.
-pub type Path = Vec<usize>;
-
-/// Errors that can occur while attempting to render to a `Pane`.
+/// Errors that can occur during pane-printing.
 #[derive(thiserror::Error, Debug)]
 pub enum PaneError<W: PrettyWindow> {
     #[error(
-        "invalid pane notation: PaneSize::Dyanmic may only be used in a PaneNotation::Doc pane"
+        "Invalid pane notation: PaneSize::Dyanmic may only be used in a PaneNotation::Doc pane"
     )]
     InvalidUseOfDynamic,
-    #[error("missing document in pane notation: {0}")]
-    MissingLabel(String),
 
-    #[error("Window error: {0}")]
+    #[error("No document found for label in PaneNotation::Doc: {0}")]
+    MissingDocument(String),
+
+    #[error("PrettyWindow error: {0}")]
     PrettyWindowError(#[source] W::Error),
 
-    #[error("Printing error: {0}")]
+    #[error("PrettyDoc printing error: {0}")]
     PrintingError(#[from] PrintingError),
 }
 
-/// Render to this pane according to the given [PaneNotation].
+/// Print the [`PaneNotation`] to this [`PrettyWindow`].
 ///
-/// - `window` is the `PrettyWindow` to display to.
-/// - `notation` is the `PaneNotation` to render. It says how to break up the screen into rectangular
-///   "panes", and which document to display in each pane. It does not contain the Documents
-///   directly, instead it references them by `DocLabel`.
-/// - `get_content` is a function to look up a document by label. It returns both the document, and
-///   the path to the node in the document to focus on.
+/// ## Arguments
+///
+/// - `window`: the [`PrettyWindow`] to display to.
+/// - `notation`: the [`PaneNotation`] to render. It says how to break up the screen into
+///   rectangular "panes", and which document to display in each pane. It does not contain the
+///   documents directly, instead it references them by [`DocLabel`].
+/// - `get_content`: a function to look up a document by [`DocLabel`]. It returns both the document
+///   and extra information about how to render it.
 pub fn pane_print<'d, L, D, W>(
     window: &mut W,
     notation: &PaneNotation<L, D::Style>,
@@ -77,7 +77,7 @@ where
         }
         PaneNotation::Doc { label } => {
             let (doc, render_options) = get_content(label.clone())
-                .ok_or_else(|| PaneError::MissingLabel(format!("{:?}", label)))?;
+                .ok_or_else(|| PaneError::MissingDocument(format!("{:?}", label)))?;
             let printed_doc = PrintedDoc::new(doc, &render_options, rect.size())?;
             printed_doc.render(window, rect)?;
         }
@@ -103,7 +103,7 @@ where
                     return Err(PaneError::InvalidUseOfDynamic);
                 };
                 let (doc, render_options) = get_content(label.clone())
-                    .ok_or_else(|| PaneError::MissingLabel(format!("{:?}", label)))?;
+                    .ok_or_else(|| PaneError::MissingDocument(format!("{:?}", label)))?;
 
                 let printed_doc = PrintedDoc::new(doc, &render_options, available_size)?;
                 let width = printed_doc.width().min(available_size.width);
@@ -156,7 +156,7 @@ where
                     return Err(PaneError::InvalidUseOfDynamic);
                 };
                 let (doc, render_options) = get_content(label.clone())
-                    .ok_or_else(|| PaneError::MissingLabel(format!("{:?}", label)))?;
+                    .ok_or_else(|| PaneError::MissingDocument(format!("{:?}", label)))?;
 
                 let printed_doc = PrintedDoc::new(doc, &render_options, available_size)?;
                 let height = printed_doc.height();
@@ -193,11 +193,15 @@ where
 
 struct PrintedDoc<'d, D: PrettyDoc<'d>> {
     lines: Vec<Line<'d, D>>,
+    /// Which line in `lines` is the focus line.
     focus_line_index: usize,
+    /// Which row of the pane should the focus line be displayed on.
     focus_line_row: Row,
 }
 
 impl<'d, D: PrettyDoc<'d>> PrintedDoc<'d, D> {
+    /// Pretty-print the portion of document that would fit in the given `size`,
+    /// storing it as text in the `PrintedDoc`.
     fn new(doc: D, render_options: &RenderOptions, size: Size) -> Result<Self, PrintingError> {
         if size.height == 0 || size.width == 0 {
             return Ok(PrintedDoc {
@@ -234,10 +238,12 @@ impl<'d, D: PrettyDoc<'d>> PrintedDoc<'d, D> {
         })
     }
 
+    /// The number of lines in the document.
     fn height(&self) -> Height {
         self.lines.len() as Height
     }
 
+    /// The number of columns in the widest line of the document.
     fn width(&self) -> Width {
         self.lines
             .iter()
@@ -246,6 +252,7 @@ impl<'d, D: PrettyDoc<'d>> PrintedDoc<'d, D> {
             .unwrap_or(0)
     }
 
+    /// Actually render/display the document to the PrettyWindow.
     fn render<W>(self, window: &mut W, rect: Rectangle) -> Result<(), PaneError<W>>
     where
         D: PrettyDoc<'d>,
@@ -263,8 +270,8 @@ impl<'d, D: PrettyDoc<'d>> PrintedDoc<'d, D> {
     }
 }
 
-/// Displays the Line in the given window, at the given position relative to the rect.
-/// Does not display anything that falls outside of the rect.
+/// Display the [`Line`] in the given window, at the given position relative to the `rect`.
+/// Does not display anything that falls outside of the `rect`.
 fn render_line<'d, D, W>(
     window: &mut W,
     line: Line<'d, D>,

@@ -1,21 +1,22 @@
 use std::fmt;
 use std::ops::Add;
 
-/// Line number. 0-indexed.
+/// Line number, 0-indexed.
 pub type Row = u32;
 
-/// Zero-indexed column number. A typical ascii character is half-width and takes up one column.
-/// Some Unicode characters, especially in East-Asian languages, are full-width and take up two
-/// columns.
+/// Column number, 0-indexed.
+///
+/// A typical monospaced ascii character is half-width and takes up one column. Some Unicode
+/// characters, especially in East-Asian languages, are full-width and take up two columns.
 pub type Col = u16;
 
-/// Height, measured in lines.
+/// Height, measured in lines/[`Row`]s.
 pub type Height = u32;
 
-/// Width, measured in columns.
+/// Width, measured in columns/[`Col`]s.
 pub type Width = u16;
 
-/// A position relative to the screen or the document.
+/// A position relative to the window or the document.
 ///
 /// The origin is in the upper left, and is `(0, 0)`. I.e., this is 0-indexed.
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Ord, PartialOrd)]
@@ -31,8 +32,8 @@ pub struct Size {
     pub width: Width,
 }
 
-/// A rectangle, either on the screen, or on the document.
-/// Includes its upper-left, but excludes its lower-right.
+/// A rectangle, either on the window or on the document. Includes its upper-left, but excludes its
+/// lower-right.
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub(crate) struct Rectangle {
     pub min_row: Row,
@@ -84,13 +85,13 @@ impl Add<Size> for Pos {
     }
 }
 
-/// The width of a string in columns. May be an overestimate. Not to be confused with number of
+/// The width of a string in columns. May be an overestimate. Not to be confused with the number of
 /// bytes, Unicode code points, or Unicode grapheme clusters.
 pub fn str_width(s: &str) -> Width {
     unicode_width::UnicodeWidthStr::width(s) as Width
 }
 
-/// Like [`str_width`] but for a single character.
+/// Returns true if the char is 2 columns wide and false if its 1 column wide.
 pub fn is_char_full_width(ch: char) -> bool {
     unicode_width::UnicodeWidthChar::width(ch) == Some(2)
 }

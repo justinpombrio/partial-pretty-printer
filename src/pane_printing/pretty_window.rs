@@ -1,22 +1,21 @@
 use crate::geometry::{Pos, Size};
 use std::fmt;
 
-/// A "window" that supports the methods necessary to render a set of
-/// [PrettyDocument](crate::PrettyDoc)s.
+/// A "window" that can display a set of pretty-printed [`PrettyDoc`](crate::PrettyDoc)s.
 pub trait PrettyWindow: Sized {
-    // Forbid the Error type from containing non-static references so we can use
-    // `PrettyWindow` as a trait object.
+    /// An error that can happen when printing to the window. It is forbidden from containing
+    /// non-static references, so that `PrettyWindow` can be used as a trait object.
     type Error: std::error::Error + 'static;
 
-    /// The style used in the document.
+    /// The style metadata used in the document(s).
     type Style: fmt::Debug + Default;
 
     /// Get the size of this window.
     fn size(&self) -> Result<Size, Self::Error>;
 
-    /// Print the given character at the given window position in the given style.
-    /// `width` is the width of the character in columns (either 1 or 2). The character
-    /// is guaranteed to fit in the window.
+    /// Print a character at the given window position in the given style. `full_width` indicates
+    /// whether the character is 1 (`false`) or 2 (`true`) columns wide. The character is guaranteed
+    /// to fit in the window.
     fn print_char(
         &mut self,
         ch: char,

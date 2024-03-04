@@ -1,3 +1,6 @@
+//! This uses Json (with comments) as an example of how to create documents.
+//! Each type of Json value has a color applied, for syntax highlighting.
+
 #![allow(clippy::precedence)]
 
 use super::style::BasicStyle;
@@ -126,12 +129,21 @@ static JSON_ROOTS_NOTATION: Lazy<TreeNotation> = Lazy::new(|| {
     notation.validate().unwrap()
 });
 
+/// A [`Tree`] that stores a Json document (with comments).
 pub type Json = Tree<BasicStyle>;
 
+/// Create a document that can contain multiple Json values or comments at the
+/// top-level.
+pub fn json_roots(values: Vec<Json>) -> Json {
+    Tree::new_branch(&JSON_ROOTS_NOTATION, values)
+}
+
+/// Create the value `null`.
 pub fn json_null() -> Json {
     Tree::new_branch(&JSON_NULL_NOTATION, Vec::new())
 }
 
+/// Create the value `true` or `false`.
 pub fn json_bool(b: bool) -> Json {
     if b {
         Tree::new_branch(&JSON_TRUE_NOTATION, Vec::new())
@@ -140,30 +152,32 @@ pub fn json_bool(b: bool) -> Json {
     }
 }
 
+/// Create a string.
 pub fn json_string(s: &str) -> Json {
     Tree::new_text(&JSON_STRING_NOTATION, s.to_owned())
 }
 
+/// Create a number.
 pub fn json_number(f: f64) -> Json {
     Tree::new_text(&JSON_NUMBER_NOTATION, f.to_string())
 }
 
+/// Create an array containing the given values.
 pub fn json_array(elements: Vec<Json>) -> Json {
     Tree::new_branch(&JSON_ARRAY_NOTATION, elements)
 }
 
-pub fn json_roots(values: Vec<Json>) -> Json {
-    Tree::new_branch(&JSON_ROOTS_NOTATION, values)
-}
-
+/// Create a key-value pair for an object.
 pub fn json_object_pair(key: &str, value: Json) -> Json {
     Tree::new_branch(&JSON_OBJECT_PAIR_NOTATION, vec![json_string(key), value])
 }
 
+/// Create a Json object. The entries must be either [`json_object_pair`]s or [`json_comment`]s.
 pub fn json_object(entries: Vec<Json>) -> Json {
     Tree::new_branch(&JSON_OBJECT_NOTATION, entries)
 }
 
+/// Create a comment containing text.
 pub fn json_comment(comment: &str) -> Json {
     Tree::new_branch(
         &JSON_COMMENT_NOTATION,

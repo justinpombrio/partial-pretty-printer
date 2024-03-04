@@ -13,13 +13,14 @@ const MAX_WIDTH: Width = 10_000;
 /// **Invariant:** there's always at least one line.
 struct Layout {
     lines: Vec<String>,
+    /// Whether there's an `EndOfLine` on the last line of `lines`.
     ends_with_eol: bool,
 }
 
-/// For testing!
-///
-/// Pretty print the document with the given width. This is meant only for testing.
-/// It's slow: roughly exponential in the size of the doc.
+/// Print the document using a simple but slow algorithm; the time is roughly exponential in the
+/// size of the doc. This function should always produce the same output as
+/// [`pretty_print_to_string`](crate::pretty_print_to_string), so it can be used for automated
+/// testing of the more efficient and complex partial-pretty-printing algorithm.
 pub fn oracular_pretty_print<'d, D: PrettyDoc<'d>>(doc: D, width: Width) -> String {
     let note = DelayedConsolidatedNotation::new(doc)
         .eval()
@@ -30,9 +31,14 @@ pub fn oracular_pretty_print<'d, D: PrettyDoc<'d>>(doc: D, width: Width) -> Stri
 }
 
 fn pp<'d, D: PrettyDoc<'d>>(
+    // Everything that's been printed so far
     mut prefix: Layout,
+    // The next notation to print
     note: ConsolidatedNotation<'d, D>,
+    // The number of columns known to follow `note`, or `None` if it's followed by `EndOfLine +
+    // Text`.
     suffix_len: Option<Width>,
+    // The printing width
     width: Width,
 ) -> Result<Layout, PrintingError> {
     use ConsolidatedNotation::*;
@@ -93,9 +99,10 @@ fn pp<'d, D: PrettyDoc<'d>>(
     }
 }
 
-/// Smallest possible first line length of `note`, given that its last line will have an additional
-/// `suffix_len` columns after it. Assumes the rule that in (x | y), y's first line is no longer
-/// than x's.
+/// Compute the smallest possible first line length of `note`, given that its last line will have an
+/// additional `suffix_len` columns after it (where `None` means the suffix contains `EndOfLine +
+/// Textual`). Assumes the rule that "in (x | y), if x fits then y fits", and so always chooses y.
+/// Returns `None` if the first line contains `EndOfLine + Textual`.
 fn first_line_len<'d, D: PrettyDoc<'d>>(
     note: ConsolidatedNotation<'d, D>,
     suffix_len: Option<Width>,
@@ -107,8 +114,8 @@ fn first_line_len<'d, D: PrettyDoc<'d>>(
         Textual(textual) => Ok(suffix_len.map(|w| textual.width + w)),
         EndOfLine => match suffix_len {
             None => Ok(None),
-            Some(0) => Ok(Some(0)),
-            Some(_) => Ok(None),
+            Some(0) => Ok(Some(0)), // Followed by a newline, good
+            Some(_) => Ok(None),    // Followed by text, bad
         },
         Newline(_) => Ok(Some(0)),
         Child(_, x) => first_line_len(x.eval()?, suffix_len),

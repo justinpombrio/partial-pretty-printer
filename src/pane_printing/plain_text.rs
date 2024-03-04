@@ -4,15 +4,21 @@ use std::convert::Infallible;
 use std::fmt;
 use std::marker::PhantomData;
 
-/// Render a document in plain text.
+/// A simple [`PrettyWindow`] that renders documents as plain text. Use [`fmt::Display`] to view the
+/// text.
 #[derive(Debug)]
 pub struct PlainText<S: fmt::Debug + Default> {
+    /// A line is stored as a vector of characters. Each element represents one column position, so
+    /// a full-width unicode character will be followed by a `SENTINEL` value to indicate that it
+    /// takes up the next column as well.
     lines: Vec<Vec<char>>,
+    /// The size of the window.
     size: Size,
-    phantom: PhantomData<S>,
+    /// The style is ignored.
+    phantom_style: PhantomData<S>,
 }
 
-// Follows each full-width char
+// Follows each full-width char.
 const SENTINEL: char = '\0';
 
 impl<S: fmt::Debug + Default> fmt::Display for PlainText<S> {
@@ -30,16 +36,16 @@ impl<S: fmt::Debug + Default> fmt::Display for PlainText<S> {
 }
 
 impl<S: fmt::Debug + Default> PlainText<S> {
-    /// Construct a screen with the given width and height.
+    /// Construct a window with the given width and height.
     pub fn new(width: Width, height: Height) -> PlainText<S> {
         PlainText::<S> {
             lines: vec![],
             size: Size { width, height },
-            phantom: PhantomData,
+            phantom_style: PhantomData,
         }
     }
 
-    /// Construct a screen with the given width and unbounded height.
+    /// Construct a window with the given width and unbounded height.
     pub fn new_unbounded_height(width: Width) -> PlainText<S> {
         PlainText::<S>::new(width, Height::max_value())
     }

@@ -1,5 +1,7 @@
 use crate::pretty_printing::Style;
 
+/// An example of a basic style struct that implements [`Style`] can be applied to text in a
+/// [`PrettyDoc`](crate::PrettyDoc).
 #[derive(Debug, Clone, Copy, Default)]
 pub struct BasicStyle {
     pub color: Color,
@@ -20,13 +22,12 @@ pub enum Color {
 }
 
 impl BasicStyle {
+    /// Construct a default `BasicStyle` (white, not bold).
     pub fn new() -> BasicStyle {
-        BasicStyle {
-            color: Color::White,
-            bold: false,
-        }
+        BasicStyle::default()
     }
 
+    /// Change the color.
     pub fn color(self, color: Color) -> Self {
         BasicStyle {
             color,
@@ -34,6 +35,7 @@ impl BasicStyle {
         }
     }
 
+    /// Make it bold.
     pub fn bold(self) -> Self {
         BasicStyle {
             color: self.color,
@@ -43,6 +45,8 @@ impl BasicStyle {
 }
 
 impl Style for BasicStyle {
+    /// The combined style has the color of `inner_style`, and will be bold if either `inner_style`
+    /// or `outer_style` is bold.
     fn combine(outer_style: &BasicStyle, inner_style: &BasicStyle) -> BasicStyle {
         BasicStyle {
             color: inner_style.color,
@@ -52,6 +56,8 @@ impl Style for BasicStyle {
 }
 
 impl From<&'static str> for BasicStyle {
+    /// Create a `BasicStyle` from a label like `"red"` or `"bold_red"`. If the label is unknown,
+    /// use the default `BasicStyle`.
     fn from(label: &'static str) -> Self {
         use Color::*;
 
@@ -72,7 +78,7 @@ impl From<&'static str> for BasicStyle {
             "bold_magenta" => BasicStyle::new().color(Magenta).bold(),
             "cyan" => BasicStyle::new().color(Cyan),
             "bold_cyan" => BasicStyle::new().color(Cyan).bold(),
-            _ => BasicStyle::new(),
+            _ => BasicStyle::default(),
         }
     }
 }
