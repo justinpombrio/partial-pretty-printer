@@ -186,9 +186,11 @@ impl<'d, D: PrettyDoc<'d>> ToString for FocusedLine<'d, D> {
 /// `segments` or by splitting the `Block` into two when we encounter a `Newline`.
 ///
 /// Structure:
-///     | segments ->| at_eol? |<- chunks |
-///     ^^^^^^^^^^^^^^
-///     prefix_len
+/// ```text
+/// | segments ->| at_eol? |<- chunks |
+/// ^^^^^^^^^^^^^^
+/// prefix_len
+/// ```
 struct Block<'d, D: PrettyDoc<'d>> {
     /// Stack of resolved text. The last element is the _rightmost_ text.
     segments: Vec<Segment<'d, D>>,
@@ -246,7 +248,9 @@ impl<'d, D: PrettyDoc<'d>> Block<'d, D> {
 /// the boundary between `segments` and `chunks` of the top Block in `next_blocks`. The focus is
 /// only defined while seeking, not during calls to `print_prev_line` and `print_next_line`.
 ///
-/// | prev_blocks ->| (focus) |<- next_blocks|
+/// ```text
+/// | prev_blocks ->|<- next_blocks|
+/// ```
 struct Printer<'d, D: PrettyDoc<'d>> {
     /// Printing width
     width: Width,

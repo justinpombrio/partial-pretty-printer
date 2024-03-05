@@ -143,7 +143,7 @@ pub enum CheckPos {
 #[derive(Clone, Debug)]
 pub struct Literal {
     string: String,
-    /// Width of the string in [`Col`]s.
+    /// Width of the string in columns.
     width: Width,
 }
 

@@ -13,7 +13,7 @@ const MAX_WIDTH: Width = 10_000;
 /// **Invariant:** there's always at least one line.
 struct Layout {
     lines: Vec<String>,
-    /// Whether there's an `EndOfLine` on the last line of `lines`.
+    /// Whether there's an `EndOfLine` at the end of the last line of `lines`.
     ends_with_eol: bool,
 }
 

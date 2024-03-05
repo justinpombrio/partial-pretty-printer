@@ -84,6 +84,7 @@ pub struct DelayedConsolidatedNotation<'d, D: PrettyDoc<'d>> {
     join_pos: Option<JoinPos<'d, D>>,
 }
 
+/// Position within a `Fold` notation.
 #[derive(Debug)]
 struct JoinPos<'d, D: PrettyDoc<'d>> {
     /// The document node containing the `Notation::Fold`.
@@ -92,9 +93,9 @@ struct JoinPos<'d, D: PrettyDoc<'d>> {
     child: D,
     /// The index of `child`.
     index: usize,
-    /// The notation to use for displaying the first child.
+    /// Notation::Fold.first
     first: &'d Notation<D::StyleLabel, D::Condition>,
-    /// The notation to use for joining multiple children.
+    /// Notation::Fold.join
     join: &'d Notation<D::StyleLabel, D::Condition>,
 }
 
