@@ -20,7 +20,7 @@ struct Layout {
 /// Print the document using a simple but slow algorithm; the time is roughly exponential in the
 /// size of the doc. This function should always produce the same output as
 /// [`pretty_print_to_string`](crate::pretty_print_to_string), so it can be used for automated
-/// testing of the more efficient and complex partial-pretty-printing algorithm.
+/// testing of the more efficient but complex partial-pretty-printing algorithm.
 pub fn oracular_pretty_print<'d, D: PrettyDoc<'d>>(doc: D, width: Width) -> String {
     let note = DelayedConsolidatedNotation::new(doc)
         .eval()

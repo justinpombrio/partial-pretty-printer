@@ -3,8 +3,8 @@ use crate::{Height, Row, Width};
 /// Options for how to print a document within a pane.
 #[derive(Debug, Clone)]
 pub struct PrintingOptions {
-    /// Set the focus of the document to be at the start or end of this node. Each `usize` is the
-    /// index of a child node, starting from the root.
+    /// Set the focus of the document to be at the start or end of the node at this path. Each
+    /// `usize` is the index of a child node, starting from the root.
     pub focus_path: Vec<usize>,
     /// Whether the focus should be at the start or end of the node.
     pub focus_side: FocusSide,
@@ -27,7 +27,8 @@ pub enum FocusSide {
 pub enum WidthStrategy {
     /// Use all available width in the pane.
     Full,
-    /// Use the given width.
+    /// Use the given width. If the pane is too narrow, the document will be printed with the given
+    /// width but then truncated to fit in the pane.
     Fixed(Width),
     /// Use either the given width or the available pane width, whichever is smaller.
     NoMoreThan(Width),

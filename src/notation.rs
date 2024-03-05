@@ -3,7 +3,9 @@ use std::fmt;
 use std::ops::{Add, BitOr, BitXor, Shr};
 
 #[cfg(doc)]
-use crate::PrettyDoc; // for links in rustdocs
+use crate::notation_constructors;
+#[cfg(doc)]
+use crate::PrettyDoc; // for links in rustdocs // for links in rustdocs
 
 /// A label used to look up a style in the document.
 /// It corresponds to the [`PrettyDoc::StyleLabel`] associated type.
@@ -16,6 +18,8 @@ pub trait Condition: fmt::Debug + Clone {}
 impl<T: fmt::Debug + Clone> Condition for T {}
 
 /// Describes how to display a document node.
+///
+/// The [`notation_constructors`] module has convenient functions for constructing these notations.
 #[derive(Clone, Debug)]
 pub enum Notation<L: StyleLabel, C: Condition> {
     /// Display nothing.
@@ -27,31 +31,31 @@ pub enum Notation<L: StyleLabel, C: Condition> {
     /// [`Text`](Notation::Text) or [`Literal`](Notation::Literal). If that's not possible, it will
     /// fail with a [`PrintingError::TextAfterEndOfLine`](crate::PrintingError::TextAfterEndOfLine).
     EndOfLine,
-    /// Display this constant, literal text. It must not contain a newline character.
+    /// Display this constant text. It must not contain a newline character.
     Literal(Literal),
     /// Display a dynamic piece of text from the document. It must not contain a newline character.
-    /// This variant can only be used in the notation for a document node for which
-    /// [`PrettyDoc::num_children()`] returns `None` (implying that it contains text).
+    /// It can only be used in the notation for a document node that contains text (indicated by
+    /// [`PrettyDoc::num_children()`] returning `None`).
     Text,
-    /// Pick the left-most option of every [`Choice`](Notation::Choice) in the contained notation.
+    /// Pick the first option of every [`Choice`](Notation::Choice) in the contained notation.
     /// If the notation author followed the recommendation of not putting
-    /// [`Newline`](Notation::Newline)s in the left-most options of [`Choice`](Notation::Choice)s,
-    /// then everything inside this `Flat` will be displayed all on one line.
+    /// [`Newline`](Notation::Newline)s in the first options of [`Choice`](Notation::Choice)s,
+    /// then everything inside this `Flat` will be displayed on one line.
     Flat(Box<Notation<L, C>>),
     /// Append a string to the indentation of the contained notation. If the `Option<L>` is `Some`,
     /// that style will be applied to the indentation string.
     ///
     /// All of the indentation strings will be displayed after each [`Newline`](Notation::Newline).
     /// (They therefore don't affect the first line of a notation.) Indentation strings will
-    /// typically contain one indentation level's worth of whitespace characters (eg. 4 spaces), but
+    /// typically contain one indentation level's worth of whitespace characters (e.g. 4 spaces), but
     /// can also be used for other purposes like placing comment syntax at the start of a line.
     Indent(Literal, Option<L>, Box<Notation<L, C>>),
     /// Display both notations. The first character of the right notation immediately follows the
     /// last character of the left notation. Note that the column at which the right notation starts
     /// does not affect its indentation level.
     Concat(Box<Notation<L, C>>, Box<Notation<L, C>>),
-    /// Display the left notation if we're inside a [`Flat`](Notation::Flat) or if it "fits on the
-    /// current line". Otherwise, display the right.
+    /// Display the first notation if we're inside a [`Flat`](Notation::Flat) or if it "fits on the
+    /// current line". Otherwise, display the second.
     ///
     /// A notation "fits on the current line" if both of the following are true:
     ///
@@ -61,8 +65,7 @@ pub enum Notation<L: StyleLabel, C: Condition> {
     ///   [`Literal`](Notation::Literal).
     ///
     /// You must obey an important requirement when constructing [`Choice`](Notation::Choice)s. If
-    /// you do not, the pretty printer may choose poor layouts or throw a "spurious"
-    /// [`PrintingError::TextAfterEndOfLine`](crate::PrintingError::TextAfterEndOfLine).
+    /// you do not, the pretty printer may choose poor layouts or produce an error.
     ///
     /// > For every choice `(x | y)`, if `x` "fits on the current line" then `y` must too.
     ///
@@ -72,27 +75,40 @@ pub enum Notation<L: StyleLabel, C: Condition> {
     /// Check whether the [`Condition`](PrettyDoc::Condition) `C` is true for the document node
     /// located at [`CheckPos`]. If so, display the first notation, otherwise display the second.
     Check(C, CheckPos, Box<Notation<L, C>>, Box<Notation<L, C>>),
-    /// Display the `i`th child of the current document node. If the index is negative, the number
+    /// Display the i'th child of the current document node. If the index is negative, the number
     /// of children is added to it (so that -1 accesses the last child). Can only be used on a node
     /// for which [`PrettyDoc::num_children()`] returns `Some(n)`, with `-n <= i < n`.
     Child(isize),
-    /// Look up the style with the given label in the current document node and apply it to this
-    /// notation. (The lookup happens via [`PrettyDoc::lookup_style()`].) It will be combined with
-    /// any other styles that were previously applied to this subtree, using
+    /// Look up the style with the given label in the current document node (via
+    /// [`PrettyDoc::lookup_style()`]), and apply it to this notation. It will be combined with any
+    /// other styles that were previously applied to this subtree using
     /// [`Style::combine()`](crate::Style::combine).
     Style(L, Box<Notation<L, C>>),
-    /// Display one of these notations, depending on the number of children the current document
-    /// node has.
+    /// Display one of these notations, depending how many children the current document node has.
     Count {
         zero: Box<Notation<L, C>>,
         one: Box<Notation<L, C>>,
         many: Box<Notation<L, C>>,
     },
-    /// Fold (a.k.a. reduce) over the node's children. (This is a left-fold.) This lets you specify
-    /// how an indeterminate number of children should be displayed, eg. separated by commas. If
-    /// there are zero children, it displays nothing. It should typically be used within
-    /// [`Count`](Notation::Count)'s `many` case. // Note: Folds must be left-folds for flow wrap to
-    /// work.
+    /// [Left-fold](https://en.wikipedia.org/wiki/Fold_(higher-order_function)) over the node's
+    /// children. This lets you specify how an indeterminate number of children should be
+    /// displayed. For example, to separate the children by commas on a single line:
+    ///
+    /// ```
+    /// use partial_pretty_printer::Notation;
+    /// use partial_pretty_printer::notation_constructors::{
+    ///     fold, Fold, child, left, right, lit
+    /// };
+    ///
+    /// let notation: Notation<(), ()> = fold(Fold {
+    ///     first: child(0),
+    ///     join: left() + lit(", ") + right()
+    /// });
+    /// ```
+    ///
+    /// `Fold` should typically be used within [`Count`](Notation::Count)'s `many` case, where you
+    /// know there are multiple children. But if there are zero children, it will display nothing.
+    // Note: Folds must be left-folds for flow wrap to work.
     Fold {
         /// How to display the first child on its own.
         first: Box<Notation<L, C>>,
@@ -104,8 +120,8 @@ pub enum Notation<L: StyleLabel, C: Condition> {
     /// Used in [`Fold`](Notation::Fold)'s `join` case to refer to the accumulated notation. Illegal
     /// outside of `Fold`.
     Left,
-    /// Used in [`Fold`](Notation::Fold)'s `join` case to refer to the next child. Illegal outside
-    /// of `Fold`.
+    /// Used in [`Fold`](Notation::Fold)'s `join` case to refer to the next child's notation.
+    /// Illegal outside of `Fold`.
     Right,
 }
 
@@ -123,7 +139,7 @@ pub enum CheckPos {
     RightChild,
 }
 
-/// Literal text, to be displayed as-is. Cannot contain a newline.
+/// Literal text in a [`Notation`], to be displayed as-is. Must not contain a newline.
 #[derive(Clone, Debug)]
 pub struct Literal {
     string: String,

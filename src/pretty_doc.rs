@@ -5,13 +5,14 @@ use std::hash::Hash;
 #[cfg(doc)]
 use crate::Notation; // for links in rustdocs
 
-/// A node in a "document" that supports the necessary methods to be pretty-printed.
+/// A reference of lifetime `'d` to a node in a "document", that supports the necessary methods to
+/// be pretty-printed.
 ///
 /// A node is expected to contain either a piece of text, or 0 or more child nodes.
 ///
-/// Consider implementing [`PrettyDoc::unwrap_last_child()`] and [`PrettyDoc::unwrap_prev_sibling()`],
+/// Consider implementing [`PrettyDoc::unwrap_last_child()`] and [`PrettyDoc::unwrap_prev_sibling()`]
 /// even though default implementations are provided. Depending on your representation of documents,
-/// you may be to write much more efficient implementations.
+/// you may be able to write much more efficient implementations.
 pub trait PrettyDoc<'d>: Copy {
     /// Used to uniquely identify a node.
     type Id: Eq + Hash + Copy + fmt::Debug;
@@ -19,14 +20,14 @@ pub trait PrettyDoc<'d>: Copy {
     type Style: Style + 'd;
     /// Used to look up a style. It should be small and cheap to clone.
     type StyleLabel: StyleLabel + 'd;
-    /// Arbitrary property of the node that can be checked with
+    /// Arbitrary property of a node that can be checked with
     /// [`PrettyDoc::condition()`]/[`Notation::Check`].
     type Condition: Condition + 'd;
 
-    /// Get an id that uniquely identifies this node.
+    /// Get the id that uniquely identifies this node.
     fn id(self) -> Self::Id;
 
-    /// Get the node's notation.
+    /// Get this node's notation.
     fn notation(self) -> &'d ValidNotation<Self::StyleLabel, Self::Condition>;
 
     /// Check whether the given condition holds for this node. The pretty printer will only call
@@ -38,11 +39,11 @@ pub trait PrettyDoc<'d>: Copy {
     /// [`Notation::Style`].
     fn lookup_style(self, style_label: Self::StyleLabel) -> Self::Style;
 
-    /// Get a style to apply to this node. This method is called once per document node and applies
+    /// Get the style to apply to this node. This method is called once per document node and applies
     /// to the whole node. It will be [`combined`](Style::combine) with any overlapping styles.
     fn node_style(self) -> Self::Style;
 
-    /// Get this node's number of children, or `None` if it contains text instead. `Some(0)` means
+    /// Get the number of children this node has, or `None` if it contains text instead. `Some(0)` means
     /// that this node contains no children and no text.
     fn num_children(self) -> Option<usize>;
 
@@ -69,8 +70,8 @@ pub trait PrettyDoc<'d>: Copy {
         }
     }
 
-    /// Get this node's previous sibling, or panic. `parent` is this node's parent, and `i` is
-    /// the index of its previous sibling. The pretty printer will only call this method if:
+    /// Get this node's previous sibling, or panic. `parent` is this node's parent and `i` is
+    /// the index of this node's previous sibling. The pretty printer will only call this method if:
     ///
     /// - `parent.num_children()` returned `Some(n)` for `n > i + 1`, and
     /// - the index of `self` is `i + 1`.
@@ -85,7 +86,7 @@ pub trait PrettyDoc<'d>: Copy {
 }
 
 /// Styles are arbitrary metadata that are applied to regions of the document. When multiple styles
-/// overlap, they are merged into a single style with `Style::combine()`.
+/// overlap, they are merged into a single style with [`Style::combine()`].
 pub trait Style: fmt::Debug + Clone {
     /// Produce a new Style by combining the `outer_style` with an `inner_style`
     /// that applies to a subregion.

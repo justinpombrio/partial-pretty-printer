@@ -10,13 +10,13 @@ pub type Row = u32;
 /// characters, especially in East-Asian languages, are full-width and take up two columns.
 pub type Col = u16;
 
-/// Height, measured in lines/[`Row`]s.
+/// Height, measured in lines ([`Row`]s).
 pub type Height = u32;
 
-/// Width, measured in columns/[`Col`]s.
+/// Width, measured in columns ([`Col`]s).
 pub type Width = u16;
 
-/// A position relative to the window or the document.
+/// A row/col position.
 ///
 /// The origin is in the upper left, and is `(0, 0)`. I.e., this is 0-indexed.
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Ord, PartialOrd)]
@@ -28,8 +28,8 @@ pub struct Pos {
 /// The size of a two-dimensional rectangular region.
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Ord, PartialOrd)]
 pub struct Size {
-    pub height: Height,
     pub width: Width,
+    pub height: Height,
 }
 
 /// A rectangle, either on the window or on the document. Includes its upper-left, but excludes its

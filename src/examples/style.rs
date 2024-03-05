@@ -1,13 +1,13 @@
 use crate::Style;
 
-/// An example of a basic style struct that implements [`Style`] can be applied to text in a
-/// [`PrettyDoc`](crate::PrettyDoc).
+/// An example of a basic style struct that implements the [`Style`] trait.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct BasicStyle {
     pub color: Color,
     pub bold: bool,
 }
 
+/// The color used in [`BasicStyle`].
 #[derive(Debug, Clone, Copy, Default)]
 pub enum Color {
     #[default]

@@ -1,5 +1,5 @@
-//! This uses Json (with comments) as an example of how to create documents.
-//! Each type of Json value has a color applied, for syntax highlighting.
+//! This uses Json (with comments) as an example of how to create notations and documents.  Each
+//! type of Json value has a color applied for syntax highlighting.
 
 #![allow(clippy::precedence)]
 

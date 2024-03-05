@@ -8,7 +8,7 @@ use partial_pretty_printer::{
         display_pane, DocLabel, FocusSide, PaneNotation, PaneSize, PlainText, PrintingOptions,
         WidthStrategy,
     },
-    PrettyDoc, Size,
+    PrettyDoc, Size, Style,
 };
 use std::fmt::Debug;
 use std::marker::PhantomData;
@@ -28,7 +28,7 @@ fn get_content<'d, D: PrettyDoc<'d> + Clone + Debug>(
 }
 
 #[track_caller]
-fn pane_test<'d, S: Debug + Default, D: PrettyDoc<'d, Style = S> + Clone + Debug>(
+fn pane_test<'d, S: Style, D: PrettyDoc<'d, Style = S> + Clone + Debug>(
     notation: PaneNotation<SimpleLabel<'d, D>, S>,
     expected: &str,
 ) {
@@ -43,7 +43,7 @@ fn pane_test<'d, S: Debug + Default, D: PrettyDoc<'d, Style = S> + Clone + Debug
 }
 
 #[track_caller]
-fn pane_test_with_size<'d, S: Debug + Default, D: PrettyDoc<'d, Style = S> + Clone + Debug>(
+fn pane_test_with_size<'d, S: Style, D: PrettyDoc<'d, Style = S> + Clone + Debug>(
     size: Size,
     notation: PaneNotation<SimpleLabel<'d, D>, S>,
     expected: &str,

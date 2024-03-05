@@ -1,3 +1,4 @@
+use crate::Style;
 use crate::{pane::PrettyWindow, Height, Pos, Size, Width};
 use std::convert::Infallible;
 use std::fmt;
@@ -6,7 +7,7 @@ use std::marker::PhantomData;
 /// A simple [`PrettyWindow`] that outputs the contents of the "window" as plain text. Use
 /// [`fmt::Display`] to view the text.
 #[derive(Debug)]
-pub struct PlainText<S: fmt::Debug + Default> {
+pub struct PlainText<S: Style> {
     /// A line is stored as a vector of characters. Each element represents one column position, so
     /// a full-width unicode character will be followed by a `SENTINEL` value to indicate that it
     /// takes up the next column as well.
@@ -20,7 +21,7 @@ pub struct PlainText<S: fmt::Debug + Default> {
 // Follows each full-width char.
 const SENTINEL: char = '\0';
 
-impl<S: fmt::Debug + Default> fmt::Display for PlainText<S> {
+impl<S: Style> fmt::Display for PlainText<S> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for line in &self.lines {
             for ch in line {
@@ -34,7 +35,7 @@ impl<S: fmt::Debug + Default> fmt::Display for PlainText<S> {
     }
 }
 
-impl<S: fmt::Debug + Default> PlainText<S> {
+impl<S: Style> PlainText<S> {
     /// Construct a window with the given width and height.
     pub fn new(width: Width, height: Height) -> PlainText<S> {
         PlainText::<S> {
@@ -50,7 +51,7 @@ impl<S: fmt::Debug + Default> PlainText<S> {
     }
 }
 
-impl<S: fmt::Debug + Default> PrettyWindow for PlainText<S> {
+impl<S: Style> PrettyWindow for PlainText<S> {
     type Error = Infallible;
     type Style = S;
 

@@ -1,5 +1,4 @@
-use crate::{Pos, Size};
-use std::fmt;
+use crate::{Pos, Size, Style};
 
 /// A "window" that can display a set of pretty-printed [`PrettyDoc`](crate::PrettyDoc)s.
 pub trait PrettyWindow: Sized {
@@ -8,7 +7,7 @@ pub trait PrettyWindow: Sized {
     type Error: std::error::Error + 'static;
 
     /// The style metadata used in the document(s).
-    type Style: fmt::Debug + Default;
+    type Style: Style;
 
     /// Get the size of this window.
     fn size(&self) -> Result<Size, Self::Error>;

@@ -1,4 +1,12 @@
 //! Convenient functions for constructing [`Notation`]s.
+//!
+//! There are also shorthand operators for the most common constructors:
+//!
+//! - `x + y` is shorthand for [`Concat`](Notation::Concat)`(x, y)`.
+//! - `x | y` is shorthand for [`Choice`](Notation::Choice)`(x, y)`.
+//! - `x ^ y` is shorthand for `x + `[`Newline`](Notation::Newline)` + y`.
+//! - `i >> x` is shorthand for [`Indent`](Notation::Indent)`(i_spaces,
+//!   `[`Newline`](Notation::Newline)` + x)` (sometimes called "nesting").
 
 use crate::{CheckPos, Condition, Literal, Notation, StyleLabel};
 

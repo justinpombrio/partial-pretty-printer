@@ -24,16 +24,10 @@ pub enum PaneError<W: PrettyWindow> {
     PrintingError(#[from] PrintingError),
 }
 
-/// Display the [`PaneNotation`] in this [`PrettyWindow`].
+/// Display a [`PaneNotation`] to a [`PrettyWindow`].
 ///
-/// ## Arguments
-///
-/// - `window`: the [`PrettyWindow`] to display to.
-/// - `notation`: the [`PaneNotation`] to display. It says how to break up the screen into
-///   rectangular "panes", and which document to display in each pane. It does not contain the
-///   documents directly, instead it references them by [`DocLabel`].
-/// - `get_content`: a function to look up a document by [`DocLabel`]. It returns both the document
-///   and extra information about how to print it.
+/// `get_content` is a function to look up a document by [`DocLabel`]. It returns both the document
+/// and [extra information](PrintingOptions) about how to print it.
 pub fn display_pane<'d, L, D, W>(
     window: &mut W,
     notation: &PaneNotation<L, D::Style>,

@@ -10,9 +10,9 @@ use std::iter::Iterator;
 use std::mem;
 use std::rc::Rc;
 
-/// Pretty print a document, focused to the left or right of the node found by traversing `path`
-/// from the root. If `seek_end` is true, focus will be to the right of the node, otherwise to the
-/// left.
+/// Pretty print a document, focused to the left or right of the node found by traversing `path`.
+/// The `path` is a sequence of child indices to follow starting from the root. If `seek_end` is
+/// true, focus will be to the right of the node, otherwise to the left.
 ///
 /// `width` is the desired line width. The algorithm will attempt to, but is not guaranteed to,
 /// find a layout that fits within that width.
@@ -68,7 +68,7 @@ pub fn pretty_print<'d, D: PrettyDoc<'d>>(
 /// Print the entirety of the document to a single string, ignoring styles.
 ///
 /// `width` is the desired line width. The algorithm will attempt to, but is not guaranteed to, find
-/// a layout that fits withing that width.
+/// a layout that fits within that width.
 pub fn pretty_print_to_string<'d, D: PrettyDoc<'d>>(
     doc: D,
     width: Width,

@@ -23,7 +23,7 @@ fn next_id() -> u32 {
 /// Properties of a [`Tree`] node that can be checked with [`Notation::Check`].
 #[derive(Debug, Clone, Copy)]
 pub enum TreeCondition {
-    /// Whether this node should be followed by a separator.
+    /// Whether this node should be followed by a separator (such as a comma).
     NeedsSeparator,
     /// Whether this node is a text node containing the empty string.
     IsEmptyText,
@@ -34,11 +34,9 @@ pub enum TreeCondition {
 pub type TreeStyleLabel = &'static str;
 pub type TreeNotation = ValidNotation<TreeStyleLabel, TreeCondition>;
 
-/// A sample implementation of the [`PrettyDoc`] trait. Each `Tree` node can be
-/// either a leaf containing text, or a branch containing a list of child `Tree`
-/// nodes. `Tree` nodes are not designed to have their contents modified after
-/// they're created, but they're useful for creating and printing static
-/// documents.
+/// A sample implementation of the [`PrettyDoc`] trait. Each `Tree` node can either contain text or
+/// contain a list of child `Tree` nodes. `Tree` nodes are not designed to have their contents
+/// modified after they're created, but they're useful for creating and printing static documents.
 #[derive(Debug, Clone)]
 pub struct Tree<S>
 where
@@ -72,9 +70,7 @@ pub enum Contents<S>
 where
     S: Style + From<TreeStyleLabel> + Default + 'static,
 {
-    /// A leaf node.
     Text(String),
-    /// A branch node.
     Children(Vec<Tree<S>>),
 }
 

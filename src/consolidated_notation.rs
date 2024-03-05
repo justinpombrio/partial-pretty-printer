@@ -32,11 +32,12 @@ pub enum ConsolidatedNotation<'d, D: PrettyDoc<'d>> {
     Child(usize, DelayedConsolidatedNotation<'d, D>),
 }
 
-/// A fully resolved piece of text.
+// A fully resolved piece of text.
+/// A piece of styled text output by the pretty printer.
 #[derive(Debug)]
 pub struct Segment<'d, D: PrettyDoc<'d>> {
     pub str: &'d str,
-    /// The unicode width of `str`, stored for performance reasons
+    /// The width of `str` in columns.
     pub width: Width,
     pub style: D::Style,
 }
@@ -159,7 +160,7 @@ impl<'d, D: PrettyDoc<'d>> Clone for JoinPos<'d, D> {
 }
 impl<'d, D: PrettyDoc<'d>> Copy for JoinPos<'d, D> {}
 
-/// An error that can occur while printing (laying out) the document.
+/// An error that can occur while pretty printing the document.
 #[derive(thiserror::Error, Debug, Clone)]
 pub enum PrintingError {
     #[error("Pretty printing path invalid at child index {0}.")]

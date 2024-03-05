@@ -2,7 +2,7 @@
 //! display a pretty-printed document (or be filled with a repeated character).
 //! This is primarily meant for implementing terminal UIs.
 //!
-//! You use the [`display_pane()`] function to display a [`PaneNotation`] in a [`PrettyWindow`]
+//! You use the [`display_pane()`] function to display a [`PaneNotation`] in a [`PrettyWindow`].
 //!
 //! The [`PaneNotation`] says how to divide a window into multiple rectangular panes. For example,
 //! it could say to show two different documents side-by-side.
