@@ -1,11 +1,12 @@
-use crate::notation::{normalize_child_index, CheckPos, Condition, Notation, StyleLabel};
+use crate::{notation::normalize_child_index, CheckPos, Condition, Notation, StyleLabel};
 use std::fmt;
 
-/// A Notation that has passed validation. Obtain one by constructing a [Notation] and then calling
-/// [`Notation::validate`].
+/// A notation that has passed validation and does not have any detectable flaws. Obtain one by
+/// constructing a [`Notation`] and then calling [`Notation::validate()`].
 #[derive(Clone, Debug)]
 pub struct ValidNotation<L: StyleLabel, C: Condition>(pub(crate) Notation<L, C>);
 
+/// Flaws that can be detected when validating a [`Notation`] to produce a [`ValidNotation`].
 #[derive(thiserror::Error, Debug, Clone)]
 pub enum NotationError {
     #[error(
@@ -44,8 +45,17 @@ pub enum NotationError {
         "Notation contains a Text inside a Fold, but a node can't have both text and children."
     )]
     TextInsideFold,
-    #[error("Notation contains Text or Literal after an EndOfLine, which is a printing error.")]
+    #[error(
+        "Notation contains Text or Literal after an EndOfLine, which would cause a printing error."
+    )]
     TextAfterEol,
+}
+
+/// Tracks what notations we are inside of during the validation process.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Context {
+    count: Option<CountContext>,
+    fold: Option<FoldContext>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -59,12 +69,6 @@ enum CountContext {
 enum FoldContext {
     InFoldFirst,
     InFoldJoin,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct Context {
-    count: Option<CountContext>,
-    fold: Option<FoldContext>,
 }
 
 impl Context {
@@ -112,24 +116,28 @@ impl Context {
 }
 
 impl<L: StyleLabel, C: Condition> Notation<L, C> {
-    pub fn validate(mut self) -> Result<ValidNotation<L, C>, NotationError> {
+    /// If no flaws are found in this [`Notation`], convert it into a [`ValidNotation`].
+    pub fn validate(self) -> Result<ValidNotation<L, C>, NotationError> {
         self.validate_rec(false, false, Context::new())?;
         Ok(ValidNotation(self))
     }
 
     #[doc(hidden)]
+    // For testing how the pretty printer handles a notation that would have failed validation.
     pub fn cheat_validation_for_testing_only(self) -> ValidNotation<L, C> {
         ValidNotation(self)
     }
 
-    // Returns whether any way of making Choices and Checks will end with an EOL
-    fn validate_rec(
-        &mut self,
-        flat: bool,
-        // whether this notation may have been preceded by an EOL
-        eol: bool,
-        ctx: Context,
-    ) -> Result<bool, NotationError> {
+    /// Returns `Err` if a flaw is detected.
+    ///
+    /// Returns `Ok(true)` if there's any way of picking [`Choice`](Notation::Choice)s and
+    /// [`Check`](Notation::Check)s such that this notation will end with an
+    /// [`EndOfLine`](Notation::EndOfLine). (We assume here that no [`Child`](Notation::Child) will
+    /// end with [`EndOfLine`](Notation::EndOfLine)).
+    ///
+    /// Similarly, the `eol` parameter indicates whether there could possibly be an
+    /// [`EndOfLine`](Notation::EndOfLine) immediately to the left of this notation.
+    fn validate_rec(&self, flat: bool, eol: bool, ctx: Context) -> Result<bool, NotationError> {
         use CountContext::*;
         use FoldContext::*;
         use Notation::*;

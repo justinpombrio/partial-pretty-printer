@@ -1,5 +1,5 @@
 use partial_pretty_printer::{
-    examples::{
+    doc_examples::{
         json::{json_array, json_number, json_object, json_object_pair, json_string, Json},
         BasicStyle, Color,
     },
@@ -37,6 +37,7 @@ impl RichChar {
     fn style_char(&self) -> char {
         let ch = match self.style.color {
             Color::White => 'w',
+            Color::Black => 'k',
             Color::Red => 'r',
             Color::Green => 'g',
             Color::Yellow => 'y',

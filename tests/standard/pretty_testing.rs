@@ -28,8 +28,7 @@ impl<'a> PrettyDoc<'a> for &'a SimpleDoc {
     type Condition = ();
 
     fn id(self) -> usize {
-        // shouldn't be the default of usize
-        1
+        0
     }
 
     fn notation(self) -> &'a ValidNotation<(), ()> {

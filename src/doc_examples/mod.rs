@@ -1,6 +1,4 @@
 //! Sample document types, with notations.
-//!
-//! - [`Json`](json::Json)
 
 mod style;
 

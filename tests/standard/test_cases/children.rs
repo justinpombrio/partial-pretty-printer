@@ -1,7 +1,7 @@
 use crate::standard::pretty_testing::assert_pp;
 use once_cell::sync::Lazy;
-use partial_pretty_printer::examples::tree::{Tree, TreeCondition, TreeNotation};
-use partial_pretty_printer::examples::BasicStyle;
+use partial_pretty_printer::doc_examples::tree::{Tree, TreeCondition, TreeNotation};
+use partial_pretty_printer::doc_examples::BasicStyle;
 use partial_pretty_printer::notation_constructors::{
     check, child, count, empty, fold, left, lit, right, text, Count, Fold,
 };

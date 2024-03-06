@@ -1,64 +1,40 @@
 # partial-pretty-printer
 
-A peephole-efficient pretty printer library in Rust.
+This is a pretty printing library for formatting source code in any language.
 
-------
-
-This is a pretty printer library. You say how a document should be printed---including newline
-options, indentation, and coloring---and it prints it for you.
+You provide declarative rules for how to display each sort of node in a
+document, including line break options, indentation, and coloring. The Partial
+Pretty Printer prints the document, picking a good layout that fits in your
+desired line width if possible.
 
 The Partial Pretty Printer is:
 
-- **For tree-shaped documents:** You use it to display an AST, or a JSON object, or the like. You
-  don't feed it your source code. Instead, you feed it your AST and it returns formatted source code
-  to you. Its tree-shaped input is called the _document_.
-- **Peephole-efficient:** You can use it to display just part of a document (in practice, the part
-  around the cursor in an editor). If you ask it to print 100 lines in the middle of a 100,000 line
-  document, it can (typically) do that in ~100 units of work, rather than ~50,000 units of work.
+- **Peephole-efficient:** It lets you display just _part of_ a document. If you
+  ask it to print 50 lines in the middle of a 100,000 line document, it can
+  typically do that in ~50 units of work, rather than ~50,000 units of work.
+  This library was designed to support the
+  [Synless](https://github.com/justinpombrio/synless) editor, which needs to
+  re-render a screenfull of document on every keystroke, even if the screen
+  width has changed.
 
-It is made for [Synless](https://github.com/justinpombrio/synless), though it aims to be
-general-purpose.
+- **Fast:** Even when printing every line of a document, it can e.g. print
+  ~400,000 lines of JSON per second (excluding terminal IO time).
 
-## Non-features
+- **Expressive:** The combinators that it uses are a
+  [variation](https://justinpombrio.net/2024/02/23/a-twist-on-Wadlers-printer.html)
+  on Wadler's
+  [Prettier Printer](http://homepages.inf.ed.ac.uk/wadler/papers/prettier/prettier.pdf).
+  It's therefore about as expressive as other libraries based on Wadler's
+  algorithm, like [JS Prettier](https://prettier.io).
 
-### Align
+- **Flexible:** It can apply user-defined styles to the text and use
+  user-defined predicates (like "is this node a comment") to choose between
+  layouts.
 
-`Align` is not supported.  Say you define 2 possible layouts for a list. It can choose to align all
-its elements to the opening `[`, like this:
+- **Also secretly a terminal UI library:** See the (optional) `pane` module for
+  how to arrange multiple documents in a window.
 
-```
-let list = &[item1.foo(arg, arg, arg, arg),     |
-             item2.bar(arg, arg, arg, arg)];    |
-```
+There's a demo JSON formatter implemented using the Partial Pretty Printer,
+which you can try out with:
 
-Or if that's too wide to fit in the screen width (marked by `|`), it can choose to split across
-multiple lines, using a constant indentation:
-
-```
-let very_very_very_long_list_variable_name = &[ |
-    item1.foo(arg, arg, arg, arg),              |
-    item2.bar(arg, arg, arg, arg),              |
-];                                              |
-```
-
-The problem is that this pretty printer would choose the aligned layout whenever it's possible, even
-when it's not practical:
-
-```
-let somewhat_long_list_variable_name = &[item1  |
-                                         .foo(  |
-                                          arg,  |
-                                          arg,  |
-                                          arg,  |
-                                          arg   |
-                                         ),     |
-                                         item2  |
-                                         .bar(  |
-                                          arg,  |
-                                          arg,  |
-                                          arg,  |
-                                          arg   |
-                                         )];    |
-```
-
-Also, it would be tricky to implement partial pretty printing that supports this sort of alignment. 
+> cargo run --release --example json -- examples/pokemon.json --width 100

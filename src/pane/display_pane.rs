@@ -1,42 +1,37 @@
-use super::divvy::Divvier;
-use super::pane_notation::{DocLabel, PaneNotation, PaneSize};
-use super::pretty_window::PrettyWindow;
-use super::render_options::{FocusSide, RenderOptions};
-use crate::geometry::{is_char_full_width, Height, Pos, Rectangle, Row, Size, Width};
-use crate::pretty_printing::{pretty_print, Line, PrettyDoc, PrintingError};
+use crate::{
+    geometry::{is_char_full_width, Rectangle},
+    pane::{
+        divvy::Divvier, DocLabel, FocusSide, PaneNotation, PaneSize, PrettyWindow, PrintingOptions,
+    },
+    pretty_print, Height, Line, Pos, PrettyDoc, PrintingError, Row, Size, Width,
+};
 
-/// A list of child indices describing the path from the root to a node in the document.
-pub type Path = Vec<usize>;
-
-/// Errors that can occur while attempting to render to a `Pane`.
+/// Errors that can occur while displaying a pane.
 #[derive(thiserror::Error, Debug)]
 pub enum PaneError<W: PrettyWindow> {
     #[error(
-        "invalid pane notation: PaneSize::Dyanmic may only be used in a PaneNotation::Doc pane"
+        "Invalid pane notation: PaneSize::Dyanmic may only be used in a PaneNotation::Doc pane"
     )]
     InvalidUseOfDynamic,
-    #[error("missing document in pane notation: {0}")]
-    MissingLabel(String),
 
-    #[error("Window error: {0}")]
+    #[error("No document found for label in PaneNotation::Doc: {0}")]
+    MissingDocument(String),
+
+    #[error("PrettyWindow error: {0}")]
     PrettyWindowError(#[source] W::Error),
 
-    #[error("Printing error: {0}")]
+    #[error("PrettyDoc printing error: {0}")]
     PrintingError(#[from] PrintingError),
 }
 
-/// Render to this pane according to the given [PaneNotation].
+/// Display a [`PaneNotation`] to a [`PrettyWindow`].
 ///
-/// - `window` is the `PrettyWindow` to display to.
-/// - `notation` is the `PaneNotation` to render. It says how to break up the screen into rectangular
-///   "panes", and which document to display in each pane. It does not contain the Documents
-///   directly, instead it references them by `DocLabel`.
-/// - `get_content` is a function to look up a document by label. It returns both the document, and
-///   the path to the node in the document to focus on.
-pub fn pane_print<'d, L, D, W>(
+/// `get_content` is a function to look up a document by [`DocLabel`]. It returns both the document
+/// and [extra information](PrintingOptions) about how to print it.
+pub fn display_pane<'d, L, D, W>(
     window: &mut W,
     notation: &PaneNotation<L, D::Style>,
-    get_content: &impl Fn(L) -> Option<(D, RenderOptions)>,
+    get_content: &impl Fn(L) -> Option<(D, PrintingOptions)>,
 ) -> Result<(), PaneError<W>>
 where
     L: DocLabel,
@@ -45,13 +40,13 @@ where
 {
     let size = window.size().map_err(PaneError::PrettyWindowError)?;
     let rect = Rectangle::from_size(size);
-    pane_print_rec(window, notation, get_content, rect)
+    display_pane_rec(window, notation, get_content, rect)
 }
 
-fn pane_print_rec<'d, L, D, W>(
+fn display_pane_rec<'d, L, D, W>(
     window: &mut W,
     notation: &PaneNotation<L, D::Style>,
-    get_content: &impl Fn(L) -> Option<(D, RenderOptions)>,
+    get_content: &impl Fn(L) -> Option<(D, PrintingOptions)>,
     rect: Rectangle,
 ) -> Result<(), PaneError<W>>
 where
@@ -69,17 +64,17 @@ where
                 let mut col = rect.min_col;
                 while col + char_width <= rect.max_col {
                     window
-                        .print_char(*ch, Pos { row, col }, style, is_full_width)
+                        .display_char(*ch, Pos { row, col }, style, is_full_width)
                         .map_err(PaneError::PrettyWindowError)?;
                     col += char_width;
                 }
             }
         }
         PaneNotation::Doc { label } => {
-            let (doc, render_options) = get_content(label.clone())
-                .ok_or_else(|| PaneError::MissingLabel(format!("{:?}", label)))?;
-            let printed_doc = PrintedDoc::new(doc, &render_options, rect.size())?;
-            printed_doc.render(window, rect)?;
+            let (doc, options) = get_content(label.clone())
+                .ok_or_else(|| PaneError::MissingDocument(format!("{:?}", label)))?;
+            let printed_doc = PrintedDoc::new(doc, &options, rect.size())?;
+            printed_doc.display(window, rect)?;
         }
         PaneNotation::Horz(panes) => {
             let pane_sizes = panes
@@ -102,10 +97,10 @@ where
                 } else {
                     return Err(PaneError::InvalidUseOfDynamic);
                 };
-                let (doc, render_options) = get_content(label.clone())
-                    .ok_or_else(|| PaneError::MissingLabel(format!("{:?}", label)))?;
+                let (doc, options) = get_content(label.clone())
+                    .ok_or_else(|| PaneError::MissingDocument(format!("{:?}", label)))?;
 
-                let printed_doc = PrintedDoc::new(doc, &render_options, available_size)?;
+                let printed_doc = PrintedDoc::new(doc, &options, available_size)?;
                 let width = printed_doc.width().min(available_size.width);
                 available_size.width -= width;
                 dynamic_widths.push(width as usize);
@@ -128,9 +123,9 @@ where
 
                 if let PaneSize::Dynamic = size {
                     let doc = dynamic_docs.next().unwrap();
-                    doc.render(window, child_rect)?;
+                    doc.display(window, child_rect)?;
                 } else {
-                    pane_print_rec(window, child_note, get_content, child_rect)?;
+                    display_pane_rec(window, child_note, get_content, child_rect)?;
                 }
             }
         }
@@ -155,10 +150,10 @@ where
                 } else {
                     return Err(PaneError::InvalidUseOfDynamic);
                 };
-                let (doc, render_options) = get_content(label.clone())
-                    .ok_or_else(|| PaneError::MissingLabel(format!("{:?}", label)))?;
+                let (doc, options) = get_content(label.clone())
+                    .ok_or_else(|| PaneError::MissingDocument(format!("{:?}", label)))?;
 
-                let printed_doc = PrintedDoc::new(doc, &render_options, available_size)?;
+                let printed_doc = PrintedDoc::new(doc, &options, available_size)?;
                 let height = printed_doc.height();
                 available_size.height -= height;
                 dynamic_heights.push(height as usize);
@@ -181,9 +176,9 @@ where
 
                 if let PaneSize::Dynamic = size {
                     let doc = dynamic_docs.next().unwrap();
-                    doc.render(window, child_rect)?;
+                    doc.display(window, child_rect)?;
                 } else {
-                    pane_print_rec(window, child_note, get_content, child_rect)?;
+                    display_pane_rec(window, child_note, get_content, child_rect)?;
                 }
             }
         }
@@ -193,12 +188,16 @@ where
 
 struct PrintedDoc<'d, D: PrettyDoc<'d>> {
     lines: Vec<Line<'d, D>>,
+    /// Which line in `lines` is the focus line.
     focus_line_index: usize,
+    /// Which row of the pane should the focus line be displayed on.
     focus_line_row: Row,
 }
 
 impl<'d, D: PrettyDoc<'d>> PrintedDoc<'d, D> {
-    fn new(doc: D, render_options: &RenderOptions, size: Size) -> Result<Self, PrintingError> {
+    /// Pretty-print the portion of document that would fit in the given `size`,
+    /// storing it as text in the `PrintedDoc`.
+    fn new(doc: D, options: &PrintingOptions, size: Size) -> Result<Self, PrintingError> {
         if size.height == 0 || size.width == 0 {
             return Ok(PrintedDoc {
                 lines: Vec::new(),
@@ -207,11 +206,11 @@ impl<'d, D: PrettyDoc<'d>> PrintedDoc<'d, D> {
             });
         }
 
-        let printing_width = render_options.choose_width(size.width);
-        let focus_line_row = render_options.choose_focus_line_row(size.height);
-        let at_end = render_options.focus_side == FocusSide::End;
+        let printing_width = options.choose_width(size.width);
+        let focus_line_row = options.choose_focus_line_row(size.height);
+        let at_end = options.focus_side == FocusSide::End;
         let (mut upward_printer, focused_line, mut downward_printer) =
-            pretty_print(doc, printing_width, &render_options.focus_path, at_end)?;
+            pretty_print(doc, printing_width, &options.focus_path, at_end)?;
 
         let mut lines = Vec::new();
         for _ in 0..focus_line_row {
@@ -234,10 +233,12 @@ impl<'d, D: PrettyDoc<'d>> PrintedDoc<'d, D> {
         })
     }
 
+    /// The number of lines in the document.
     fn height(&self) -> Height {
         self.lines.len() as Height
     }
 
+    /// The number of columns in the widest line of the document.
     fn width(&self) -> Width {
         self.lines
             .iter()
@@ -246,7 +247,8 @@ impl<'d, D: PrettyDoc<'d>> PrintedDoc<'d, D> {
             .unwrap_or(0)
     }
 
-    fn render<W>(self, window: &mut W, rect: Rectangle) -> Result<(), PaneError<W>>
+    /// Actually display the document to the PrettyWindow.
+    fn display<W>(self, window: &mut W, rect: Rectangle) -> Result<(), PaneError<W>>
     where
         D: PrettyDoc<'d>,
         W: PrettyWindow<Style = D::Style>,
@@ -256,16 +258,16 @@ impl<'d, D: PrettyDoc<'d>> PrintedDoc<'d, D> {
             row: self.focus_line_row - (self.focus_line_index as Row),
         };
         for line in self.lines {
-            render_line(window, line, relative_pos, rect)?;
+            display_line(window, line, relative_pos, rect)?;
             relative_pos.row += 1;
         }
         Ok(())
     }
 }
 
-/// Displays the Line in the given window, at the given position relative to the rect.
-/// Does not display anything that falls outside of the rect.
-fn render_line<'d, D, W>(
+/// Display the [`Line`] in the given window, at the given position relative to the `rect`.
+/// Does not display anything that falls outside of the `rect`.
+fn display_line<'d, D, W>(
     window: &mut W,
     line: Line<'d, D>,
     relative_pos: Pos,
@@ -284,7 +286,7 @@ where
         return Ok(());
     }
 
-    // Print each segment
+    // Display each segment
     for segment in line.segments {
         for ch in segment.str.chars() {
             let is_full_width = is_char_full_width(ch);
@@ -293,7 +295,7 @@ where
                 return Ok(());
             }
             window
-                .print_char(ch, pos, &segment.style, is_full_width)
+                .display_char(ch, pos, &segment.style, is_full_width)
                 .map_err(PaneError::PrettyWindowError)?;
             pos.col += char_width;
         }

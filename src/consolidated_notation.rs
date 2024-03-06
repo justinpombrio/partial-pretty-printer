@@ -1,8 +1,9 @@
 //! Walk along the notation tree, skipping the boring parts.
 
-use super::pretty_doc::{PrettyDoc, Style};
-use crate::geometry::{str_width, Width};
-use crate::notation::{normalize_child_index, CheckPos, Notation};
+use crate::{
+    geometry::str_width, notation::normalize_child_index, CheckPos, Notation, PrettyDoc, Style,
+    Width,
+};
 use std::fmt;
 use std::rc::Rc;
 
@@ -31,18 +32,21 @@ pub enum ConsolidatedNotation<'d, D: PrettyDoc<'d>> {
     Child(usize, DelayedConsolidatedNotation<'d, D>),
 }
 
-/// A fully resolved piece of text.
+// A fully resolved piece of text.
+/// A piece of styled text output by the pretty printer.
 #[derive(Debug)]
 pub struct Segment<'d, D: PrettyDoc<'d>> {
     pub str: &'d str,
+    /// The width of `str` in columns.
     pub width: Width,
     pub style: D::Style,
 }
 
-/// A styled piece of text from Notation::Literal or Notation::Text or Notation::Indent.
+/// A styled piece of text from `Notation::Literal` or `Notation::Text` or `Notation::Indent`.
 #[derive(Debug)]
 pub struct Textual<'d, D: PrettyDoc<'d>> {
     pub str: &'d str,
+    /// The unicode width of `str`, stored for performance reasons
     pub width: Width,
     pub style: D::Style,
 }
@@ -53,8 +57,8 @@ pub struct Textual<'d, D: PrettyDoc<'d>> {
 // - Indentation as a `Vec<Segment>` -- much slower
 // If there's a way to implement it with fewer heap alloations, we should try it.
 
-/// One level of indentation, plus a reference to the level of indentation to
-/// its left. These references form trees, with each child referencing its parent.
+/// One level of indentation, plus a reference to the level of indentation to its left. These
+/// references form trees, with each child referencing its parent.
 #[derive(Debug)]
 pub struct IndentNode<'d, D: PrettyDoc<'d>> {
     /// The rightmost/current level of indentation.
@@ -67,20 +71,31 @@ pub struct IndentNode<'d, D: PrettyDoc<'d>> {
 /// from being in memory at once. Call `.eval()` to get a `ConsolidatedNotation`.
 #[derive(Debug)]
 pub struct DelayedConsolidatedNotation<'d, D: PrettyDoc<'d>> {
-    doc: D,
     notation: &'d Notation<D::StyleLabel, D::Condition>,
+    /// The document node that this notation came from.
+    doc: D,
+    /// Whether we are inside a `Notation::Flat`.
     flat: bool,
+    /// The indentation that will be applied to any newlines inside of this notation.
     indent: Option<Rc<IndentNode<'d, D>>>,
-    join_pos: Option<JoinPos<'d, D>>,
+    /// The style that will be applied to any text, literals, or indentation inside of this notation
     style: D::Style,
+    /// If we are inside a `Notation::Fold`'s `join` case, this stores context about the join.
+    join_pos: Option<JoinPos<'d, D>>,
 }
 
+/// Position within a `Fold` notation.
 #[derive(Debug)]
 struct JoinPos<'d, D: PrettyDoc<'d>> {
+    /// The document node containing the `Notation::Fold`.
     parent: D,
+    /// The next child to process.
     child: D,
+    /// The index of `child`.
     index: usize,
+    /// Notation::Fold.first
     first: &'d Notation<D::StyleLabel, D::Condition>,
+    /// Notation::Fold.join
     join: &'d Notation<D::StyleLabel, D::Condition>,
 }
 
@@ -146,6 +161,7 @@ impl<'d, D: PrettyDoc<'d>> Clone for JoinPos<'d, D> {
 }
 impl<'d, D: PrettyDoc<'d>> Copy for JoinPos<'d, D> {}
 
+/// An error that can occur while pretty printing the document.
 #[derive(thiserror::Error, Debug, Clone)]
 pub enum PrintingError {
     #[error("Pretty printing path invalid at child index {0}.")]
@@ -164,7 +180,6 @@ pub enum PrintingError {
     CheckPosChildIndexOutOfBounds { index: isize, len: usize },
     #[error("Notation/doc mismatch: Notation contained CheckPos::Child(_) but doc node contained text instead.")]
     CheckPosChildOnChildlessDoc,
-    // Count used on texty node
     #[error("Notation/doc mismatch: Notation was Count but doc node contained text instead of children.")]
     CountNotationOnChildlessDoc,
     #[error("Doc node's num_children() changed between invocations!")]

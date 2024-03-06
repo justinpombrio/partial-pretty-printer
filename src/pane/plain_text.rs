@@ -1,21 +1,27 @@
-use super::pretty_window::PrettyWindow;
-use crate::geometry::{Height, Pos, Size, Width};
+use crate::Style;
+use crate::{pane::PrettyWindow, Height, Pos, Size, Width};
 use std::convert::Infallible;
 use std::fmt;
 use std::marker::PhantomData;
 
-/// Render a document in plain text.
+/// A simple [`PrettyWindow`] that outputs the contents of the "window" as plain text. Use
+/// [`fmt::Display`] to view the text.
 #[derive(Debug)]
-pub struct PlainText<S: fmt::Debug + Default> {
+pub struct PlainText<S: Style> {
+    /// A line is stored as a vector of characters. Each element represents one column position, so
+    /// a full-width unicode character will be followed by a `SENTINEL` value to indicate that it
+    /// takes up the next column as well.
     lines: Vec<Vec<char>>,
+    /// The size of the window.
     size: Size,
-    phantom: PhantomData<S>,
+    /// The style is ignored.
+    phantom_style: PhantomData<S>,
 }
 
-// Follows each full-width char
+// Follows each full-width char.
 const SENTINEL: char = '\0';
 
-impl<S: fmt::Debug + Default> fmt::Display for PlainText<S> {
+impl<S: Style> fmt::Display for PlainText<S> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for line in &self.lines {
             for ch in line {
@@ -29,23 +35,23 @@ impl<S: fmt::Debug + Default> fmt::Display for PlainText<S> {
     }
 }
 
-impl<S: fmt::Debug + Default> PlainText<S> {
-    /// Construct a screen with the given width and height.
+impl<S: Style> PlainText<S> {
+    /// Construct a window with the given width and height.
     pub fn new(width: Width, height: Height) -> PlainText<S> {
         PlainText::<S> {
             lines: vec![],
             size: Size { width, height },
-            phantom: PhantomData,
+            phantom_style: PhantomData,
         }
     }
 
-    /// Construct a screen with the given width and unbounded height.
+    /// Construct a window with the given width and unbounded height.
     pub fn new_unbounded_height(width: Width) -> PlainText<S> {
         PlainText::<S>::new(width, Height::max_value())
     }
 }
 
-impl<S: fmt::Debug + Default> PrettyWindow for PlainText<S> {
+impl<S: Style> PrettyWindow for PlainText<S> {
     type Error = Infallible;
     type Style = S;
 
@@ -53,7 +59,7 @@ impl<S: fmt::Debug + Default> PrettyWindow for PlainText<S> {
         Ok(self.size)
     }
 
-    fn print_char(
+    fn display_char(
         &mut self,
         ch: char,
         pos: Pos,
