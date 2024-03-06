@@ -1,5 +1,5 @@
 use crate::standard::pretty_testing::{assert_pp, assert_pp_region, assert_pp_seek};
-use partial_pretty_printer::examples::json::{
+use partial_pretty_printer::doc_examples::json::{
     json_array, json_bool, json_comment, json_null, json_number, json_object, json_object_pair,
     json_roots, json_string, Json,
 };

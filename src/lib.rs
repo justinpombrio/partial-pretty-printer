@@ -1,17 +1,15 @@
-//! This is a pretty printing library for tree-shaped documents, such as ASTs.
+//! This is a pretty printing library for formatting source code in any language.
 //!
-//! You provide declarative rules ([`Notation`]s) for how to display each sort of node in a
-//! document, including line break options, indentation, and coloring. The pretty printer prints the
-//! document, picking a good layout that fits in your desired line width if possible.
+//! You provide declarative rules for how to display each sort of node in a
+//! document, including line break options, indentation, and coloring. The Partial
+//! Pretty Printer prints the document, picking a good layout that fits in your
+//! desired line width if possible.
 //!
 //! The [`Notation`] combinators that it uses are similar to existing approaches like Wadler's
 //! [prettier printer](http://homepages.inf.ed.ac.uk/wadler/papers/prettier/prettier.pdf).
 //! However, this library's algorithm is unique in that it is peephole-efficient: it lets you
 //! display just _part of_ a document. If you ask it to print 50 lines in the middle of a 100,000
 //! line document, it can typically do that in ~50 units of work, rather than ~50,000 units of work.
-//!
-//! This library was made for the [Synless](https://github.com/justinpombrio/synless) editor, but
-//! it aims to be general-purpose.
 //!
 //! ## Quick Reference
 //!
@@ -34,7 +32,7 @@
 //! - The node's [`Notation`], which describes how to display that sort of node.
 //!   It can express choices like "if the whole list won't fit on one line, put newlines between
 //!   each element". For an example of how to write realistic [`Notation`]s, see
-//!   [`examples::Json`](https://github.com/justinpombrio/partial-pretty-printer/blob/master/src/examples/json.rs).
+//!   [`doc_examples::Json`](https://github.com/justinpombrio/partial-pretty-printer/blob/master/src/examples/json.rs).
 //! - Other associated data like a unique ID.
 //!
 //! ## Pretty Printing Functions
@@ -68,7 +66,7 @@ mod pretty_doc;
 mod pretty_print;
 mod valid_notation;
 
-pub mod examples;
+pub mod doc_examples;
 pub mod notation_constructors;
 pub mod pane;
 

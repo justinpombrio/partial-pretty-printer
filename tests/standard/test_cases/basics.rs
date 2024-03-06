@@ -67,7 +67,7 @@ fn basics_eol() {
 
 #[test]
 fn test_all_paths_fn() {
-    use partial_pretty_printer::examples::json::{json_array, json_string};
+    use partial_pretty_printer::doc_examples::json::{json_array, json_string};
 
     let doc = json_array(vec![
         json_array(vec![json_string("0.0"), json_string("0.1")]),

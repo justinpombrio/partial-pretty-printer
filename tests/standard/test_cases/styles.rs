@@ -1,5 +1,5 @@
 use partial_pretty_printer::{
-    examples::{
+    doc_examples::{
         json::{json_array, json_number, json_object, json_object_pair, json_string, Json},
         BasicStyle, Color,
     },

@@ -1,6 +1,6 @@
 use crate::standard::pretty_testing::SimpleDoc;
 use partial_pretty_printer::{
-    examples::{
+    doc_examples::{
         json::{json_array, json_number, json_string, Json},
         BasicStyle,
     },
