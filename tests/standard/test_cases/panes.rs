@@ -550,7 +550,7 @@ fn test_focus_point() {
     pane_test_with_focus(
         Size {
             width: 20,
-            height: 8,
+            height: 12,
         },
         PaneNotation::Vert(vec![
             (PaneSize::Fixed(3), fill('*')),
@@ -570,14 +570,18 @@ fn test_focus_point() {
             "********************",
             "********************",
             "********************",
+            "##",
+            "##[",
             "##    \"Hello\",",
             "##    \"darkness,\",",
             "##    [\"my\", \"old\"],",
             "##    \"friend\"",
             "##]",
+            "##",
+            "##",
             "",
         ]
         .join("\n"),
-        Pos { col: 11, row: 5 },
+        Pos { col: 11, row: 7 },
     );
 }
