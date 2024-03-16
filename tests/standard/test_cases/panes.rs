@@ -552,26 +552,32 @@ fn test_focus_point() {
             width: 20,
             height: 8,
         },
-        PaneNotation::Horz(vec![
-            (PaneSize::Fixed(2), fill('#')),
+        PaneNotation::Vert(vec![
+            (PaneSize::Fixed(3), fill('*')),
             (
                 PaneSize::Proportional(1),
-                PaneNotation::Doc { label: contents },
+                PaneNotation::Horz(vec![
+                    (PaneSize::Fixed(2), fill('#')),
+                    (
+                        PaneSize::Proportional(1),
+                        PaneNotation::Doc { label: contents },
+                    ),
+                ]),
             ),
         ]),
         &[
             // force rustfmt
-            "##",
-            "##[",
+            "********************",
+            "********************",
+            "********************",
             "##    \"Hello\",",
             "##    \"darkness,\",",
             "##    [\"my\", \"old\"],",
             "##    \"friend\"",
             "##]",
-            "##",
             "",
         ]
         .join("\n"),
-        Pos { col: 11, row: 4 },
+        Pos { col: 11, row: 5 },
     );
 }
