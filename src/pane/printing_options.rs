@@ -1,5 +1,8 @@
 use crate::{Height, Row, Width};
 
+#[cfg(doc)]
+use super::pretty_window::PrettyWindow;
+
 /// Options for how to print a document within a pane.
 #[derive(Debug, Clone)]
 pub struct PrintingOptions {
@@ -13,6 +16,8 @@ pub struct PrintingOptions {
     pub focus_height: f32,
     /// How to choose the document width.
     pub width_strategy: WidthStrategy,
+    /// Whether to invoke [`PrettyWindow::set_focus`] with the focus point of this document.
+    pub set_focus: bool,
 }
 
 /// Whether the focus should be at the start or end of the node.

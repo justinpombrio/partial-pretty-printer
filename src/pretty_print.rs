@@ -127,6 +127,14 @@ impl<'d, D: PrettyDoc<'d>> Line<'d, D> {
 }
 
 impl<'d, D: PrettyDoc<'d>> FocusedLine<'d, D> {
+    pub fn left_width(&self) -> Width {
+        self.left_segments.iter().map(|seg| seg.width).sum()
+    }
+
+    pub fn right_width(&self) -> Width {
+        self.right_segments.iter().map(|seg| seg.width).sum()
+    }
+
     pub fn width(&self) -> Width {
         let segs = self.left_segments.iter().chain(self.right_segments.iter());
         segs.map(|seg| seg.width).sum()
