@@ -16,6 +16,8 @@ pub struct PlainText<S: Style> {
     size: Size,
     /// The style is ignored.
     phantom_style: PhantomData<S>,
+    /// The focus points of the documents.
+    focus_points: Vec<Pos>,
 }
 
 // Follows each full-width char.
@@ -41,6 +43,7 @@ impl<S: Style> PlainText<S> {
         PlainText::<S> {
             lines: vec![],
             size: Size { width, height },
+            focus_points: Vec::new(),
             phantom_style: PhantomData,
         }
     }
@@ -48,6 +51,10 @@ impl<S: Style> PlainText<S> {
     /// Construct a window with the given width and unbounded height.
     pub fn new_unbounded_height(width: Width) -> PlainText<S> {
         PlainText::<S>::new(width, Height::max_value())
+    }
+
+    pub fn focus_points(&self) -> &[Pos] {
+        &self.focus_points
     }
 }
 
@@ -81,6 +88,11 @@ impl<S: Style> PrettyWindow for PlainText<S> {
         if full_width {
             line[col + 1] = SENTINEL;
         }
+        Ok(())
+    }
+
+    fn set_focus(&mut self, pos: Pos) -> Result<(), Self::Error> {
+        self.focus_points.push(pos);
         Ok(())
     }
 }

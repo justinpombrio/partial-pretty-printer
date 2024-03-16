@@ -1,5 +1,8 @@
 use crate::{Pos, Size, Style};
 
+#[cfg(doc)]
+use super::printing_options::PrintingOptions;
+
 /// A "window" that can display a set of pretty-printed [`PrettyDoc`](crate::PrettyDoc)s.
 pub trait PrettyWindow: Sized {
     /// An error that can happen when displaying to the window. It is forbidden from containing
@@ -22,4 +25,8 @@ pub trait PrettyWindow: Sized {
         style: &Self::Style,
         full_width: bool,
     ) -> Result<(), Self::Error>;
+
+    /// Invoked for each document for which [`PrintingOptions::set_focus`] is true,
+    /// where `pos` is the focal point of the document.
+    fn set_focus(&mut self, pos: Pos) -> Result<(), Self::Error>;
 }

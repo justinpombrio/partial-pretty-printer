@@ -192,6 +192,8 @@ struct PrintedDoc<'d, D: PrettyDoc<'d>> {
     focus_line_index: usize,
     /// Which row of the pane should the focus line be displayed on.
     focus_line_row: Row,
+    /// Focus point of the document, relative to the pane.
+    focus_point: Option<Pos>,
 }
 
 impl<'d, D: PrettyDoc<'d>> PrintedDoc<'d, D> {
@@ -203,6 +205,7 @@ impl<'d, D: PrettyDoc<'d>> PrintedDoc<'d, D> {
                 lines: Vec::new(),
                 focus_line_index: 0,
                 focus_line_row: 0,
+                focus_point: None,
             });
         }
 
@@ -211,6 +214,15 @@ impl<'d, D: PrettyDoc<'d>> PrintedDoc<'d, D> {
         let at_end = options.focus_side == FocusSide::End;
         let (mut upward_printer, focused_line, mut downward_printer) =
             pretty_print(doc, printing_width, &options.focus_path, at_end)?;
+
+        let focus_point = if options.set_focus {
+            Some(Pos {
+                row: focus_line_row,
+                col: focused_line.left_width(),
+            })
+        } else {
+            None
+        };
 
         let mut lines = Vec::new();
         for _ in 0..focus_line_row {
@@ -226,10 +238,12 @@ impl<'d, D: PrettyDoc<'d>> PrintedDoc<'d, D> {
                 lines.push(line?);
             }
         }
+
         Ok(PrintedDoc {
             lines,
             focus_line_index,
             focus_line_row,
+            focus_point,
         })
     }
 
@@ -253,6 +267,14 @@ impl<'d, D: PrettyDoc<'d>> PrintedDoc<'d, D> {
         D: PrettyDoc<'d>,
         W: PrettyWindow<Style = D::Style>,
     {
+        if let Some(focus_point) = self.focus_point {
+            window
+                .set_focus(Pos {
+                    row: focus_point.row + rect.min_row,
+                    col: focus_point.col + rect.min_col,
+                })
+                .map_err(PaneError::PrettyWindowError)?;
+        }
         let mut relative_pos = Pos {
             col: 0,
             row: self.focus_line_row - (self.focus_line_index as Row),

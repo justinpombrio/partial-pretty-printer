@@ -8,7 +8,7 @@ use partial_pretty_printer::{
         display_pane, DocLabel, FocusSide, PaneNotation, PaneSize, PlainText, PrintingOptions,
         WidthStrategy,
     },
-    PrettyDoc, Size, Style,
+    Pos, PrettyDoc, Size, Style,
 };
 use std::fmt::Debug;
 use std::marker::PhantomData;
@@ -58,10 +58,28 @@ fn pane_test_with_size<'d, S: Style, D: PrettyDoc<'d, Style = S> + Clone + Debug
     assert_eq!(actual, expected);
 }
 
-fn fill<L: DocLabel>(ch: char) -> PaneNotation<L, NoStyle> {
+#[track_caller]
+fn pane_test_with_focus<'d, S: Style, D: PrettyDoc<'d, Style = S> + Clone + Debug>(
+    size: Size,
+    notation: PaneNotation<SimpleLabel<'d, D>, S>,
+    expected: &str,
+    expected_pos: Pos,
+) {
+    let mut screen = PlainText::new(size.width, size.height);
+    display_pane(&mut screen, &notation, &get_content).unwrap();
+    let actual = screen.to_string();
+    if actual != expected {
+        eprintln!("ACTUAL:\n{}", actual);
+        eprintln!("EXPECTED:\n{}", expected);
+    }
+    assert_eq!(actual, expected);
+    assert_eq!(screen.focus_points(), &[expected_pos]);
+}
+
+fn fill<L: DocLabel, S: Style + Default>(ch: char) -> PaneNotation<L, S> {
     PaneNotation::Fill {
         ch,
-        style: NoStyle::default(),
+        style: S::default(),
     }
 }
 
@@ -213,6 +231,7 @@ fn test_doc_pane() {
         focus_height: 0.0,
         width_strategy: WidthStrategy::Full,
         focus_side: FocusSide::Start,
+        set_focus: false,
     };
     let doc = json_array(vec![json_string("Hello"), json_string("world")]);
     let contents = SimpleLabel(Some((&doc, options)), PhantomData);
@@ -229,6 +248,7 @@ fn test_doc_pane_full_width_cutoff() {
         focus_height: 0.0,
         width_strategy: WidthStrategy::Full,
         focus_side: FocusSide::Start,
+        set_focus: false,
     };
     let doc = json_string("一二三");
     let contents = SimpleLabel(Some((&doc, options)), PhantomData);
@@ -277,6 +297,7 @@ fn test_pane_cursor_heights() {
             focus_height,
             width_strategy: WidthStrategy::Full,
             focus_side: FocusSide::Start,
+            set_focus: false,
         };
         let doc = json_string("Hi");
         let contents = SimpleLabel(Some((&doc, options)), PhantomData);
@@ -301,6 +322,7 @@ fn test_pane_widths() {
             focus_height: 0.0,
             width_strategy,
             focus_side: FocusSide::Start,
+            set_focus: false,
         };
         let doc = json_array(vec![json_string("Hello"), json_string("world")]);
         let contents = SimpleLabel(Some((&doc, options)), PhantomData);
@@ -335,6 +357,7 @@ fn test_seek() {
             focus_height: 0.5,
             width_strategy: WidthStrategy::Full,
             focus_side,
+            set_focus: false,
         };
 
         PaneNotation::Doc {
@@ -401,6 +424,7 @@ fn test_dynamic() {
             focus_height: 0.0,
             width_strategy: WidthStrategy::Full,
             focus_side: FocusSide::Start,
+            set_focus: false,
         };
 
         PaneNotation::Doc {
@@ -504,5 +528,50 @@ fn test_dynamic() {
             "    5\n",
         ]
         .join("\n"),
+    );
+}
+
+#[test]
+fn test_focus_point() {
+    let options = PrintingOptions {
+        focus_path: vec![2, 0],
+        focus_height: 0.5,
+        width_strategy: WidthStrategy::Full,
+        focus_side: FocusSide::End,
+        set_focus: true,
+    };
+    let doc = json_array(vec![
+        json_string("Hello"),
+        json_string("darkness,"),
+        json_array(vec![json_string("my"), json_string("old")]),
+        json_string("friend"),
+    ]);
+    let contents = SimpleLabel(Some((&doc, options)), PhantomData);
+    pane_test_with_focus(
+        Size {
+            width: 20,
+            height: 8,
+        },
+        PaneNotation::Horz(vec![
+            (PaneSize::Fixed(2), fill('#')),
+            (
+                PaneSize::Proportional(1),
+                PaneNotation::Doc { label: contents },
+            ),
+        ]),
+        &[
+            // force rustfmt
+            "##",
+            "##[",
+            "##    \"Hello\",",
+            "##    \"darkness,\",",
+            "##    [\"my\", \"old\"],",
+            "##    \"friend\"",
+            "##]",
+            "##",
+            "",
+        ]
+        .join("\n"),
+        Pos { col: 11, row: 4 },
     );
 }
