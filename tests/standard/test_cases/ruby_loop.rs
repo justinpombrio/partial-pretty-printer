@@ -55,52 +55,53 @@ impl<'d> PrettyDoc<'d> for &'d Ruby {
     type Style = ();
     type StyleLabel = ();
     type Condition = ();
+    type Error = std::convert::Infallible;
 
-    fn id(self) -> usize {
-        self.id
+    fn id(self) -> Result<usize, Self::Error> {
+        Ok(self.id)
     }
 
-    fn notation(self) -> &'d ValidNotation<(), ()> {
+    fn notation(self) -> Result<&'d ValidNotation<(), ()>, Self::Error> {
         use RubyData::*;
 
-        match self.data {
+        Ok(match self.data {
             Var(_) => &VAR_NOTATION,
             MethodCall(_) => &METHOD_CALL_NOTATION,
             DoLoop(_) => &DO_LOOP_NOTATION,
-        }
+        })
     }
 
-    fn condition(self, _condition: &()) -> bool {
-        false
+    fn condition(self, _condition: &()) -> Result<bool, Self::Error> {
+        Ok(false)
     }
 
-    fn node_style(self) -> () {
-        ()
+    fn node_style(self) -> Result<(), Self::Error> {
+        Ok(())
     }
 
-    fn lookup_style(self, _label: ()) -> () {
-        ()
+    fn lookup_style(self, _label: ()) -> Result<(), Self::Error> {
+        Ok(())
     }
 
-    fn num_children(self) -> Option<usize> {
-        match self.contents() {
+    fn num_children(self) -> Result<Option<usize>, Self::Error> {
+        Ok(match self.contents() {
             Contents::Text(_) => None,
             Contents::Children(slice) => Some(slice.len()),
-        }
+        })
     }
 
-    fn unwrap_text(self) -> &'d str {
-        match self.contents() {
+    fn unwrap_text(self) -> Result<&'d str, Self::Error> {
+        Ok(match self.contents() {
             Contents::Text(txt) => txt,
             Contents::Children(_) => unreachable!(),
-        }
+        })
     }
 
-    fn unwrap_child(self, i: usize) -> Self {
-        match self.contents() {
+    fn unwrap_child(self, i: usize) -> Result<Self, Self::Error> {
+        Ok(match self.contents() {
             Contents::Text(_) => unreachable!(),
             Contents::Children(slice) => &slice[i],
-        }
+        })
     }
 }
 

@@ -26,36 +26,37 @@ impl<'a> PrettyDoc<'a> for &'a SimpleDoc {
     type Style = ();
     type StyleLabel = ();
     type Condition = ();
+    type Error = std::convert::Infallible;
 
-    fn id(self) -> usize {
-        0
+    fn id(self) -> Result<usize, Self::Error> {
+        Ok(0)
     }
 
-    fn notation(self) -> &'a ValidNotation<(), ()> {
-        &self.0
+    fn notation(self) -> Result<&'a ValidNotation<(), ()>, Self::Error> {
+        Ok(&self.0)
     }
 
-    fn condition(self, _condition: &()) -> bool {
-        false
+    fn condition(self, _condition: &()) -> Result<bool, Self::Error> {
+        Ok(false)
     }
 
-    fn node_style(self) -> () {
-        ()
+    fn node_style(self) -> Result<(), Self::Error> {
+        Ok(())
     }
 
-    fn lookup_style(self, _label: ()) -> () {
-        ()
+    fn lookup_style(self, _label: ()) -> Result<(), Self::Error> {
+        Ok(())
     }
 
-    fn num_children(self) -> Option<usize> {
-        Some(0)
+    fn num_children(self) -> Result<Option<usize>, Self::Error> {
+        Ok(Some(0))
     }
 
-    fn unwrap_text(self) -> &'a str {
+    fn unwrap_text(self) -> Result<&'a str, Self::Error> {
         panic!("Nothing in a simple doc");
     }
 
-    fn unwrap_child(self, _i: usize) -> Self {
+    fn unwrap_child(self, _i: usize) -> Result<Self, Self::Error> {
         panic!("Nothing in a simple doc");
     }
 }
@@ -94,9 +95,9 @@ fn print_above_and_below<'d, D: PrettyDoc<'d>>(
 pub fn all_paths<'d, D: PrettyDoc<'d>>(doc: D) -> Vec<Vec<usize>> {
     fn recur<'d, D: PrettyDoc<'d>>(doc: D, path: &mut Vec<usize>, paths: &mut Vec<Vec<usize>>) {
         paths.push(path.clone());
-        for i in 0..doc.num_children().unwrap_or(0) {
+        for i in 0..doc.num_children().unwrap().unwrap_or(0) {
             path.push(i);
-            recur(doc.unwrap_child(i), path, paths);
+            recur(doc.unwrap_child(i).unwrap(), path, paths);
             path.pop();
         }
     }
@@ -158,7 +159,7 @@ fn assert_pp_impl<'d, D: PrettyDoc<'d>>(doc: D, width: Width, expected_lines: Op
             &format!(
                 "IN PRETTY PRINTING WITH WIDTH {}\nNOTATION\n{}",
                 width,
-                doc.notation()
+                doc.notation().unwrap()
             ),
             ("ORACLE", oracle_result.clone()),
             ("ACTUAL", lines.join("\n")),
