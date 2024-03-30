@@ -49,11 +49,11 @@ fn test_count() {
 #[test]
 fn test_fold() {
     static FOLD_NOTATION: Lazy<TreeNotation> = Lazy::new(|| {
-        (lit("[")
+        ((lit("[")
             + (2 >> fold(Fold {
                 first: lit("first: ") + child(0),
-                join: left() ^ lit("later: ") + right(),
-            }))
+                join: left() ^ (lit("later: ") + right()),
+            })))
             ^ lit("]"))
         .validate()
         .unwrap()
@@ -100,8 +100,8 @@ fn test_condition_positions() {
         let cond = TreeCondition::IsComment;
         let list_seq = fold(Fold {
             first: check(cond, CheckPos::Child(0), lit("/* "), empty()) + child(0),
-            join: left() + check(cond, CheckPos::LeftChild, lit(" */"), empty())
-                ^ check(cond, CheckPos::RightChild, lit("/* "), empty()) + right(),
+            join: (left() + check(cond, CheckPos::LeftChild, lit(" */"), empty()))
+                ^ (check(cond, CheckPos::RightChild, lit("/* "), empty()) + right()),
         });
         let list_note = list_seq + check(cond, CheckPos::Child(-1), lit(" */"), empty());
         list_note.validate().unwrap()

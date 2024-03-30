@@ -96,7 +96,5 @@ pub trait Style: fmt::Debug + Clone {
 }
 
 impl Style for () {
-    fn combine(_outer_style: &Self, _inner_style: &Self) -> Self {
-        ()
-    }
+    fn combine(_outer_style: &Self, _inner_style: &Self) -> Self {}
 }

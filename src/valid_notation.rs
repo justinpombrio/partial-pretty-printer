@@ -60,9 +60,9 @@ struct Context {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CountContext {
-    InCountZero,
-    InCountOne,
-    InCountMany,
+    Zero,
+    One,
+    Many,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -81,21 +81,21 @@ impl Context {
 
     fn count_zero(self) -> Self {
         Context {
-            count: Some(CountContext::InCountZero),
+            count: Some(CountContext::Zero),
             fold: self.fold,
         }
     }
 
     fn count_one(self) -> Self {
         Context {
-            count: Some(CountContext::InCountOne),
+            count: Some(CountContext::One),
             fold: self.fold,
         }
     }
 
     fn count_many(self) -> Self {
         Context {
-            count: Some(CountContext::InCountMany),
+            count: Some(CountContext::Many),
             fold: self.fold,
         }
     }
@@ -118,7 +118,7 @@ impl Context {
 impl<L: StyleLabel, C: Condition> Notation<L, C> {
     /// If no flaws are found in this [`Notation`], convert it into a [`ValidNotation`].
     pub fn validate(self) -> Result<ValidNotation<L, C>, NotationError> {
-        self.validate_rec(false, false, Context::new())?;
+        self.validate_rec(false, Context::new())?;
         Ok(ValidNotation(self))
     }
 
@@ -137,8 +137,7 @@ impl<L: StyleLabel, C: Condition> Notation<L, C> {
     ///
     /// Similarly, the `eol` parameter indicates whether there could possibly be an
     /// [`EndOfLine`](Notation::EndOfLine) immediately to the left of this notation.
-    fn validate_rec(&self, flat: bool, eol: bool, ctx: Context) -> Result<bool, NotationError> {
-        use CountContext::*;
+    fn validate_rec(&self, eol: bool, ctx: Context) -> Result<bool, NotationError> {
         use FoldContext::*;
         use Notation::*;
         use NotationError::*;
@@ -151,25 +150,25 @@ impl<L: StyleLabel, C: Condition> Notation<L, C> {
             Text | Literal(_) => Ok(false),
             Newline => Ok(false),
             EndOfLine => Ok(true),
-            Flat(note) => note.validate_rec(true, eol, ctx),
-            Indent(_, _, note) => note.validate_rec(flat, eol, ctx),
+            Flat(note) => note.validate_rec(eol, ctx),
+            Indent(_, _, note) => note.validate_rec(eol, ctx),
             Concat(note1, note2) => {
-                let eol = note1.validate_rec(flat, eol, ctx)?;
-                note2.validate_rec(flat, eol, ctx)
+                let eol = note1.validate_rec(eol, ctx)?;
+                note2.validate_rec(eol, ctx)
             }
             Choice(note1, note2) => {
-                let eol_1 = note1.validate_rec(flat, eol, ctx)?;
-                let eol_2 = note2.validate_rec(flat, eol, ctx)?;
+                let eol_1 = note1.validate_rec(eol, ctx)?;
+                let eol_2 = note2.validate_rec(eol, ctx)?;
                 Ok(eol_1 || eol_2)
             }
             Check(_, pos, note1, note2) => {
                 match &pos {
                     CheckPos::Here => (),
-                    CheckPos::Child(_) if ctx.count == Some(InCountZero) => {
+                    CheckPos::Child(_) if ctx.count == Some(CountContext::Zero) => {
                         return Err(CountZeroCheckPosChild)
                     }
                     CheckPos::Child(i)
-                        if ctx.count == Some(InCountOne)
+                        if ctx.count == Some(CountContext::One)
                             && normalize_child_index(*i, 1).is_none() =>
                     {
                         return Err(CountOneCheckPosChildIndex(*i))
@@ -183,28 +182,31 @@ impl<L: StyleLabel, C: Condition> Notation<L, C> {
                     }
                     CheckPos::LeftChild | CheckPos::RightChild => (),
                 }
-                let eol_1 = note1.validate_rec(flat, eol, ctx)?;
-                let eol_2 = note2.validate_rec(flat, eol, ctx)?;
+                let eol_1 = note1.validate_rec(eol, ctx)?;
+                let eol_2 = note2.validate_rec(eol, ctx)?;
                 Ok(eol_1 || eol_2)
             }
-            Child(_) if ctx.count == Some(InCountZero) => Err(CountZeroChild),
-            Child(i) if ctx.count == Some(InCountOne) && normalize_child_index(*i, 1).is_none() => {
+            Child(_) if ctx.count == Some(CountContext::Zero) => Err(CountZeroChild),
+            Child(i)
+                if ctx.count == Some(CountContext::One)
+                    && normalize_child_index(*i, 1).is_none() =>
+            {
                 Err(CountOneChildIndex(*i))
             }
             Child(_) => Ok(false),
-            Style(_, note) => note.validate_rec(flat, eol, ctx),
+            Style(_, note) => note.validate_rec(eol, ctx),
             Count { .. } if ctx.count.is_some() => Err(NestedCount),
             Count { zero, one, many } => {
-                let eol_1 = zero.validate_rec(flat, eol, ctx.count_zero())?;
-                let eol_2 = one.validate_rec(flat, eol, ctx.count_one())?;
-                let eol_3 = many.validate_rec(flat, eol, ctx.count_many())?;
+                let eol_1 = zero.validate_rec(eol, ctx.count_zero())?;
+                let eol_2 = one.validate_rec(eol, ctx.count_one())?;
+                let eol_3 = many.validate_rec(eol, ctx.count_many())?;
                 Ok(eol_1 || eol_2 || eol_3)
             }
             Fold { .. } if ctx.fold.is_some() => Err(NestedFold),
             Fold { first, join } => {
                 // Can't easily check for EOL here
-                first.validate_rec(flat, false, ctx.fold_first())?;
-                join.validate_rec(flat, false, ctx.fold_join())?;
+                first.validate_rec(false, ctx.fold_first())?;
+                join.validate_rec(false, ctx.fold_join())?;
                 Ok(false)
             }
             Left if ctx.fold != Some(InFoldJoin) => Err(LeftOutsideJoin),

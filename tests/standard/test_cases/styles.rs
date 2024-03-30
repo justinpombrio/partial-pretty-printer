@@ -64,7 +64,7 @@ impl RichText {
             for ch in segment.str.chars() {
                 chars.push(RichChar {
                     ch,
-                    style: segment.style.clone(),
+                    style: segment.style,
                 });
             }
         }

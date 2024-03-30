@@ -337,12 +337,7 @@ fn test_pane_widths() {
 }
 
 fn make_array(start: usize, end: usize) -> Json {
-    json_array(
-        (start..end)
-            .into_iter()
-            .map(|x| json_number(x as f64))
-            .collect(),
-    )
+    json_array((start..end).map(|x| json_number(x as f64)).collect())
 }
 
 #[test]
@@ -418,7 +413,7 @@ fn test_seek() {
 
 #[test]
 fn test_dynamic() {
-    fn make_note<'a>(doc: &'a Json) -> PaneNotation<SimpleLabel<'a, &'a Json>, BasicStyle> {
+    fn make_note(doc: &Json) -> PaneNotation<SimpleLabel<&Json>, BasicStyle> {
         let options = PrintingOptions {
             focus_path: Vec::new(),
             focus_height: 0.0,

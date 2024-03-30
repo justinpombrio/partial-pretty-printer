@@ -150,13 +150,7 @@ impl<'d, D: PrettyDoc<'d>> Clone for DelayedConsolidatedNotation<'d, D> {
 
 impl<'d, D: PrettyDoc<'d>> Clone for JoinPos<'d, D> {
     fn clone(&self) -> Self {
-        JoinPos {
-            parent: self.parent,
-            child: self.child,
-            index: self.index,
-            first: self.first,
-            join: self.join,
-        }
+        *self
     }
 }
 impl<'d, D: PrettyDoc<'d>> Copy for JoinPos<'d, D> {}

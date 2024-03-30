@@ -156,7 +156,7 @@ impl Layout {
 
     fn last_line_len(&self) -> Width {
         let last_line = self.lines.last().unwrap(); // relies on invariant
-        str_width(&last_line)
+        str_width(last_line)
     }
 }
 

@@ -2,8 +2,8 @@
 
 use crate::{PrettyDoc, Style, ValidNotation};
 use std::cell::Cell;
-use std::thread_local;
 use std::convert::Infallible;
+use std::thread_local;
 
 #[cfg(doc)]
 use crate::Notation; // for links in rustdocs
@@ -196,10 +196,9 @@ where
 
     fn condition(self, condition: &TreeCondition) -> Result<bool, Self::Error> {
         Ok(match condition {
-            TreeCondition::IsEmptyText => match &self.contents {
-                Contents::Text(text) if text.is_empty() => true,
-                _ => false,
-            },
+            TreeCondition::IsEmptyText => {
+                matches!(&self.contents, Contents::Text(text) if text.is_empty())
+            }
             TreeCondition::NeedsSeparator => self.needs_separator,
             TreeCondition::IsComment => self.is_comment,
         })
