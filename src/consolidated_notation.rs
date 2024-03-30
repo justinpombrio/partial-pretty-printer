@@ -186,8 +186,8 @@ pub enum PrintingError<E: std::error::Error + 'static> {
     NumChildrenChanged,
     #[error("Pretty printing encountered a Text or Literal after an EndOfLine.")]
     TextAfterEndOfLine,
-    #[error("PrettyDoc implementation error: {0}")]
-    PrettyDocImpl(#[from] E),
+    #[error("PrettyDoc error: {0}")]
+    PrettyDoc(#[from] E),
 }
 
 impl<'d, D: PrettyDoc<'d>> DelayedConsolidatedNotation<'d, D> {
