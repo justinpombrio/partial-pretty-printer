@@ -8,7 +8,7 @@ use crate::{
 
 /// Errors that can occur while displaying a pane.
 #[derive(thiserror::Error, Debug)]
-pub enum PaneError<W: PrettyWindow> {
+pub enum PaneError<W: PrettyWindow, E: std::error::Error + 'static> {
     #[error(
         "Invalid pane notation: PaneSize::Dyanmic may only be used in a PaneNotation::Doc pane"
     )]
@@ -21,7 +21,7 @@ pub enum PaneError<W: PrettyWindow> {
     PrettyWindowError(#[source] W::Error),
 
     #[error("PrettyDoc printing error: {0}")]
-    PrintingError(#[from] PrintingError),
+    PrintingError(#[from] PrintingError<E>),
 }
 
 /// Display a [`PaneNotation`] to a [`PrettyWindow`].
@@ -32,7 +32,7 @@ pub fn display_pane<'d, L, D, W>(
     window: &mut W,
     notation: &PaneNotation<L, D::Style>,
     get_content: &impl Fn(L) -> Option<(D, PrintingOptions)>,
-) -> Result<(), PaneError<W>>
+) -> Result<(), PaneError<W, D::Error>>
 where
     L: DocLabel,
     D: PrettyDoc<'d>,
@@ -48,7 +48,7 @@ fn display_pane_rec<'d, L, D, W>(
     notation: &PaneNotation<L, D::Style>,
     get_content: &impl Fn(L) -> Option<(D, PrintingOptions)>,
     rect: Rectangle,
-) -> Result<(), PaneError<W>>
+) -> Result<(), PaneError<W, D::Error>>
 where
     L: DocLabel,
     D: PrettyDoc<'d>,
@@ -199,7 +199,7 @@ struct PrintedDoc<'d, D: PrettyDoc<'d>> {
 impl<'d, D: PrettyDoc<'d>> PrintedDoc<'d, D> {
     /// Pretty-print the portion of document that would fit in the given `size`,
     /// storing it as text in the `PrintedDoc`.
-    fn new(doc: D, options: &PrintingOptions, size: Size) -> Result<Self, PrintingError> {
+    fn new(doc: D, options: &PrintingOptions, size: Size) -> Result<Self, PrintingError<D::Error>> {
         if size.height == 0 || size.width == 0 {
             return Ok(PrintedDoc {
                 lines: Vec::new(),
@@ -262,7 +262,7 @@ impl<'d, D: PrettyDoc<'d>> PrintedDoc<'d, D> {
     }
 
     /// Actually display the document to the PrettyWindow.
-    fn display<W>(self, window: &mut W, rect: Rectangle) -> Result<(), PaneError<W>>
+    fn display<W>(self, window: &mut W, rect: Rectangle) -> Result<(), PaneError<W, D::Error>>
     where
         D: PrettyDoc<'d>,
         W: PrettyWindow<Style = D::Style>,
@@ -294,7 +294,7 @@ fn display_line<'d, D, W>(
     line: Line<'d, D>,
     relative_pos: Pos,
     rect: Rectangle,
-) -> Result<(), PaneError<W>>
+) -> Result<(), PaneError<W, D::Error>>
 where
     D: PrettyDoc<'d>,
     W: PrettyWindow<Style = D::Style>,

@@ -32,11 +32,11 @@ pub fn pretty_print<'d, D: PrettyDoc<'d>>(
     seek_end: bool,
 ) -> Result<
     (
-        impl Iterator<Item = Result<Line<'d, D>, PrintingError>>,
+        impl Iterator<Item = Result<Line<'d, D>, PrintingError<D::Error>>>,
         FocusedLine<'d, D>,
-        impl Iterator<Item = Result<Line<'d, D>, PrintingError>>,
+        impl Iterator<Item = Result<Line<'d, D>, PrintingError<D::Error>>>,
     ),
-    PrintingError,
+    PrintingError<D::Error>,
 > {
     span!("Pretty Print");
 
@@ -72,7 +72,7 @@ pub fn pretty_print<'d, D: PrettyDoc<'d>>(
 pub fn pretty_print_to_string<'d, D: PrettyDoc<'d>>(
     doc: D,
     width: Width,
-) -> Result<String, PrintingError> {
+) -> Result<String, PrintingError<D::Error>> {
     let (_, focused_line, lines_iter) = pretty_print(doc, width, &[], false)?;
     let mut string = focused_line.to_string();
     for line in lines_iter {
@@ -97,9 +97,9 @@ impl<'d, D: PrettyDoc<'d>> Clone for Chunk<'d, D> {
 }
 
 impl<'d, D: PrettyDoc<'d>> Chunk<'d, D> {
-    fn new(notation: DelayedConsolidatedNotation<'d, D>) -> Result<Self, PrintingError> {
+    fn new(notation: DelayedConsolidatedNotation<'d, D>) -> Result<Self, PrintingError<D::Error>> {
         Ok(Chunk {
-            id: notation.doc().id(),
+            id: notation.doc().id()?,
             notation: notation.eval()?,
         })
     }
@@ -230,7 +230,7 @@ impl<'d, D: PrettyDoc<'d>> Block<'d, D> {
         }
     }
 
-    fn push_text(&mut self, textual: Textual<'d, D>) -> Result<(), PrintingError> {
+    fn push_text(&mut self, textual: Textual<'d, D>) -> Result<(), PrintingError<D::Error>> {
         if self.at_eol {
             return Err(PrintingError::TextAfterEndOfLine);
         }
@@ -269,7 +269,7 @@ struct Printer<'d, D: PrettyDoc<'d>> {
 }
 
 impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
-    fn new(width: Width) -> Result<Printer<'d, D>, PrintingError> {
+    fn new(width: Width) -> Result<Printer<'d, D>, PrintingError<D::Error>> {
         let empty_block = Block::new(None, Vec::new());
         Ok(Printer {
             width,
@@ -279,7 +279,7 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
     }
 
     /// Returns `None` if it already reached the bottom of the document.
-    fn print_next_line(&mut self) -> Result<Option<Line<'d, D>>, PrintingError> {
+    fn print_next_line(&mut self) -> Result<Option<Line<'d, D>>, PrintingError<D::Error>> {
         use ConsolidatedNotation::*;
         span!("print_next_line");
 
@@ -307,7 +307,7 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
     }
 
     /// Returns `None` if it already reached the top of the document.
-    fn print_prev_line(&mut self) -> Result<Option<Line<'d, D>>, PrintingError> {
+    fn print_prev_line(&mut self) -> Result<Option<Line<'d, D>>, PrintingError<D::Error>> {
         use ConsolidatedNotation::*;
         span!("print_prev_line");
 
@@ -334,10 +334,15 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
 
     /// Focus on the left or right of the node at the given path.
     /// (You don't want to seek twice.)
-    fn seek(&mut self, doc: D, path: &[usize], seek_end: bool) -> Result<(), PrintingError> {
+    fn seek(
+        &mut self,
+        doc: D,
+        path: &[usize],
+        seek_end: bool,
+    ) -> Result<(), PrintingError<D::Error>> {
         span!("seek");
 
-        let mut chunk = Chunk::new(DelayedConsolidatedNotation::new(doc))?;
+        let mut chunk = Chunk::new(DelayedConsolidatedNotation::new(doc)?)?;
         for child_index in path {
             chunk = self.seek_child(chunk, *child_index)?;
         }
@@ -350,7 +355,7 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
 
     /// Given an _unexpanded_ chunk that belongs at the focus, move the focus to just past the end
     /// of it.
-    fn seek_end(&mut self, chunk: Chunk<'d, D>) -> Result<(), PrintingError> {
+    fn seek_end(&mut self, chunk: Chunk<'d, D>) -> Result<(), PrintingError<D::Error>> {
         use ConsolidatedNotation::*;
         span!("seek_end");
 
@@ -379,7 +384,7 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
 
     /// Given an _unexpanded_ chunk that belongs at the focus, move the focus to just before the
     /// start of it.
-    fn seek_start(&mut self, chunk: Chunk<'d, D>) -> Result<(), PrintingError> {
+    fn seek_start(&mut self, chunk: Chunk<'d, D>) -> Result<(), PrintingError<D::Error>> {
         span!("seek_start");
 
         let mut block = self.next_blocks.pop().unwrap();
@@ -395,7 +400,7 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
         &mut self,
         parent: Chunk<'d, D>,
         child_index: usize,
-    ) -> Result<Chunk<'d, D>, PrintingError> {
+    ) -> Result<Chunk<'d, D>, PrintingError<D::Error>> {
         use ConsolidatedNotation::*;
         span!("seek_child");
 
@@ -474,7 +479,7 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
         &mut self,
         block: &mut Block<'d, D>,
         chunk: Chunk<'d, D>,
-    ) -> Result<(), PrintingError> {
+    ) -> Result<(), PrintingError<D::Error>> {
         use ConsolidatedNotation::*;
         span!("expand_first");
 
@@ -511,7 +516,7 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
         &mut self,
         block: &mut Block<'d, D>,
         chunk: Chunk<'d, D>,
-    ) -> Result<(), PrintingError> {
+    ) -> Result<(), PrintingError<D::Error>> {
         use ConsolidatedNotation::*;
         span!("expand_last");
 
@@ -552,7 +557,7 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
         block: &Block<'d, D>,
         opt1: DelayedConsolidatedNotation<'d, D>,
         opt2: DelayedConsolidatedNotation<'d, D>,
-    ) -> Result<Chunk<'d, D>, PrintingError> {
+    ) -> Result<Chunk<'d, D>, PrintingError<D::Error>> {
         span!("choose");
 
         let chunk1 = Chunk::new(opt1)?;
@@ -629,7 +634,7 @@ fn fits<'d, D: PrettyDoc<'d>>(
     at_eol: bool,
     notation: ConsolidatedNotation<'d, D>,
     next_chunks: &[Chunk<'d, D>],
-) -> Result<bool, PrintingError> {
+) -> Result<bool, PrintingError<D::Error>> {
     use ConsolidatedNotation::*;
     span!("fits");
 
@@ -685,9 +690,9 @@ fn fits<'d, D: PrettyDoc<'d>>(
 struct UpwardPrinter<'d, D: PrettyDoc<'d>>(Printer<'d, D>);
 
 impl<'d, D: PrettyDoc<'d>> Iterator for UpwardPrinter<'d, D> {
-    type Item = Result<Line<'d, D>, PrintingError>;
+    type Item = Result<Line<'d, D>, PrintingError<D::Error>>;
 
-    fn next(&mut self) -> Option<Result<Line<'d, D>, PrintingError>> {
+    fn next(&mut self) -> Option<Result<Line<'d, D>, PrintingError<D::Error>>> {
         self.0.print_prev_line().transpose()
     }
 }
@@ -696,9 +701,9 @@ impl<'d, D: PrettyDoc<'d>> Iterator for UpwardPrinter<'d, D> {
 struct DownwardPrinter<'d, D: PrettyDoc<'d>>(Printer<'d, D>);
 
 impl<'d, D: PrettyDoc<'d>> Iterator for DownwardPrinter<'d, D> {
-    type Item = Result<Line<'d, D>, PrintingError>;
+    type Item = Result<Line<'d, D>, PrintingError<D::Error>>;
 
-    fn next(&mut self) -> Option<Result<Line<'d, D>, PrintingError>> {
+    fn next(&mut self) -> Option<Result<Line<'d, D>, PrintingError<D::Error>>> {
         self.0.print_next_line().transpose()
     }
 }

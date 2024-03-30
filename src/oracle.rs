@@ -23,6 +23,7 @@ struct Layout {
 /// testing of the more efficient but complex partial-pretty-printing algorithm.
 pub fn oracular_pretty_print<'d, D: PrettyDoc<'d>>(doc: D, width: Width) -> String {
     let note = DelayedConsolidatedNotation::new(doc)
+        .unwrap()
         .eval()
         .expect("Notation mismatch in oracle test (root)");
     let layout =
@@ -40,7 +41,7 @@ fn pp<'d, D: PrettyDoc<'d>>(
     suffix_len: Option<Width>,
     // The printing width
     width: Width,
-) -> Result<Layout, PrintingError> {
+) -> Result<Layout, PrintingError<D::Error>> {
     use ConsolidatedNotation::*;
 
     assert!(width < MAX_WIDTH);
@@ -106,7 +107,7 @@ fn pp<'d, D: PrettyDoc<'d>>(
 fn first_line_len<'d, D: PrettyDoc<'d>>(
     note: ConsolidatedNotation<'d, D>,
     suffix_len: Option<Width>,
-) -> Result<Option<Width>, PrintingError> {
+) -> Result<Option<Width>, PrintingError<D::Error>> {
     use ConsolidatedNotation::*;
 
     match note {

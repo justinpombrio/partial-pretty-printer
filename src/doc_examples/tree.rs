@@ -3,6 +3,7 @@
 use crate::{PrettyDoc, Style, ValidNotation};
 use std::cell::Cell;
 use std::thread_local;
+use std::convert::Infallible;
 
 #[cfg(doc)]
 use crate::Notation; // for links in rustdocs
@@ -149,57 +150,58 @@ where
     type Style = S;
     type StyleLabel = TreeStyleLabel;
     type Condition = TreeCondition;
+    type Error = Infallible;
 
-    fn id(self) -> u32 {
-        self.id
+    fn id(self) -> Result<u32, Self::Error> {
+        Ok(self.id)
     }
 
-    fn notation(self) -> &'d TreeNotation {
-        self.notation
+    fn notation(self) -> Result<&'d TreeNotation, Self::Error> {
+        Ok(self.notation)
     }
 
-    fn node_style(self) -> Self::Style {
-        self.node_style.clone()
+    fn node_style(self) -> Result<Self::Style, Self::Error> {
+        Ok(self.node_style.clone())
     }
 
-    fn lookup_style(self, label: TreeStyleLabel) -> Self::Style {
+    fn lookup_style(self, label: TreeStyleLabel) -> Result<Self::Style, Self::Error> {
         for (l, style) in &self.style_overrides {
             if *l == label {
-                return style.clone();
+                return Ok(style.clone());
             }
         }
-        Self::Style::from(label)
+        Ok(Self::Style::from(label))
     }
 
-    fn num_children(self) -> Option<usize> {
-        match &self.contents {
+    fn num_children(self) -> Result<Option<usize>, Self::Error> {
+        Ok(match &self.contents {
             Contents::Text(_) => None,
             Contents::Children(children) => Some(children.len()),
-        }
+        })
     }
 
-    fn unwrap_text(self) -> &'d str {
-        match &self.contents {
+    fn unwrap_text(self) -> Result<&'d str, Self::Error> {
+        Ok(match &self.contents {
             Contents::Text(text) => text,
             Contents::Children(_) => panic!("Tree: invalid invocation of unwrap_text"),
-        }
+        })
     }
 
-    fn unwrap_child(self, i: usize) -> Self {
-        match &self.contents {
+    fn unwrap_child(self, i: usize) -> Result<Self, Self::Error> {
+        Ok(match &self.contents {
             Contents::Text(_) => panic!("Tree: invalid invocation of unwrap_child"),
             Contents::Children(children) => &children[i],
-        }
+        })
     }
 
-    fn condition(self, condition: &TreeCondition) -> bool {
-        match condition {
+    fn condition(self, condition: &TreeCondition) -> Result<bool, Self::Error> {
+        Ok(match condition {
             TreeCondition::IsEmptyText => match &self.contents {
                 Contents::Text(text) if text.is_empty() => true,
                 _ => false,
             },
             TreeCondition::NeedsSeparator => self.needs_separator,
             TreeCondition::IsComment => self.is_comment,
-        }
+        })
     }
 }
