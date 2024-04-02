@@ -8,8 +8,8 @@ use super::{
     tree::{Tree, TreeCondition, TreeNotation},
 };
 use crate::notation_constructors::{
-    check, child, count, empty, eol, flat, fold, indent, left, lit, nl, right, style, text, Count,
-    Fold,
+    check, child, count, empty, eol, flat, fold, indent, left, lit, mark, nl, right, style, text,
+    Count, Fold,
 };
 use crate::CheckPos;
 use once_cell::sync::Lazy;
@@ -60,7 +60,7 @@ static JSON_ARRAY_NOTATION: Lazy<TreeNotation> = Lazy::new(|| {
     let array = single | multi;
 
     count(Count {
-        zero: style("open", lit("[")) + style("close", lit("]")),
+        zero: style("open", lit("[")) + mark() + style("close", lit("]")),
         one: array.clone(),
         many: array,
     })
@@ -93,7 +93,7 @@ static JSON_OBJECT_NOTATION: Lazy<TreeNotation> = Lazy::new(|| {
     let object = single | multi;
 
     count(Count {
-        zero: style("open", lit("{")) + style("close", lit("}")),
+        zero: style("open", lit("{")) + mark() + style("close", lit("}")),
         one: object.clone(),
         many: object,
     })
@@ -103,7 +103,7 @@ static JSON_OBJECT_NOTATION: Lazy<TreeNotation> = Lazy::new(|| {
 
 static JSON_COMMENT_NOTATION: Lazy<TreeNotation> = Lazy::new(|| {
     let comment_body = count(Count {
-        zero: empty(),
+        zero: mark(),
         one: child(0),
         many: fold(Fold {
             first: child(0),
@@ -121,7 +121,7 @@ static JSON_COMMENT_WORD_NOTATION: Lazy<TreeNotation> = Lazy::new(|| text().vali
 
 static JSON_ROOTS_NOTATION: Lazy<TreeNotation> = Lazy::new(|| {
     let notation = count(Count {
-        zero: empty(),
+        zero: mark(),
         one: child(0),
         many: fold(Fold {
             first: child(0),

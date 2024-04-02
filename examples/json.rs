@@ -3,7 +3,7 @@ use partial_pretty_printer::doc_examples::json::{
     json_array, json_bool, json_null, json_number, json_object, json_object_pair, json_string, Json,
 };
 use partial_pretty_printer::doc_examples::Color;
-use partial_pretty_printer::{pretty_print, Line, Width};
+use partial_pretty_printer::{pretty_print, FocusTarget, Line, Width};
 use std::fmt;
 use std::process;
 
@@ -41,7 +41,8 @@ fn json_to_doc(json: serde_json::Value) -> Json {
 
 fn pretty_print_json(doc: &Json, width: Width) -> Vec<Line<&Json>> {
     let mut lines = Vec::new();
-    let (_prev_lines, focused_line, next_lines) = unwrap(pretty_print(doc, width, &[], false));
+    let (_prev_lines, focused_line, next_lines) =
+        unwrap(pretty_print(doc, width, &[], FocusTarget::Start));
     lines.push(Line::from(focused_line));
     for line in next_lines {
         lines.push(unwrap(line));

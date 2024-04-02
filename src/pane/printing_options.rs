@@ -1,4 +1,4 @@
-use crate::{Height, Row, Width};
+use crate::{FocusTarget, Height, Row, Width};
 
 #[cfg(doc)]
 use super::pretty_window::PrettyWindow;
@@ -6,11 +6,11 @@ use super::pretty_window::PrettyWindow;
 /// Options for how to print a document within a pane.
 #[derive(Debug, Clone)]
 pub struct PrintingOptions {
-    /// Set the focus of the document to be at the start or end of the node at this path. Each
+    /// Set the focus of the document to be at some target relative to the node at this path. Each
     /// `usize` is the index of a child node, starting from the root.
     pub focus_path: Vec<usize>,
-    /// Whether the focus should be at the start or end of the node.
-    pub focus_side: FocusSide,
+    /// Where the focus should be relative to the node given by `focus_path`.
+    pub focus_target: FocusTarget,
     /// Position the document such that the focus is at this height, where 0.0 is the top line of
     /// the pane and 1.0 is the bottom line.
     pub focus_height: f32,
@@ -18,13 +18,6 @@ pub struct PrintingOptions {
     pub width_strategy: WidthStrategy,
     /// Whether to invoke [`PrettyWindow::set_focus`] with the focus point of this document.
     pub set_focus: bool,
-}
-
-/// Whether the focus should be at the start or end of the node.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FocusSide {
-    Start,
-    End,
 }
 
 /// How to choose the document width, after learning the how much width is available.

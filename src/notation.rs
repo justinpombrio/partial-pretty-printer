@@ -5,7 +5,7 @@ use std::ops::{Add, BitOr, BitXor, Shr};
 #[cfg(doc)]
 use crate::notation_constructors;
 #[cfg(doc)]
-use crate::PrettyDoc; // for links in rustdocs // for links in rustdocs
+use crate::{FocusTarget, PrettyDoc};
 
 /// A label used to look up a style in the document.
 /// It corresponds to the [`PrettyDoc::StyleLabel`] associated type.
@@ -84,6 +84,8 @@ pub enum Notation<L: StyleLabel, C: Condition> {
     /// other styles that were previously applied to this subtree using
     /// [`Style::combine()`](crate::Style::combine).
     Style(L, Box<Notation<L, C>>),
+    /// A location you can seek to while pretty printing, using [`FocusTarget::Mark`].
+    FocusMark,
     /// Display one of these notations, depending how many children the current document node has.
     Count {
         zero: Box<Notation<L, C>>,
@@ -189,6 +191,7 @@ impl<L: StyleLabel, C: Condition> fmt::Display for Notation<L, C> {
             Empty => write!(f, "ε"),
             Newline => write!(f, "↵"),
             EndOfLine => write!(f, "EOL"),
+            FocusMark => write!(f, "MARK"),
             Text => write!(f, "TEXT"),
             Literal(lit) => write!(f, "'{}'", lit.string),
             Flat(note) => write!(f, "Flat({})", note),

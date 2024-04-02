@@ -1,6 +1,6 @@
 use partial_pretty_printer::{
-    pretty_print, pretty_print_to_string, testing::oracular_pretty_print, Notation, NotationError,
-    PrettyDoc, ValidNotation, Width,
+    pretty_print, pretty_print_to_string, testing::oracular_pretty_print, FocusTarget, Notation,
+    NotationError, PrettyDoc, ValidNotation, Width,
 };
 
 #[derive(Debug, Clone)]
@@ -76,10 +76,10 @@ fn print_above_and_below<'d, D: PrettyDoc<'d>>(
     doc: D,
     width: Width,
     path: &[usize],
-    seek_end: bool,
+    focus_target: FocusTarget,
 ) -> (Vec<String>, String, String, Vec<String>) {
     let (upward_printer, focused_line, downward_printer) =
-        pretty_print(doc, width, path, seek_end).unwrap();
+        pretty_print(doc, width, path, focus_target).unwrap();
     let mut lines_above = upward_printer
         .map(|line| line.unwrap().to_string())
         .collect::<Vec<_>>();
@@ -110,11 +110,11 @@ pub fn print_region<'d, D: PrettyDoc<'d>>(
     doc: D,
     width: Width,
     path: &[usize],
-    seek_end: bool,
+    focus_target: FocusTarget,
     rows: usize,
 ) -> Vec<String> {
     let (upward_printer, focused_line, downward_printer) =
-        pretty_print(doc, width, path, seek_end).unwrap();
+        pretty_print(doc, width, path, focus_target).unwrap();
     let mut lines = upward_printer
         .map(|line| line.unwrap().to_string())
         .take(rows / 2)
@@ -172,14 +172,14 @@ fn assert_pp_impl<'d, D: PrettyDoc<'d>>(doc: D, width: Width, expected_lines: Op
         );
     }
     for path in all_paths(doc) {
-        for seek_end in [false, true] {
+        for focus_target in [FocusTarget::Start, FocusTarget::End] {
             let (lines_above, left_string, right_string, lines_below) =
-                print_above_and_below(doc, width, &path, seek_end);
+                print_above_and_below(doc, width, &path, focus_target);
             let lines = concat_lines(lines_above, left_string, right_string, lines_below);
             compare_lines(
                 &format!(
-                    "IN PRETTY PRINTING AT PATH {:?} (seek_end={})",
-                    path, seek_end
+                    "IN PRETTY PRINTING AT PATH {:?} (focus_target={:?})",
+                    path, focus_target
                 ),
                 ("EXPECTED", oracle_result.clone()),
                 ("ACTUAL", lines.join("\n")),
@@ -210,9 +210,9 @@ pub fn assert_pp_seek<'d, D: PrettyDoc<'d>>(
     expected_lines: &[&str],
 ) {
     let (lines_above_1, left_string_1, right_string_1, lines_below_1) =
-        print_above_and_below(doc, width, path, false);
+        print_above_and_below(doc, width, path, FocusTarget::Start);
     let (lines_above_2, left_string_2, right_string_2, lines_below_2) =
-        print_above_and_below(doc, width, path, true);
+        print_above_and_below(doc, width, path, FocusTarget::End);
     let start_row = lines_above_1.len();
     let end_row = lines_above_2.len();
     let start_col = left_string_1.len();
@@ -237,15 +237,35 @@ pub fn assert_pp_seek<'d, D: PrettyDoc<'d>>(
 }
 
 #[track_caller]
+pub fn assert_pp_focus<'d, D: PrettyDoc<'d>>(
+    doc: D,
+    width: Width,
+    path: &[usize],
+    focus_target: FocusTarget,
+    expected_lines: &[&str],
+) {
+    let (lines_above, mut left_string, right_string, lines_below) =
+        print_above_and_below(doc, width, path, focus_target);
+    left_string.push('|');
+    let lines_with_focus = concat_lines(lines_above, left_string, right_string, lines_below);
+
+    compare_lines(
+        &format!("IN PRINTING AT PATH {:?}", path),
+        ("EXPECTED", expected_lines.join("\n")),
+        ("ACTUAL", lines_with_focus.join("\n")),
+    );
+}
+
+#[track_caller]
 pub fn assert_pp_region<'d, D: PrettyDoc<'d>>(
     doc: D,
     width: Width,
     path: &[usize],
-    seek_end: bool,
+    focus_target: FocusTarget,
     rows: usize,
     expected_lines: &[&str],
 ) {
-    let lines = print_region(doc, width, path, seek_end, rows);
+    let lines = print_region(doc, width, path, focus_target, rows);
     compare_lines(
         &format!("IN PRINTING {} ROWS AT PATH {:?}", rows, path),
         ("EXPECTED", expected_lines.join("\n")),

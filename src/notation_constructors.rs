@@ -35,6 +35,11 @@ pub fn style<L: StyleLabel, C: Condition>(style_label: L, n: Notation<L, C>) -> 
     Notation::Style(style_label, Box::new(n))
 }
 
+/// Construct a [`Notation::FocusMark`].
+pub fn mark<L: StyleLabel, C: Condition>() -> Notation<L, C> {
+    Notation::FocusMark
+}
+
 /// Construct a [`Notation::Text`].
 pub fn text<L: StyleLabel, C: Condition>() -> Notation<L, C> {
     Notation::Text

@@ -49,6 +49,8 @@ pub enum NotationError {
         "Notation contains Text or Literal after an EndOfLine, which would cause a printing error."
     )]
     TextAfterEol,
+    #[error("Notation contains multiple FocusMarks, but only the first one would ever be used.")]
+    MultipleFocusMarks,
 }
 
 /// Tracks what notations we are inside of during the validation process.
@@ -115,10 +117,60 @@ impl Context {
     }
 }
 
+/// Record whether certain notations were encountered earlier in the notation.
+#[derive(Debug, Clone, Copy, Default)]
+struct History {
+    /// Did the last notation visisted _potentially_ contain a Notation::EndOfLine?
+    ///
+    /// More precisely, is there any way of picking [`Choice`](Notation::Choice)s and
+    /// [`Check`](Notation::Check)s such that the notation will end with an
+    /// [`EndOfLine`](Notation::EndOfLine). We assume here that no [`Child`](Notation::Child) will
+    /// end with [`EndOfLine`](Notation::EndOfLine).
+    eol: bool,
+    /// Did the previously visited notations _definitely_ contain a
+    /// [`FocusMark`](Notation::FocusMark)?
+    ///
+    /// (It's not a disaster for a Notation to contain multiple `FocusMark`s, so it's ok if _some_
+    /// possible combinations of choices result in multiple `FocusMark`s, so long as not all of
+    /// them do.)
+    mark: bool,
+}
+
+impl History {
+    fn uncertain() -> History {
+        History {
+            eol: false,
+            mark: false,
+        }
+    }
+
+    fn choice(self, other: History) -> History {
+        History {
+            eol: self.eol || other.eol,
+            mark: self.mark && other.mark,
+        }
+    }
+
+    fn with_mark(mut self) -> History {
+        self.mark = true;
+        self
+    }
+
+    fn with_eol(mut self) -> History {
+        self.eol = true;
+        self
+    }
+
+    fn without_eol(mut self) -> History {
+        self.eol = false;
+        self
+    }
+}
+
 impl<L: StyleLabel, C: Condition> Notation<L, C> {
     /// If no flaws are found in this [`Notation`], convert it into a [`ValidNotation`].
     pub fn validate(self) -> Result<ValidNotation<L, C>, NotationError> {
-        self.validate_rec(false, Context::new())?;
+        self.validate_rec(History::default(), Context::new())?;
         Ok(ValidNotation(self))
     }
 
@@ -130,14 +182,7 @@ impl<L: StyleLabel, C: Condition> Notation<L, C> {
 
     /// Returns `Err` if a flaw is detected.
     ///
-    /// Returns `Ok(true)` if there's any way of picking [`Choice`](Notation::Choice)s and
-    /// [`Check`](Notation::Check)s such that this notation will end with an
-    /// [`EndOfLine`](Notation::EndOfLine). (We assume here that no [`Child`](Notation::Child) will
-    /// end with [`EndOfLine`](Notation::EndOfLine)).
-    ///
-    /// Similarly, the `eol` parameter indicates whether there could possibly be an
-    /// [`EndOfLine`](Notation::EndOfLine) immediately to the left of this notation.
-    fn validate_rec(&self, eol: bool, ctx: Context) -> Result<bool, NotationError> {
+    fn validate_rec(&self, history: History, ctx: Context) -> Result<History, NotationError> {
         use FoldContext::*;
         use Notation::*;
         use NotationError::*;
@@ -145,21 +190,21 @@ impl<L: StyleLabel, C: Condition> Notation<L, C> {
         match self {
             Text if ctx.count.is_some() => Err(TextInsideCount),
             Text if ctx.fold.is_some() => Err(TextInsideFold),
-            Empty => Ok(eol),
-            Text | Literal(_) if eol => Err(TextAfterEol),
-            Text | Literal(_) => Ok(false),
-            Newline => Ok(false),
-            EndOfLine => Ok(true),
-            Flat(note) => note.validate_rec(eol, ctx),
-            Indent(_, _, note) => note.validate_rec(eol, ctx),
+            Empty => Ok(history),
+            Text | Literal(_) if history.eol => Err(TextAfterEol),
+            Text | Literal(_) => Ok(history.without_eol()),
+            Newline => Ok(history.without_eol()),
+            EndOfLine => Ok(history.with_eol()),
+            Flat(note) => note.validate_rec(history, ctx),
+            Indent(_, _, note) => note.validate_rec(history, ctx),
             Concat(note1, note2) => {
-                let eol = note1.validate_rec(eol, ctx)?;
-                note2.validate_rec(eol, ctx)
+                let history = note1.validate_rec(history, ctx)?;
+                note2.validate_rec(history, ctx)
             }
             Choice(note1, note2) => {
-                let eol_1 = note1.validate_rec(eol, ctx)?;
-                let eol_2 = note2.validate_rec(eol, ctx)?;
-                Ok(eol_1 || eol_2)
+                let history_1 = note1.validate_rec(history, ctx)?;
+                let history_2 = note2.validate_rec(history, ctx)?;
+                Ok(history_1.choice(history_2))
             }
             Check(_, pos, note1, note2) => {
                 match &pos {
@@ -182,9 +227,9 @@ impl<L: StyleLabel, C: Condition> Notation<L, C> {
                     }
                     CheckPos::LeftChild | CheckPos::RightChild => (),
                 }
-                let eol_1 = note1.validate_rec(eol, ctx)?;
-                let eol_2 = note2.validate_rec(eol, ctx)?;
-                Ok(eol_1 || eol_2)
+                let history_1 = note1.validate_rec(history, ctx)?;
+                let history_2 = note2.validate_rec(history, ctx)?;
+                Ok(history_1.choice(history_2))
             }
             Child(_) if ctx.count == Some(CountContext::Zero) => Err(CountZeroChild),
             Child(i)
@@ -193,25 +238,28 @@ impl<L: StyleLabel, C: Condition> Notation<L, C> {
             {
                 Err(CountOneChildIndex(*i))
             }
-            Child(_) => Ok(false),
-            Style(_, note) => note.validate_rec(eol, ctx),
+            Child(_) => Ok(history.without_eol()),
+            Style(_, note) => note.validate_rec(history, ctx),
+            FocusMark if history.mark => Err(MultipleFocusMarks),
+            FocusMark => Ok(history.with_mark()),
             Count { .. } if ctx.count.is_some() => Err(NestedCount),
             Count { zero, one, many } => {
-                let eol_1 = zero.validate_rec(eol, ctx.count_zero())?;
-                let eol_2 = one.validate_rec(eol, ctx.count_one())?;
-                let eol_3 = many.validate_rec(eol, ctx.count_many())?;
-                Ok(eol_1 || eol_2 || eol_3)
+                let history_1 = zero.validate_rec(history, ctx.count_zero())?;
+                let history_2 = one.validate_rec(history, ctx.count_one())?;
+                let history_3 = many.validate_rec(history, ctx.count_many())?;
+                Ok(history_1.choice(history_2).choice(history_3))
             }
             Fold { .. } if ctx.fold.is_some() => Err(NestedFold),
             Fold { first, join } => {
-                // Can't easily check for EOL here
-                first.validate_rec(false, ctx.fold_first())?;
-                join.validate_rec(false, ctx.fold_join())?;
-                Ok(false)
+                // Can't easily check for EOL/mark here
+                first.validate_rec(History::uncertain(), ctx.fold_first())?;
+                join.validate_rec(History::uncertain(), ctx.fold_join())?;
+                Ok(History::uncertain())
             }
             Left if ctx.fold != Some(InFoldJoin) => Err(LeftOutsideJoin),
             Right if ctx.fold != Some(InFoldJoin) => Err(RightOutsideJoin),
-            Left | Right => Ok(false),
+            // Can't easily check for EOL/mark here
+            Left | Right => Ok(History::uncertain()),
         }
     }
 }
