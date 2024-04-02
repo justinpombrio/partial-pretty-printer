@@ -5,10 +5,9 @@ use partial_pretty_printer::{
         BasicStyle,
     },
     pane::{
-        display_pane, DocLabel, FocusSide, PaneNotation, PaneSize, PlainText, PrintingOptions,
-        WidthStrategy,
+        display_pane, DocLabel, PaneNotation, PaneSize, PlainText, PrintingOptions, WidthStrategy,
     },
-    Pos, PrettyDoc, Size, Style,
+    FocusTarget, Pos, PrettyDoc, Size, Style,
 };
 use std::fmt::Debug;
 use std::marker::PhantomData;
@@ -230,7 +229,7 @@ fn test_doc_pane() {
         focus_path: Vec::new(),
         focus_height: 0.0,
         width_strategy: WidthStrategy::Full,
-        focus_side: FocusSide::Start,
+        focus_target: FocusTarget::Start,
         set_focus: false,
     };
     let doc = json_array(vec![json_string("Hello"), json_string("world")]);
@@ -247,7 +246,7 @@ fn test_doc_pane_full_width_cutoff() {
         focus_path: Vec::new(),
         focus_height: 0.0,
         width_strategy: WidthStrategy::Full,
-        focus_side: FocusSide::Start,
+        focus_target: FocusTarget::Start,
         set_focus: false,
     };
     let doc = json_string("一二三");
@@ -296,7 +295,7 @@ fn test_pane_cursor_heights() {
             focus_path: Vec::new(),
             focus_height,
             width_strategy: WidthStrategy::Full,
-            focus_side: FocusSide::Start,
+            focus_target: FocusTarget::Start,
             set_focus: false,
         };
         let doc = json_string("Hi");
@@ -321,7 +320,7 @@ fn test_pane_widths() {
             focus_path: Vec::new(),
             focus_height: 0.0,
             width_strategy,
-            focus_side: FocusSide::Start,
+            focus_target: FocusTarget::Start,
             set_focus: false,
         };
         let doc = json_array(vec![json_string("Hello"), json_string("world")]);
@@ -345,13 +344,13 @@ fn test_seek() {
     fn make_note<'a>(
         doc: &'a Json,
         path: &[usize],
-        focus_side: FocusSide,
+        focus_target: FocusTarget,
     ) -> PaneNotation<SimpleLabel<'a, &'a Json>, BasicStyle> {
         let options = PrintingOptions {
             focus_path: path.to_owned(),
             focus_height: 0.5,
             width_strategy: WidthStrategy::Full,
-            focus_side,
+            focus_target,
             set_focus: false,
         };
 
@@ -361,7 +360,7 @@ fn test_seek() {
     }
     let doc10 = make_array(0, 8);
     pane_test(
-        make_note(&doc10, &[], FocusSide::Start),
+        make_note(&doc10, &[], FocusTarget::Start),
         &[
             "",         // force rustfmt
             "",         // force rustfmt
@@ -374,7 +373,7 @@ fn test_seek() {
         .join("\n"),
     );
     pane_test(
-        make_note(&doc10, &[], FocusSide::End),
+        make_note(&doc10, &[], FocusTarget::End),
         &[
             "    5,", // force rustfmt
             "    6,", // force rustfmt
@@ -384,7 +383,7 @@ fn test_seek() {
         .join("\n"),
     );
     pane_test(
-        make_note(&doc10, &[1], FocusSide::Start),
+        make_note(&doc10, &[1], FocusTarget::Start),
         &[
             "",         // force rustfmt
             "[",        // force rustfmt
@@ -397,7 +396,7 @@ fn test_seek() {
         .join("\n"),
     );
     pane_test(
-        make_note(&doc10, &[1], FocusSide::End),
+        make_note(&doc10, &[1], FocusTarget::End),
         &[
             "",         // force rustfmt
             "[",        // force rustfmt
@@ -418,7 +417,7 @@ fn test_dynamic() {
             focus_path: Vec::new(),
             focus_height: 0.0,
             width_strategy: WidthStrategy::Full,
-            focus_side: FocusSide::Start,
+            focus_target: FocusTarget::Start,
             set_focus: false,
         };
 
@@ -532,7 +531,7 @@ fn test_focus_point() {
         focus_path: vec![2, 0],
         focus_height: 0.5,
         width_strategy: WidthStrategy::Full,
-        focus_side: FocusSide::End,
+        focus_target: FocusTarget::End,
         set_focus: true,
     };
     let doc = json_array(vec![

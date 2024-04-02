@@ -74,7 +74,7 @@ pub use consolidated_notation::{PrintingError, Segment};
 pub use geometry::{Col, Height, Pos, Row, Size, Width};
 pub use notation::{CheckPos, Condition, Literal, Notation, StyleLabel};
 pub use pretty_doc::{PrettyDoc, Style};
-pub use pretty_print::{pretty_print, pretty_print_to_string, FocusedLine, Line};
+pub use pretty_print::{pretty_print, pretty_print_to_string, FocusTarget, FocusedLine, Line};
 pub use valid_notation::{NotationError, ValidNotation};
 
 /// For testing only. Not core functionality.

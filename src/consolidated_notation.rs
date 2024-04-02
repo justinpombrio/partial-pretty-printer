@@ -30,6 +30,7 @@ pub enum ConsolidatedNotation<'d, D: PrettyDoc<'d>> {
         DelayedConsolidatedNotation<'d, D>,
     ),
     Child(usize, DelayedConsolidatedNotation<'d, D>),
+    FocusMark,
 }
 
 // A fully resolved piece of text.
@@ -46,9 +47,11 @@ pub struct Segment<'d, D: PrettyDoc<'d>> {
 #[derive(Debug)]
 pub struct Textual<'d, D: PrettyDoc<'d>> {
     pub str: &'d str,
-    /// The unicode width of `str`, stored for performance reasons
+    /// The unicode width of `str`, stored for performance.
     pub width: Width,
     pub style: D::Style,
+    /// Whether this came from a `Notation::Text` (true) or a `Notation::Literal` (false).
+    pub is_from_text: bool,
 }
 
 // Performance Note: We've tested three implementations of indentation so far:
@@ -99,12 +102,40 @@ struct JoinPos<'d, D: PrettyDoc<'d>> {
     join: &'d Notation<D::StyleLabel, D::Condition>,
 }
 
+impl<'d, D: PrettyDoc<'d>> Textual<'d, D> {
+    /// Split this text in two, at the given position between `char`s. If it's too large, split at
+    /// the end.
+    pub fn split_at(self, char_pos: usize) -> (Textual<'d, D>, Textual<'d, D>) {
+        let byte_pos = self
+            .str
+            .char_indices()
+            .nth(char_pos)
+            .map(|(byte_pos, _)| byte_pos)
+            .unwrap_or(self.str.len());
+        let (left_str, right_str) = self.str.split_at(byte_pos);
+        let left_textual = Textual {
+            str: left_str,
+            width: str_width(left_str),
+            style: self.style.clone(),
+            is_from_text: self.is_from_text,
+        };
+        let right_textual = Textual {
+            str: right_str,
+            width: str_width(right_str),
+            style: self.style,
+            is_from_text: self.is_from_text,
+        };
+        (left_textual, right_textual)
+    }
+}
+
 impl<'d, D: PrettyDoc<'d>> Clone for Textual<'d, D> {
     fn clone(&self) -> Self {
         Textual {
             str: self.str,
             width: self.width,
             style: self.style.clone(),
+            is_from_text: self.is_from_text,
         }
     }
 }
@@ -131,6 +162,7 @@ impl<'d, D: PrettyDoc<'d>> Clone for ConsolidatedNotation<'d, D> {
             Concat(note1, note2) => Concat(note1.clone(), note2.clone()),
             Choice(note1, note2) => Choice(note1.clone(), note2.clone()),
             Child(i, child) => Child(*i, child.clone()),
+            FocusMark => FocusMark,
         }
     }
 }
@@ -180,6 +212,10 @@ pub enum PrintingError<E: std::error::Error + 'static> {
     NumChildrenChanged,
     #[error("Pretty printing encountered a Text or Literal after an EndOfLine.")]
     TextAfterEndOfLine,
+    #[error("FocusMark not found while focusing.")]
+    MissingFocusMark,
+    #[error("Text not found while focusing.")]
+    MissingText,
     #[error("PrettyDoc error: {0}")]
     PrettyDoc(#[from] E),
 }
@@ -212,6 +248,7 @@ impl<'d, D: PrettyDoc<'d>> DelayedConsolidatedNotation<'d, D> {
                 str: lit.str(),
                 width: lit.width(),
                 style: self.style,
+                is_from_text: false,
             })),
             Text => {
                 if self.doc.num_children()?.is_some() {
@@ -222,6 +259,7 @@ impl<'d, D: PrettyDoc<'d>> DelayedConsolidatedNotation<'d, D> {
                         str: text,
                         width: str_width(text),
                         style: self.style,
+                        is_from_text: true,
                     }))
                 }
             }
@@ -316,6 +354,7 @@ impl<'d, D: PrettyDoc<'d>> DelayedConsolidatedNotation<'d, D> {
                 self.notation = note;
                 self.eval()
             }
+            FocusMark => Ok(ConsolidatedNotation::FocusMark),
             Count { zero, one, many } => match self.doc.num_children()? {
                 None => Err(PrintingError::CountNotationOnChildlessDoc),
                 Some(0) => {
@@ -398,6 +437,7 @@ impl<'d, D: PrettyDoc<'d>> fmt::Display for ConsolidatedNotation<'d, D> {
         match self {
             Empty => write!(f, "ε"),
             EndOfLine => write!(f, "EOL"),
+            FocusMark => write!(f, "MARK"),
             Newline(_) => write!(f, "↵"),
             Textual(textual) => write!(f, "'{}'", textual.str),
             Concat(left, right) => write!(f, "{} + {}", left, right),

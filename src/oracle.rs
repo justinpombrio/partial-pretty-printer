@@ -54,7 +54,7 @@ fn pp<'d, D: PrettyDoc<'d>>(
     }
 
     match note {
-        Empty => Ok(prefix),
+        Empty | FocusMark => Ok(prefix),
         Textual(textual) => Ok(prefix.append_text(textual.str)),
         EndOfLine => {
             prefix.ends_with_eol = true;
@@ -111,7 +111,7 @@ fn first_line_len<'d, D: PrettyDoc<'d>>(
     use ConsolidatedNotation::*;
 
     match note {
-        Empty => Ok(suffix_len),
+        Empty | FocusMark => Ok(suffix_len),
         Textual(textual) => Ok(suffix_len.map(|w| textual.width + w)),
         EndOfLine => match suffix_len {
             None => Ok(None),

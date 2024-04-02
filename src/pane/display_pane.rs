@@ -1,8 +1,6 @@
 use crate::{
     geometry::{is_char_full_width, Rectangle},
-    pane::{
-        divvy::Divvier, DocLabel, FocusSide, PaneNotation, PaneSize, PrettyWindow, PrintingOptions,
-    },
+    pane::{divvy::Divvier, DocLabel, PaneNotation, PaneSize, PrettyWindow, PrintingOptions},
     pretty_print, Height, Line, Pos, PrettyDoc, PrintingError, Row, Size, Width,
 };
 
@@ -211,9 +209,12 @@ impl<'d, D: PrettyDoc<'d>> PrintedDoc<'d, D> {
 
         let printing_width = options.choose_width(size.width);
         let focus_line_row = options.choose_focus_line_row(size.height);
-        let at_end = options.focus_side == FocusSide::End;
-        let (mut upward_printer, focused_line, mut downward_printer) =
-            pretty_print(doc, printing_width, &options.focus_path, at_end)?;
+        let (mut upward_printer, focused_line, mut downward_printer) = pretty_print(
+            doc,
+            printing_width,
+            &options.focus_path,
+            options.focus_target,
+        )?;
 
         let focus_point = if options.set_focus {
             Some(Pos {

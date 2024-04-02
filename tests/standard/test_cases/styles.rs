@@ -1,10 +1,8 @@
-use partial_pretty_printer::{
-    doc_examples::{
-        json::{json_array, json_number, json_object, json_object_pair, json_string, Json},
-        BasicStyle, Color,
-    },
-    pretty_print, Line, Width,
+use partial_pretty_printer::doc_examples::{
+    json::{json_array, json_number, json_object, json_object_pair, json_string, Json},
+    BasicStyle, Color,
 };
+use partial_pretty_printer::{pretty_print, FocusTarget, Line, Width};
 
 #[derive(Debug)]
 struct RichChar {
@@ -19,7 +17,7 @@ struct RichText {
 
 fn print(doc: &Json, width: Width) -> RichText {
     let (upward_printer, focused_line, downward_printer) =
-        pretty_print(doc, width, &[], false).unwrap();
+        pretty_print(doc, width, &[], FocusTarget::Start).unwrap();
     let mut rich_text = RichText::new();
     let mut lines_above = upward_printer.collect::<Vec<_>>();
     lines_above.reverse();

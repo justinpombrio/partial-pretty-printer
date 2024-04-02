@@ -1,8 +1,11 @@
-use crate::standard::pretty_testing::{assert_pp, assert_pp_region, assert_pp_seek};
+use crate::standard::pretty_testing::{
+    assert_pp, assert_pp_focus, assert_pp_region, assert_pp_seek,
+};
 use partial_pretty_printer::doc_examples::json::{
     json_array, json_bool, json_comment, json_null, json_number, json_object, json_object_pair,
     json_roots, json_string, Json,
 };
+use partial_pretty_printer::FocusTarget;
 
 static NUMERALS: &[&str] = &[
     "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven",
@@ -42,6 +45,7 @@ fn json_seek() {
         json_object_pair("Age", json_number(42.0)),
     ]);
     let refn = &doc;
+
     assert_pp(
         refn,
         28,
@@ -119,6 +123,85 @@ fn json_seek() {
             "{",
             "    \"Name\": \"Alice\",",
             "    \"Age\": (42)",
+            "}",
+        ],
+    );
+}
+
+#[test]
+fn json_focus() {
+    let doc = json_object(vec![
+        json_object_pair("Cats", json_array(Vec::new())),
+        json_object_pair("Dogs", json_array(Vec::new())),
+    ]);
+    let refn = &doc;
+
+    assert_pp_focus(
+        refn,
+        17,
+        &[1, 1],
+        FocusTarget::Start,
+        &[
+            // force rustfmt
+            "{",
+            "    \"Cats\": [],",
+            "    \"Dogs\": |[]",
+            "}",
+        ],
+    );
+
+    assert_pp_focus(
+        refn,
+        17,
+        &[1, 1],
+        FocusTarget::End,
+        &[
+            // force rustfmt
+            "{",
+            "    \"Cats\": [],",
+            "    \"Dogs\": []|",
+            "}",
+        ],
+    );
+
+    assert_pp_focus(
+        refn,
+        17,
+        &[1, 1],
+        FocusTarget::Mark,
+        &[
+            // force rustfmt
+            "{",
+            "    \"Cats\": [],",
+            "    \"Dogs\": [|]",
+            "}",
+        ],
+    );
+
+    assert_pp_focus(
+        refn,
+        17,
+        &[1, 0],
+        FocusTarget::Text(2),
+        &[
+            // force rustfmt
+            "{",
+            "    \"Cats\": [],",
+            "    \"Do|gs\": []",
+            "}",
+        ],
+    );
+
+    assert_pp_focus(
+        refn,
+        17,
+        &[1, 0],
+        FocusTarget::Text(20),
+        &[
+            // force rustfmt
+            "{",
+            "    \"Cats\": [],",
+            "    \"Dogs|\": []",
             "}",
         ],
     );
@@ -364,7 +447,7 @@ fn big_json_tree() {
         120,
         // 3,1,15 means "child 15"
         &[3, 1, 15, 3, 1, 10],
-        false,
+        FocusTarget::Start,
         10,
         &[
             "                                }",
@@ -393,7 +476,13 @@ fn time_json() {
     let big_tree = make_json_tree(0, 16);
 
     let start = Instant::now();
-    print_region(&big_tree, 120, &[3, 1, 15, 3, 1, 10], false, 80);
+    print_region(
+        &big_tree,
+        120,
+        &[3, 1, 15, 3, 1, 10],
+        FocusTarget::Start,
+        80,
+    );
     println!(
         "Time to print middle 80 lines of ~480k line doc at width 120: {}μs",
         start.elapsed().as_micros()
