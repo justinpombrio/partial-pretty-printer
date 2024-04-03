@@ -1,6 +1,6 @@
 [package]
 name = "partial-pretty-printer"
-version = "0.5.0"
+version = "0.5.1"
 authors = ["Justin Pombrio <zallambo@gmail.com>"]
 edition = "2018"
 
@@ -13,6 +13,10 @@ unicode-width = "0.1"
 [dependencies.no-nonsense-flamegraphs]
     version = "0.2.*"
     git = "https://github.com/justinpombrio/no-nonsense-flamegraphs"
+    optional = true
+[dependencies.serde]
+    version = "1.0"
+    features = ["derive"]
     optional = true
 
 [dev-dependencies]
@@ -27,3 +31,4 @@ debug = true
 [features]
 default = []
 profile = ["no-nonsense-flamegraphs"]
+serialization = ["serde"]

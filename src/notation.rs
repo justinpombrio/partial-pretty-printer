@@ -2,6 +2,9 @@ use crate::geometry::{str_width, Width};
 use std::fmt;
 use std::ops::{Add, BitOr, BitXor, Shr};
 
+#[cfg(feature = "serialization")]
+use serde::{Deserialize, Serialize};
+
 #[cfg(doc)]
 use crate::notation_constructors;
 #[cfg(doc)]
@@ -21,6 +24,7 @@ impl<T: fmt::Debug + Clone> Condition for T {}
 ///
 /// The [`notation_constructors`] module has convenient functions for constructing these notations.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serialization", derive(Serialize, Deserialize))]
 pub enum Notation<L: StyleLabel, C: Condition> {
     /// Display nothing.
     Empty,
@@ -129,6 +133,7 @@ pub enum Notation<L: StyleLabel, C: Condition> {
 
 /// Which document node to check a [`Condition`] on.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serialization", derive(Serialize, Deserialize))]
 pub enum CheckPos {
     /// The current document node.
     Here,
@@ -143,6 +148,7 @@ pub enum CheckPos {
 
 /// Literal text in a [`Notation`], to be displayed as-is. Must not contain a newline.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serialization", derive(Serialize, Deserialize))]
 pub struct Literal {
     string: String,
     /// Width of the string in columns.
