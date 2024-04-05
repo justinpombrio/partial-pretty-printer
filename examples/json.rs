@@ -123,8 +123,16 @@ fn main() {
     let ms_to_output = start.elapsed().as_millis();
 
     let ms_total = ms_to_parse + ms_to_construct + ms_to_pretty_print + ms_to_output;
-    let pp_speed = num_lines * 1000 / ms_to_pretty_print;
-    let overall_speed = num_lines * 1000 / ms_total;
+    let pp_speed = if ms_to_pretty_print == 0 {
+        0
+    } else {
+        num_lines * 1000 / ms_to_pretty_print
+    };
+    let overall_speed = if ms_total == 0 {
+        0
+    } else {
+        num_lines * 1000 / ms_total
+    };
 
     // Print timing info to stderr
     eprintln!("Time to parse file as Json:    {} ms", ms_to_parse);
