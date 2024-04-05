@@ -244,9 +244,9 @@ impl<'d, D: PrettyDoc<'d>> DelayedConsolidatedNotation<'d, D> {
             Empty => Ok(ConsolidatedNotation::Empty),
             EndOfLine => Ok(ConsolidatedNotation::EndOfLine),
             Newline => Ok(ConsolidatedNotation::Newline(self.indent)),
-            Literal(lit) => Ok(ConsolidatedNotation::Textual(Textual {
-                str: lit.str(),
-                width: lit.width(),
+            Literal(str) => Ok(ConsolidatedNotation::Textual(Textual {
+                str,
+                width: str_width(str),
                 style: self.style,
                 is_from_text: false,
             })),
@@ -276,8 +276,8 @@ impl<'d, D: PrettyDoc<'d>> DelayedConsolidatedNotation<'d, D> {
                 };
                 let new_indent = Rc::new(IndentNode {
                     segment: Segment {
-                        str: prefix.str(),
-                        width: prefix.width(),
+                        str: prefix,
+                        width: str_width(prefix),
                         style,
                     },
                     parent: self.indent,

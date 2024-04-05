@@ -1,4 +1,4 @@
-use crate::geometry::{str_width, Width};
+use crate::geometry::Width;
 use std::fmt;
 use std::ops::{Add, BitOr, BitXor, Shr};
 
@@ -36,7 +36,7 @@ pub enum Notation<L: StyleLabel, C: Condition> {
     /// fail with a [`PrintingError::TextAfterEndOfLine`](crate::PrintingError::TextAfterEndOfLine).
     EndOfLine,
     /// Display this constant text. It must not contain a newline character.
-    Literal(Literal),
+    Literal(String),
     /// Display a dynamic piece of text from the document. It must not contain a newline character.
     /// It can only be used in the notation for a document node that contains text (indicated by
     /// [`PrettyDoc::num_children()`] returning `None`).
@@ -53,7 +53,7 @@ pub enum Notation<L: StyleLabel, C: Condition> {
     /// (They therefore don't affect the first line of a notation.) Indentation strings will
     /// typically contain one indentation level's worth of whitespace characters (e.g. 4 spaces), but
     /// can also be used for other purposes like placing comment syntax at the start of a line.
-    Indent(Literal, Option<L>, Box<Notation<L, C>>),
+    Indent(String, Option<L>, Box<Notation<L, C>>),
     /// Display both notations. The first character of the right notation immediately follows the
     /// last character of the left notation. Note that the column at which the right notation starts
     /// does not affect its indentation level.
@@ -146,15 +146,6 @@ pub enum CheckPos {
     RightChild,
 }
 
-/// Literal text in a [`Notation`], to be displayed as-is. Must not contain a newline.
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "serialization", derive(Serialize, Deserialize))]
-pub struct Literal {
-    string: String,
-    /// Width of the string in columns.
-    width: Width,
-}
-
 /// Normalizes the index so that negative indices count back from the end of the list.
 /// Returns `None` if the index would be out of bounds.
 pub fn normalize_child_index(signed_index: isize, num_children: usize) -> Option<usize> {
@@ -171,23 +162,6 @@ pub fn normalize_child_index(signed_index: isize, num_children: usize) -> Option
     }
 }
 
-impl Literal {
-    pub fn new(s: &str) -> Literal {
-        Literal {
-            string: s.to_owned(),
-            width: str_width(s),
-        }
-    }
-
-    pub fn width(&self) -> Width {
-        self.width
-    }
-
-    pub fn str(&self) -> &str {
-        &self.string
-    }
-}
-
 // For debugging. Should match impl fmt::Display for ConsolidatedNotation.
 impl<L: StyleLabel, C: Condition> fmt::Display for Notation<L, C> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -199,9 +173,9 @@ impl<L: StyleLabel, C: Condition> fmt::Display for Notation<L, C> {
             EndOfLine => write!(f, "EOL"),
             FocusMark => write!(f, "MARK"),
             Text => write!(f, "TEXT"),
-            Literal(lit) => write!(f, "'{}'", lit.string),
+            Literal(lit) => write!(f, "'{}'", lit),
             Flat(note) => write!(f, "Flat({})", note),
-            Indent(lit, _style_label, note) => write!(f, "'{}'⇒({})", lit.string, note),
+            Indent(lit, _style_label, note) => write!(f, "'{}'⇒({})", lit, note),
             Concat(left, right) => write!(f, "{} + {}", left, right),
             Choice(opt1, opt2) => write!(f, "({} | {})", opt1, opt2),
             Check(cond, pos, opt1, opt2) => {
@@ -254,7 +228,7 @@ impl<L: StyleLabel, C: Condition> Shr<Notation<L, C>> for Width {
     /// (sometimes called "nesting").
     fn shr(self, notation: Notation<L, C>) -> Notation<L, C> {
         Notation::Indent(
-            Literal::new(&format!("{:spaces$}", "", spaces = self as usize)),
+            format!("{:spaces$}", "", spaces = self as usize),
             None,
             Box::new(Notation::Concat(
                 Box::new(Notation::Newline),

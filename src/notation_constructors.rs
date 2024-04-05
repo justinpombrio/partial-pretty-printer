@@ -8,7 +8,7 @@
 //! - `i >> x` is shorthand for [`Indent`](Notation::Indent)`(i_spaces,
 //!   `[`Newline`](Notation::Newline)` + x)` (sometimes called "nesting").
 
-use crate::{CheckPos, Condition, Literal, Notation, StyleLabel};
+use crate::{CheckPos, Condition, Notation, StyleLabel};
 
 /// Construct a [`Notation::Empty`].
 pub fn empty<L: StyleLabel, C: Condition>() -> Notation<L, C> {
@@ -47,7 +47,7 @@ pub fn text<L: StyleLabel, C: Condition>() -> Notation<L, C> {
 
 /// Construct a [`Notation::Literal`].
 pub fn lit<L: StyleLabel, C: Condition>(s: &str) -> Notation<L, C> {
-    Notation::Literal(Literal::new(s))
+    Notation::Literal(s.to_owned())
 }
 
 /// Construct a [`Notation::Flat`].
@@ -61,7 +61,7 @@ pub fn indent<L: StyleLabel, C: Condition>(
     style_label: Option<L>,
     n: Notation<L, C>,
 ) -> Notation<L, C> {
-    Notation::Indent(Literal::new(s), style_label, Box::new(n))
+    Notation::Indent(s.to_owned(), style_label, Box::new(n))
 }
 
 /// Construct a [`Notation::Check`].

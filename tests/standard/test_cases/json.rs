@@ -467,7 +467,7 @@ fn big_json_tree() {
 #[test]
 #[ignore]
 // cargo test --release time_json -- --include-ignored
-// Currently takes ~1.1ms on Yoga
+// Currently takes ~420μs on Yoga
 fn time_json() {
     use crate::standard::pretty_testing::print_region;
     use std::time::Instant;
