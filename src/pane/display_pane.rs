@@ -15,9 +15,6 @@ pub enum PaneError<W: Error + 'static, E: Error + 'static> {
     )]
     InvalidUseOfDynamic,
 
-    #[error("No document found for label in PaneNotation::Doc: {0}")]
-    MissingDocument(String),
-
     #[error("PrettyWindow error: {0}")]
     PrettyWindowError(#[source] W),
 
@@ -72,10 +69,10 @@ where
             }
         }
         PaneNotation::Doc { label } => {
-            let (doc, options) = get_content(label.clone())
-                .ok_or_else(|| PaneError::MissingDocument(format!("{:?}", label)))?;
-            let printed_doc = PrintedDoc::new(doc, &options, rect.size())?;
-            printed_doc.display(window, rect)?;
+            if let Some((doc, options)) = get_content(label.clone()) {
+                let printed_doc = PrintedDoc::new(doc, &options, rect.size())?;
+                printed_doc.display(window, rect)?;
+            }
         }
         PaneNotation::Horz(panes) => {
             let pane_sizes = panes
@@ -93,15 +90,19 @@ where
                 if *size != PaneSize::Dynamic {
                     continue;
                 }
+
                 let label = if let PaneNotation::Doc { label } = child_note {
                     label.clone()
                 } else {
                     return Err(PaneError::InvalidUseOfDynamic);
                 };
-                let (doc, options) = get_content(label.clone())
-                    .ok_or_else(|| PaneError::MissingDocument(format!("{:?}", label)))?;
 
-                let printed_doc = PrintedDoc::new(doc, &options, available_size)?;
+                let printed_doc = if let Some((doc, options)) = get_content(label.clone()) {
+                    PrintedDoc::new(doc, &options, available_size)?
+                } else {
+                    PrintedDoc::new_empty()
+                };
+
                 let width = printed_doc.width().min(available_size.width);
                 available_size.width -= width;
                 dynamic_widths.push(width as usize);
@@ -146,15 +147,19 @@ where
                 if *size != PaneSize::Dynamic {
                     continue;
                 }
+
                 let label = if let PaneNotation::Doc { label } = child_note {
                     label.clone()
                 } else {
                     return Err(PaneError::InvalidUseOfDynamic);
                 };
-                let (doc, options) = get_content(label.clone())
-                    .ok_or_else(|| PaneError::MissingDocument(format!("{:?}", label)))?;
 
-                let printed_doc = PrintedDoc::new(doc, &options, available_size)?;
+                let printed_doc = if let Some((doc, options)) = get_content(label.clone()) {
+                    PrintedDoc::new(doc, &options, available_size)?
+                } else {
+                    PrintedDoc::new_empty()
+                };
+
                 let height = printed_doc.height();
                 available_size.height -= height;
                 dynamic_heights.push(height as usize);
@@ -198,16 +203,21 @@ struct PrintedDoc<'d, D: PrettyDoc<'d>> {
 }
 
 impl<'d, D: PrettyDoc<'d>> PrintedDoc<'d, D> {
+    /// Construct a blank PrintedDoc (in case `getContent()` returned `None`).
+    fn new_empty() -> Self {
+        PrintedDoc {
+            lines: Vec::new(),
+            focus_line_index: 0,
+            focus_line_row: 0,
+            focus_point: None,
+        }
+    }
+
     /// Pretty-print the portion of document that would fit in the given `size`,
     /// storing it as text in the `PrintedDoc`.
     fn new(doc: D, options: &PrintingOptions, size: Size) -> Result<Self, PrintingError<D::Error>> {
         if size.height == 0 || size.width == 0 {
-            return Ok(PrintedDoc {
-                lines: Vec::new(),
-                focus_line_index: 0,
-                focus_line_row: 0,
-                focus_point: None,
-            });
+            return Ok(PrintedDoc::new_empty());
         }
 
         let printing_width = options.choose_width(size.width);
