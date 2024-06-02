@@ -24,11 +24,13 @@ pub enum PaneError<W: Error + 'static, E: Error + 'static> {
 
 /// Display a [`PaneNotation`] to a [`PrettyWindow`].
 ///
-/// `get_content` is a function to look up a document by [`DocLabel`]. It returns both the document
-/// and [extra information](PrintingOptions) about how to print it.
+/// `style` is the initial style to use on the entire pane. `get_content` is a function to look up
+/// a document by [`DocLabel`]. It returns both the document and [extra
+/// information](PrintingOptions) about how to print it.
 pub fn display_pane<'d, L, D, W>(
     window: &mut W,
     notation: &PaneNotation<L, D::Style>,
+    style: &D::Style,
     get_content: &impl Fn(L) -> Option<(D, PrintingOptions)>,
 ) -> Result<(), PaneError<W::Error, D::Error>>
 where
@@ -38,12 +40,13 @@ where
 {
     let size = window.size().map_err(PaneError::PrettyWindowError)?;
     let rect = Rectangle::from_size(size);
-    display_pane_rec(window, notation, get_content, rect)
+    display_pane_rec(window, notation, style, get_content, rect)
 }
 
 fn display_pane_rec<'d, L, D, W>(
     window: &mut W,
     notation: &PaneNotation<L, D::Style>,
+    style: &D::Style,
     get_content: &impl Fn(L) -> Option<(D, PrintingOptions)>,
     rect: Rectangle,
 ) -> Result<(), PaneError<W::Error, D::Error>>
@@ -52,9 +55,10 @@ where
     D: PrettyDoc<'d>,
     W: PrettyWindow<Style = D::Style>,
 {
+    use crate::pretty_doc::Style;
+
     match notation {
-        PaneNotation::Empty => (),
-        PaneNotation::Fill { ch, style } => {
+        PaneNotation::Fill { ch } => {
             let is_full_width = is_char_full_width(*ch);
             let char_width = if is_full_width { 2 } else { 1 };
 
@@ -66,13 +70,25 @@ where
                         .map_err(PaneError::PrettyWindowError)?;
                     col += char_width;
                 }
+                if col < rect.max_col {
+                    window
+                        .display_char(' ', Pos { row, col }, style, false)
+                        .map_err(PaneError::PrettyWindowError)?;
+                }
             }
         }
         PaneNotation::Doc { label } => {
             if let Some((doc, options)) = get_content(label.clone()) {
-                let printed_doc = PrintedDoc::new(doc, &options, rect.size())?;
+                let printed_doc = PrintedDoc::new(doc, &options, rect.size(), style)?;
                 printed_doc.display(window, rect)?;
             }
+        }
+        PaneNotation::Style {
+            style: inner_style,
+            notation: inner_notation,
+        } => {
+            let combined_style = D::Style::combine(style, inner_style);
+            display_pane_rec(window, inner_notation, &combined_style, get_content, rect)?;
         }
         PaneNotation::Horz(panes) => {
             let pane_sizes = panes
@@ -98,9 +114,9 @@ where
                 };
 
                 let printed_doc = if let Some((doc, options)) = get_content(label.clone()) {
-                    PrintedDoc::new(doc, &options, available_size)?
+                    PrintedDoc::new(doc, &options, available_size, style)?
                 } else {
-                    PrintedDoc::new_empty()
+                    PrintedDoc::new_empty(style)
                 };
 
                 let width = printed_doc.width().min(available_size.width);
@@ -127,7 +143,7 @@ where
                     let doc = dynamic_docs.next().unwrap();
                     doc.display(window, child_rect)?;
                 } else {
-                    display_pane_rec(window, child_note, get_content, child_rect)?;
+                    display_pane_rec(window, child_note, style, get_content, child_rect)?;
                 }
             }
         }
@@ -155,9 +171,9 @@ where
                 };
 
                 let printed_doc = if let Some((doc, options)) = get_content(label.clone()) {
-                    PrintedDoc::new(doc, &options, available_size)?
+                    PrintedDoc::new(doc, &options, available_size, style)?
                 } else {
-                    PrintedDoc::new_empty()
+                    PrintedDoc::new_empty(style)
                 };
 
                 let height = printed_doc.height();
@@ -184,7 +200,7 @@ where
                     let doc = dynamic_docs.next().unwrap();
                     doc.display(window, child_rect)?;
                 } else {
-                    display_pane_rec(window, child_note, get_content, child_rect)?;
+                    display_pane_rec(window, child_note, style, get_content, child_rect)?;
                 }
             }
         }
@@ -200,24 +216,32 @@ struct PrintedDoc<'d, D: PrettyDoc<'d>> {
     focus_line_row: Row,
     /// Focus point of the document, relative to the pane.
     focus_point: Option<Pos>,
+    /// Style to apply to blank space.
+    blank_style: D::Style,
 }
 
 impl<'d, D: PrettyDoc<'d>> PrintedDoc<'d, D> {
     /// Construct a blank PrintedDoc (in case `getContent()` returned `None`).
-    fn new_empty() -> Self {
+    fn new_empty(root_style: &D::Style) -> Self {
         PrintedDoc {
             lines: Vec::new(),
             focus_line_index: 0,
             focus_line_row: 0,
             focus_point: None,
+            blank_style: root_style.clone(),
         }
     }
 
     /// Pretty-print the portion of document that would fit in the given `size`,
     /// storing it as text in the `PrintedDoc`.
-    fn new(doc: D, options: &PrintingOptions, size: Size) -> Result<Self, PrintingError<D::Error>> {
+    fn new(
+        doc: D,
+        options: &PrintingOptions,
+        size: Size,
+        root_style: &D::Style,
+    ) -> Result<Self, PrintingError<D::Error>> {
         if size.height == 0 || size.width == 0 {
-            return Ok(PrintedDoc::new_empty());
+            return Ok(PrintedDoc::new_empty(root_style));
         }
 
         let printing_width = options.choose_width(size.width);
@@ -227,6 +251,7 @@ impl<'d, D: PrettyDoc<'d>> PrintedDoc<'d, D> {
             printing_width,
             &options.focus_path,
             options.focus_target,
+            Some(root_style),
         )?;
 
         let focus_point = if options.set_focus {
@@ -258,6 +283,7 @@ impl<'d, D: PrettyDoc<'d>> PrintedDoc<'d, D> {
             focus_line_index,
             focus_line_row,
             focus_point,
+            blank_style: root_style.clone(),
         })
     }
 
@@ -293,25 +319,59 @@ impl<'d, D: PrettyDoc<'d>> PrintedDoc<'d, D> {
                 })
                 .map_err(PaneError::PrettyWindowError)?;
         }
-        let mut relative_pos = Pos {
-            col: 0,
-            row: self.focus_line_row - (self.focus_line_index as Row),
-        };
-        for line in self.lines {
-            display_line(window, line, relative_pos, rect)?;
-            relative_pos.row += 1;
+
+        let first_row = self.focus_line_row - (self.focus_line_index as Row);
+        let last_row = first_row + self.lines.len() as Row;
+        for row in 0..rect.size().height {
+            if row >= first_row && row < last_row {
+                let line = &self.lines[(row - first_row) as usize];
+                display_line(window, line, row, rect, &self.blank_style)?;
+            } else {
+                display_blank_line::<D, W>(window, row, rect, &self.blank_style)?;
+            }
         }
         Ok(())
     }
 }
 
-/// Display the [`Line`] in the given window, at the given position relative to the `rect`.
+/// Display a blank line in the given window, at the given row relative to the `rect`.
+/// Does not display anything that falls outside of the `rect`.
+fn display_blank_line<'d, D, W>(
+    window: &mut W,
+    relative_row: Row,
+    rect: Rectangle,
+    blank_style: &D::Style,
+) -> Result<(), PaneError<W::Error, D::Error>>
+where
+    D: PrettyDoc<'d>,
+    W: PrettyWindow<Style = D::Style>,
+{
+    // Compute row in absolute window coords
+    let absolute_row = rect.min_row + relative_row;
+    if absolute_row >= rect.max_row {
+        return Ok(());
+    }
+
+    for absolute_col in rect.min_col..rect.max_col {
+        let absolute_pos = Pos {
+            row: absolute_row,
+            col: absolute_col,
+        };
+        window
+            .display_char(' ', absolute_pos, blank_style, false)
+            .map_err(PaneError::PrettyWindowError)?;
+    }
+    Ok(())
+}
+
+/// Display the [`Line`] in the given window, at the given row relative to the `rect`.
 /// Does not display anything that falls outside of the `rect`.
 fn display_line<'d, D, W>(
     window: &mut W,
-    line: Line<'d, D>,
-    relative_pos: Pos,
+    line: &Line<'d, D>,
+    relative_row: Row,
     rect: Rectangle,
+    blank_style: &D::Style,
 ) -> Result<(), PaneError<W::Error, D::Error>>
 where
     D: PrettyDoc<'d>,
@@ -319,26 +379,32 @@ where
 {
     // Compute pos in absolute window coords
     let mut pos = Pos {
-        row: rect.min_row + relative_pos.row,
-        col: rect.min_col + relative_pos.col,
+        row: rect.min_row + relative_row,
+        col: rect.min_col,
     };
     if pos.row >= rect.max_row {
         return Ok(());
     }
 
     // Display each segment
-    for segment in line.segments {
+    'segments_loop: for segment in &line.segments {
         for ch in segment.str.chars() {
             let is_full_width = is_char_full_width(ch);
             let char_width = if is_full_width { 2 } else { 1 };
             if pos.col + char_width > rect.max_col {
-                return Ok(());
+                break 'segments_loop;
             }
             window
                 .display_char(ch, pos, &segment.style, is_full_width)
                 .map_err(PaneError::PrettyWindowError)?;
             pos.col += char_width;
         }
+    }
+    while pos.col < rect.max_col {
+        window
+            .display_char(' ', pos, blank_style, false)
+            .map_err(PaneError::PrettyWindowError)?;
+        pos.col += 1;
     }
     Ok(())
 }

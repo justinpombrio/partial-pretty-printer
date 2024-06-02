@@ -27,7 +27,7 @@ fn get_content<'d, D: PrettyDoc<'d> + Clone + Debug>(
 }
 
 #[track_caller]
-fn pane_test<'d, S: Style, D: PrettyDoc<'d, Style = S> + Clone + Debug>(
+fn pane_test<'d, S: Style + Default, D: PrettyDoc<'d, Style = S> + Clone + Debug>(
     notation: PaneNotation<SimpleLabel<'d, D>, S>,
     expected: &str,
 ) {
@@ -42,13 +42,13 @@ fn pane_test<'d, S: Style, D: PrettyDoc<'d, Style = S> + Clone + Debug>(
 }
 
 #[track_caller]
-fn pane_test_with_size<'d, S: Style, D: PrettyDoc<'d, Style = S> + Clone + Debug>(
+fn pane_test_with_size<'d, S: Style + Default, D: PrettyDoc<'d, Style = S> + Clone + Debug>(
     size: Size,
     notation: PaneNotation<SimpleLabel<'d, D>, S>,
     expected: &str,
 ) {
     let mut screen = PlainText::new(size.width, size.height);
-    display_pane(&mut screen, &notation, &get_content).unwrap();
+    display_pane(&mut screen, &notation, &S::default(), &get_content).unwrap();
     let actual = screen.to_string();
     if actual != expected {
         eprintln!("ACTUAL:\n{}", actual);
@@ -58,14 +58,14 @@ fn pane_test_with_size<'d, S: Style, D: PrettyDoc<'d, Style = S> + Clone + Debug
 }
 
 #[track_caller]
-fn pane_test_with_focus<'d, S: Style, D: PrettyDoc<'d, Style = S> + Clone + Debug>(
+fn pane_test_with_focus<'d, S: Style + Default, D: PrettyDoc<'d, Style = S> + Clone + Debug>(
     size: Size,
     notation: PaneNotation<SimpleLabel<'d, D>, S>,
     expected: &str,
     expected_pos: Pos,
 ) {
     let mut screen = PlainText::new(size.width, size.height);
-    display_pane(&mut screen, &notation, &get_content).unwrap();
+    display_pane(&mut screen, &notation, &S::default(), &get_content).unwrap();
     let actual = screen.to_string();
     if actual != expected {
         eprintln!("ACTUAL:\n{}", actual);
@@ -76,15 +76,7 @@ fn pane_test_with_focus<'d, S: Style, D: PrettyDoc<'d, Style = S> + Clone + Debu
 }
 
 fn fill<L: DocLabel, S: Style + Default>(ch: char) -> PaneNotation<L, S> {
-    PaneNotation::Fill {
-        ch,
-        style: S::default(),
-    }
-}
-
-#[test]
-fn test_empty_pane() {
-    pane_test::<NoStyle, &SimpleDoc>(PaneNotation::Empty, "");
+    PaneNotation::Fill { ch }
 }
 
 #[test]
@@ -109,9 +101,9 @@ fn test_fill_pane_with_full_width() {
             height: 3,
         },
         fill('信'),
-        "信信信\n\
-         信信信\n\
-         信信信\n",
+        "信信信 \n\
+         信信信 \n\
+         信信信 \n",
     );
 
     pane_test_with_size::<NoStyle, &SimpleDoc>(
@@ -128,6 +120,15 @@ fn test_fill_pane_with_full_width() {
     pane_test_with_size::<NoStyle, &SimpleDoc>(
         Size {
             width: 1,
+            height: 3,
+        },
+        fill('信'),
+        " \n \n \n",
+    );
+
+    pane_test_with_size::<NoStyle, &SimpleDoc>(
+        Size {
+            width: 0,
             height: 3,
         },
         fill('信'),
@@ -236,7 +237,17 @@ fn test_doc_pane() {
     let contents = SimpleLabel(Some((&doc, options)), PhantomData);
     pane_test(
         PaneNotation::Doc { label: contents },
-        "[\n    \"He\n    \"wo\n]\n",
+        &[
+            "[      ",  // force rustfmt
+            "    \"He", // force rustfmt
+            "    \"wo", // force rustfmt
+            "]      ",  // force rustfmt
+            "       ",  // force rustfmt
+            "       ",  // force rustfmt
+            "       ",  // force rustfmt
+            "",
+        ]
+        .join("\n"),
     );
 }
 
@@ -259,7 +270,7 @@ fn test_doc_pane_full_width_cutoff() {
             height: 3,
         },
         note.clone(),
-        "\"一二三\"\n",
+        "\"一二三\"\n        \n        \n",
     );
     pane_test_with_size(
         Size {
@@ -267,7 +278,7 @@ fn test_doc_pane_full_width_cutoff() {
             height: 3,
         },
         note.clone(),
-        "\"一二三\n",
+        "\"一二三\n       \n       \n",
     );
     pane_test_with_size(
         Size {
@@ -275,7 +286,7 @@ fn test_doc_pane_full_width_cutoff() {
             height: 3,
         },
         note.clone(),
-        "\"一二\n",
+        "\"一二 \n      \n      \n",
     );
     pane_test_with_size(
         Size {
@@ -283,7 +294,7 @@ fn test_doc_pane_full_width_cutoff() {
             height: 3,
         },
         note.clone(),
-        "\"一二\n",
+        "\"一二\n     \n     \n",
     );
 }
 
@@ -300,16 +311,23 @@ fn test_pane_cursor_heights() {
         };
         let doc = json_string("Hi");
         let contents = SimpleLabel(Some((&doc, options)), PhantomData);
-        pane_test(PaneNotation::Doc { label: contents }, expected);
+        pane_test_with_size(
+            Size {
+                width: 4,
+                height: 7,
+            },
+            PaneNotation::Doc { label: contents },
+            expected,
+        );
     }
 
-    test_at_height(0.0, "\"Hi\"\n");
-    test_at_height(0.17, "\n\"Hi\"\n");
-    test_at_height(0.33, "\n\n\"Hi\"\n");
-    test_at_height(0.5, "\n\n\n\"Hi\"\n");
-    test_at_height(0.67, "\n\n\n\n\"Hi\"\n");
-    test_at_height(0.83, "\n\n\n\n\n\"Hi\"\n");
-    test_at_height(1.0, "\n\n\n\n\n\n\"Hi\"\n");
+    test_at_height(0.0, "\"Hi\"\n    \n    \n    \n    \n    \n    \n");
+    test_at_height(0.17, "    \n\"Hi\"\n    \n    \n    \n    \n    \n");
+    test_at_height(0.33, "    \n    \n\"Hi\"\n    \n    \n    \n    \n");
+    test_at_height(0.5, "    \n    \n    \n\"Hi\"\n    \n    \n    \n");
+    test_at_height(0.67, "    \n    \n    \n    \n\"Hi\"\n    \n    \n");
+    test_at_height(0.83, "    \n    \n    \n    \n    \n\"Hi\"\n    \n");
+    test_at_height(1.0, "    \n    \n    \n    \n    \n    \n\"Hi\"\n");
 }
 
 #[test]
@@ -328,11 +346,34 @@ fn test_pane_widths() {
         pane_test(PaneNotation::Doc { label: contents }, expected);
     }
 
-    test_with_width(WidthStrategy::Full, "[\n    \"He\n    \"wo\n]\n");
-    test_with_width(WidthStrategy::Fixed(80), "[\"Hello\n");
-    test_with_width(WidthStrategy::Fixed(10), "[\n    \"He\n    \"wo\n]\n");
-    test_with_width(WidthStrategy::NoMoreThan(80), "[\n    \"He\n    \"wo\n]\n");
-    test_with_width(WidthStrategy::NoMoreThan(5), "[\n    \"He\n    \"wo\n]\n");
+    let narrow = [
+        "[      ",  // force rustfmt
+        "    \"He", // force rustfmt
+        "    \"wo", // force rustfmt
+        "]      ",  // force rustfmt
+        "       ",  // force rustfmt
+        "       ",  // force rustfmt
+        "       ",  // force rustfmt
+        "",
+    ]
+    .join("\n");
+    let wide = [
+        "[\"Hello", // force rustfmt
+        "       ",  // force rustfmt
+        "       ",  // force rustfmt
+        "       ",  // force rustfmt
+        "       ",  // force rustfmt
+        "       ",  // force rustfmt
+        "       ",  // force rustfmt
+        "",
+    ]
+    .join("\n");
+
+    test_with_width(WidthStrategy::Full, &narrow);
+    test_with_width(WidthStrategy::Fixed(80), &wide);
+    test_with_width(WidthStrategy::Fixed(10), &narrow);
+    test_with_width(WidthStrategy::NoMoreThan(80), &narrow);
+    test_with_width(WidthStrategy::NoMoreThan(5), &narrow);
 }
 
 fn make_array(start: usize, end: usize) -> Json {
@@ -362,49 +403,54 @@ fn test_seek() {
     pane_test(
         make_note(&doc10, &[], FocusTarget::Start),
         &[
-            "",         // force rustfmt
-            "",         // force rustfmt
-            "",         // force rustfmt
-            "[",        // force rustfmt
-            "    0,",   // force rustfmt
-            "    1,",   // force rustfmt
-            "    2,\n", // force rustfmt
+            "       ", // force rustfmt
+            "       ", // force rustfmt
+            "       ", // force rustfmt
+            "[      ", // force rustfmt
+            "    0, ", // force rustfmt
+            "    1, ", // force rustfmt
+            "    2, ", // force rustfmt
+            "",
         ]
         .join("\n"),
     );
     pane_test(
         make_note(&doc10, &[], FocusTarget::End),
         &[
-            "    5,", // force rustfmt
-            "    6,", // force rustfmt
-            "    7",  // force rustfmt
-            "]\n",    // force rustfmt
+            "    5, ", // force rustfmt
+            "    6, ", // force rustfmt
+            "    7  ", // force rustfmt
+            "]      ", // force rustfmt
+            "       ", // force rustfmt
+            "       ", // force rustfmt
+            "       ", // force rustfmt
+            "",
         ]
         .join("\n"),
     );
     pane_test(
         make_note(&doc10, &[1], FocusTarget::Start),
         &[
-            "",         // force rustfmt
-            "[",        // force rustfmt
-            "    0,",   // force rustfmt
-            "    1,",   // force rustfmt
-            "    2,",   // force rustfmt
-            "    3,",   // force rustfmt
-            "    4,\n", // force rustfmt
+            "       ",   // force rustfmt
+            "[      ",   // force rustfmt
+            "    0, ",   // force rustfmt
+            "    1, ",   // force rustfmt
+            "    2, ",   // force rustfmt
+            "    3, ",   // force rustfmt
+            "    4, \n", // force rustfmt
         ]
         .join("\n"),
     );
     pane_test(
         make_note(&doc10, &[1], FocusTarget::End),
         &[
-            "",         // force rustfmt
-            "[",        // force rustfmt
-            "    0,",   // force rustfmt
-            "    1,",   // force rustfmt
-            "    2,",   // force rustfmt
-            "    3,",   // force rustfmt
-            "    4,\n", // force rustfmt
+            "       ",   // force rustfmt
+            "[      ",   // force rustfmt
+            "    0, ",   // force rustfmt
+            "    1, ",   // force rustfmt
+            "    2, ",   // force rustfmt
+            "    3, ",   // force rustfmt
+            "    4, \n", // force rustfmt
         ]
         .join("\n"),
     );
@@ -437,13 +483,13 @@ fn test_dynamic() {
             (PaneSize::Dynamic, make_note(&doc5)),
         ]),
         &[
-            "[",      // force rustfmt
-            "    0,", // force rustfmt
-            "[",      // force rustfmt
-            "    6,", // force rustfmt
-            "    7,", // force rustfmt
-            "    8",  // force rustfmt
-            "]\n",
+            "[      ", // force rustfmt
+            "    0, ", // force rustfmt
+            "[      ", // force rustfmt
+            "    6, ", // force rustfmt
+            "    7, ", // force rustfmt
+            "    8  ", // force rustfmt
+            "]      \n",
         ]
         .join("\n"),
     );
@@ -454,13 +500,13 @@ fn test_dynamic() {
             (PaneSize::Dynamic, make_note(&doc8)),
         ]),
         &[
-            "[",      // force rustfmt
-            "    0,", // force rustfmt
-            "    1,", // force rustfmt
-            "    2,", // force rustfmt
-            "    3,", // force rustfmt
-            "    4,", // force rustfmt
-            "    5\n",
+            "[      ", // force rustfmt
+            "    0, ", // force rustfmt
+            "    1, ", // force rustfmt
+            "    2, ", // force rustfmt
+            "    3, ", // force rustfmt
+            "    4, ", // force rustfmt
+            "    5  \n",
         ]
         .join("\n"),
     );
@@ -472,12 +518,12 @@ fn test_dynamic() {
         ]),
         &[
             "[    42", // force rustfmt
-            "    0",   // force rustfmt
-            "    1",   // force rustfmt
-            "    2",   // force rustfmt
-            "    3",   // force rustfmt
-            "    4",   // force rustfmt
-            "    5\n",
+            "    0  ", // force rustfmt
+            "    1  ", // force rustfmt
+            "    2  ", // force rustfmt
+            "    3  ", // force rustfmt
+            "    4  ", // force rustfmt
+            "    5  \n",
         ]
         .join("\n"),
     );
@@ -493,12 +539,12 @@ fn test_dynamic() {
         ]),
         &[
             "[     \"一1\"", // force rustfmt
-            "    0,",        // force rustfmt
-            "    1,",        // force rustfmt
-            "    2,",        // force rustfmt
-            "    3,",        // force rustfmt
-            "    4,",        // force rustfmt
-            "    5\n",
+            "    0,     ",   // force rustfmt
+            "    1,     ",   // force rustfmt
+            "    2,     ",   // force rustfmt
+            "    3,     ",   // force rustfmt
+            "    4,     ",   // force rustfmt
+            "    5      \n",
         ]
         .join("\n"),
     );
@@ -514,12 +560,12 @@ fn test_dynamic() {
         ]),
         &[
             "[    \"一1\"", // force rustfmt
-            "    0",        // force rustfmt
-            "    1",        // force rustfmt
-            "    2",        // force rustfmt
-            "    3",        // force rustfmt
-            "    4",        // force rustfmt
-            "    5\n",
+            "    0     ",   // force rustfmt
+            "    1     ",   // force rustfmt
+            "    2     ",   // force rustfmt
+            "    3     ",   // force rustfmt
+            "    4     ",   // force rustfmt
+            "    5     \n",
         ]
         .join("\n"),
     );
@@ -564,15 +610,15 @@ fn test_focus_point() {
             "********************",
             "********************",
             "********************",
-            "##",
-            "##[",
-            "##    \"Hello\",",
-            "##    \"darkness,\",",
+            "##                  ",
+            "##[                 ",
+            "##    \"Hello\",      ",
+            "##    \"darkness,\",  ",
             "##    [\"my\", \"old\"],",
-            "##    \"friend\"",
-            "##]",
-            "##",
-            "##",
+            "##    \"friend\"      ",
+            "##]                 ",
+            "##                  ",
+            "##                  ",
             "",
         ]
         .join("\n"),

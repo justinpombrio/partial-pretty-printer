@@ -1,9 +1,14 @@
 use crate::{Pos, Size, Style};
 
 #[cfg(doc)]
+use super::display_pane::display_pane;
+#[cfg(doc)]
 use super::printing_options::PrintingOptions;
 
 /// A "window" that can display a set of pretty-printed [`PrettyDoc`](crate::PrettyDoc)s.
+///
+/// Every character cell will be written to (with `display_char`) exactly once during
+/// [`display_pane`].
 pub trait PrettyWindow: Sized {
     /// An error that can happen when displaying to the window. It is forbidden from containing
     /// non-static references, so that `PrettyWindow` can be used as a trait object.

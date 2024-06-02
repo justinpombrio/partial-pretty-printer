@@ -18,7 +18,8 @@ use crate::notation::Notation;
 /// where the focus is relative to that node (e.g. before or after it).
 ///
 /// `width` is the desired line width. The algorithm will attempt to, but is not guaranteed to,
-/// find a layout that fits within that width.
+/// find a layout that fits within that width. If a `root_style` is provided, it is the top-level
+/// style applied to the whole document.
 ///
 /// Returns a tuple with three things:
 ///
@@ -33,6 +34,7 @@ pub fn pretty_print<'d, D: PrettyDoc<'d>>(
     width: Width,
     path: &[usize],
     focus_target: FocusTarget,
+    root_style: Option<&D::Style>,
 ) -> Result<
     (
         impl Iterator<Item = Result<Line<'d, D>, PrintingError<D::Error>>>,
@@ -44,7 +46,7 @@ pub fn pretty_print<'d, D: PrettyDoc<'d>>(
     span!("Pretty Print");
 
     let mut printer = Printer::new(width)?;
-    printer.seek(doc, path, focus_target)?;
+    printer.seek(doc, path, focus_target, root_style)?;
 
     let num_left_segs = printer.next_blocks.last().unwrap().segments.len();
     let mut line = printer.print_next_line()?.unwrap();
@@ -76,7 +78,7 @@ pub fn pretty_print_to_string<'d, D: PrettyDoc<'d>>(
     doc: D,
     width: Width,
 ) -> Result<String, PrintingError<D::Error>> {
-    let (_, focused_line, lines_iter) = pretty_print(doc, width, &[], FocusTarget::Start)?;
+    let (_, focused_line, lines_iter) = pretty_print(doc, width, &[], FocusTarget::Start, None)?;
     let mut string = focused_line.to_string();
     for line in lines_iter {
         string.push('\n');
@@ -358,10 +360,12 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
         doc: D,
         path: &[usize],
         focus_target: FocusTarget,
+        root_style: Option<&D::Style>,
     ) -> Result<(), PrintingError<D::Error>> {
         span!("seek");
 
-        let mut chunk = Chunk::new(DelayedConsolidatedNotation::new(doc)?)?;
+        let note = DelayedConsolidatedNotation::with_optional_style(doc, root_style)?;
+        let mut chunk = Chunk::new(note)?;
         for child_index in path {
             chunk = self.seek_child(chunk, *child_index)?;
         }

@@ -79,7 +79,7 @@ fn print_above_and_below<'d, D: PrettyDoc<'d>>(
     focus_target: FocusTarget,
 ) -> (Vec<String>, String, String, Vec<String>) {
     let (upward_printer, focused_line, downward_printer) =
-        pretty_print(doc, width, path, focus_target).unwrap();
+        pretty_print(doc, width, path, focus_target, None).unwrap();
     let mut lines_above = upward_printer
         .map(|line| line.unwrap().to_string())
         .collect::<Vec<_>>();
@@ -114,7 +114,7 @@ pub fn print_region<'d, D: PrettyDoc<'d>>(
     rows: usize,
 ) -> Vec<String> {
     let (upward_printer, focused_line, downward_printer) =
-        pretty_print(doc, width, path, focus_target).unwrap();
+        pretty_print(doc, width, path, focus_target, None).unwrap();
     let mut lines = upward_printer
         .map(|line| line.unwrap().to_string())
         .take(rows / 2)

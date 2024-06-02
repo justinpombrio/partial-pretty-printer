@@ -222,13 +222,24 @@ pub enum PrintingError<E: std::error::Error + 'static> {
 
 impl<'d, D: PrettyDoc<'d>> DelayedConsolidatedNotation<'d, D> {
     pub fn new(doc: D) -> Result<Self, PrintingError<D::Error>> {
+        Self::with_optional_style(doc, None)
+    }
+
+    pub fn with_optional_style(
+        doc: D,
+        style: Option<&D::Style>,
+    ) -> Result<Self, PrintingError<D::Error>> {
         Ok(DelayedConsolidatedNotation {
             doc,
             notation: &doc.notation()?.0,
             flat: false,
             indent: None,
             join_pos: None,
-            style: doc.node_style()?,
+            style: if let Some(style) = style {
+                D::Style::combine(style, &doc.node_style()?)
+            } else {
+                doc.node_style()?
+            },
         })
     }
 

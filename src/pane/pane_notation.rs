@@ -16,10 +16,13 @@ pub enum PaneNotation<L: DocLabel, S> {
     /// Pretty print a document and display it in this pane. The given [`DocLabel`] will be used to dynamically look up
     /// the [`PrettyDoc`](crate::PrettyDoc) when the pane is displayed.
     Doc { label: L },
-    /// Fill the entire pane by repeating the given character with the given style.
-    Fill { ch: char, style: S },
-    /// Leave the pane empty.
-    Empty,
+    /// Fill the entire pane by repeating the given character.
+    Fill { ch: char },
+    /// Apply the style to the contained notation.
+    Style {
+        style: S,
+        notation: Box<PaneNotation<L, S>>,
+    },
 }
 
 /// Specify the size of a subpane within a vertically ([`PaneNotation::Vert`]) or horizontally

@@ -15,9 +15,9 @@ struct RichText {
     lines: Vec<Vec<RichChar>>,
 }
 
-fn print(doc: &Json, width: Width) -> RichText {
+fn print(doc: &Json, width: Width, style: BasicStyle) -> RichText {
     let (upward_printer, focused_line, downward_printer) =
-        pretty_print(doc, width, &[], FocusTarget::Start).unwrap();
+        pretty_print(doc, width, &[], FocusTarget::Start, Some(&style)).unwrap();
     let mut rich_text = RichText::new();
     let mut lines_above = upward_printer.collect::<Vec<_>>();
     lines_above.reverse();
@@ -132,7 +132,7 @@ fn make_json_object() -> Json {
 #[test]
 fn test_json_styles() {
     let json = make_json_object();
-    let rich_text = print(&json, 27);
+    let rich_text = print(&json, 27, BasicStyle::new());
     assert_str_eq(
         &[
             r#"{"#,
@@ -167,7 +167,7 @@ fn test_json_styles() {
         &rich_text.display_styles(),
     );
 
-    let rich_text = print(&json, 90);
+    let rich_text = print(&json, 90, BasicStyle::new());
     assert_str_eq(
         r#"{"Name": "Alice", "Age": 42, "Pets": [], "Favorites": ["chocolate", "lemon", "almond"]}"#,
         &rich_text.display_text(),
