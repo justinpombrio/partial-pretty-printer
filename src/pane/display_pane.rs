@@ -198,6 +198,7 @@ where
     Ok(())
 }
 
+#[allow(clippy::type_complexity)]
 fn extract_doc<'d, L, D, W>(
     mut notation: &PaneNotation<L, D::Style>,
     mut style: D::Style,
