@@ -107,16 +107,11 @@ where
                     continue;
                 }
 
-                let label = if let PaneNotation::Doc { label } = child_note {
-                    label.clone()
-                } else {
-                    return Err(PaneError::InvalidUseOfDynamic);
-                };
-
+                let (label, doc_style) = extract_doc::<L, D, W>(child_note, style.clone())?;
                 let printed_doc = if let Some((doc, options)) = get_content(label.clone()) {
-                    PrintedDoc::new(doc, &options, available_size, style)?
+                    PrintedDoc::new(doc, &options, available_size, &doc_style)?
                 } else {
-                    PrintedDoc::new_empty(style)
+                    PrintedDoc::new_empty(&doc_style)
                 };
 
                 let width = printed_doc.width().min(available_size.width);
@@ -164,16 +159,11 @@ where
                     continue;
                 }
 
-                let label = if let PaneNotation::Doc { label } = child_note {
-                    label.clone()
-                } else {
-                    return Err(PaneError::InvalidUseOfDynamic);
-                };
-
+                let (label, doc_style) = extract_doc::<L, D, W>(child_note, style.clone())?;
                 let printed_doc = if let Some((doc, options)) = get_content(label.clone()) {
-                    PrintedDoc::new(doc, &options, available_size, style)?
+                    PrintedDoc::new(doc, &options, available_size, &doc_style)?
                 } else {
-                    PrintedDoc::new_empty(style)
+                    PrintedDoc::new_empty(&doc_style)
                 };
 
                 let height = printed_doc.height();
@@ -206,6 +196,32 @@ where
         }
     }
     Ok(())
+}
+
+fn extract_doc<'d, L, D, W>(
+    mut notation: &PaneNotation<L, D::Style>,
+    mut style: D::Style,
+) -> Result<(L, D::Style), PaneError<W::Error, D::Error>>
+where
+    L: DocLabel,
+    D: PrettyDoc<'d>,
+    W: PrettyWindow<Style = D::Style>,
+{
+    use crate::pretty_doc::Style;
+
+    while let PaneNotation::Style {
+        notation: inner_notation,
+        style: inner_style,
+    } = notation
+    {
+        notation = inner_notation;
+        style = D::Style::combine(&style, inner_style);
+    }
+    if let PaneNotation::Doc { label } = notation {
+        Ok((label.clone(), style))
+    } else {
+        Err(PaneError::InvalidUseOfDynamic)
+    }
 }
 
 struct PrintedDoc<'d, D: PrettyDoc<'d>> {
