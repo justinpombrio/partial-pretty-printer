@@ -29,6 +29,7 @@ use crate::notation::Notation;
 ///
 /// It is expected that you will take only as many lines as you need from the iterators; doing so
 /// will save computation time.
+#[allow(clippy::type_complexity)]
 pub fn pretty_print<'d, D: PrettyDoc<'d>>(
     doc: D,
     width: Width,
@@ -140,8 +141,42 @@ pub struct FocusedLine<'d, D: PrettyDoc<'d>> {
 }
 
 impl<'d, D: PrettyDoc<'d>> Line<'d, D> {
+    pub(crate) fn new() -> Line<'d, D> {
+        Line {
+            segments: Vec::new(),
+        }
+    }
+
     pub fn width(&self) -> Width {
         self.segments.iter().map(|seg| seg.width).sum()
+    }
+
+    #[doc(hidden)]
+    pub fn split_at(self, width: Width) -> (Line<'d, D>, Line<'d, D>) {
+        if self.width() <= width {
+            return (self, Line::new());
+        }
+        let mut first_line = Line::new();
+        let mut second_line = Line::new();
+        let mut segments = self.segments.into_iter();
+        while let Some(segment) = segments.next() {
+            if first_line.width() + segment.width <= width {
+                first_line.segments.push(segment);
+            } else {
+                let (first_seg, second_seg) = segment.split_at(width - first_line.width());
+                if first_seg.width != 0 {
+                    first_line.segments.push(first_seg);
+                }
+                if second_seg.width != 0 {
+                    second_line.segments.push(second_seg);
+                }
+                for seg in segments {
+                    second_line.segments.push(seg);
+                }
+                break;
+            }
+        }
+        (first_line, second_line)
     }
 }
 
@@ -173,6 +208,18 @@ impl<'d, D: PrettyDoc<'d>> FocusedLine<'d, D> {
             string.push_str(segment.str);
         }
         string
+    }
+
+    /// Break this line in half, at the focus point.
+    pub fn split_at_focus(self) -> (Line<'d, D>, Line<'d, D>) {
+        (
+            Line {
+                segments: self.left_segments,
+            },
+            Line {
+                segments: self.right_segments,
+            },
+        )
     }
 }
 
@@ -484,7 +531,7 @@ impl<'d, D: PrettyDoc<'d>> Printer<'d, D> {
                     EndOfLine => block.at_eol = true,
                     Textual(textual) => {
                         if textual.is_from_text {
-                            let (left_textual, right_textual) = textual.split_at(text_pos);
+                            let (left_textual, right_textual) = textual.split_at(text_pos as Width);
                             block.push_text(left_textual)?;
                             block.chunks.push(Chunk {
                                 id: chunk.id,

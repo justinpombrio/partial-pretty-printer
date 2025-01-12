@@ -1,9 +1,13 @@
 use crate::{
-    geometry::{is_char_full_width, Rectangle},
-    pane::{divvy::Divvier, DocLabel, PaneNotation, PaneSize, PrettyWindow, PrintingOptions},
+    geometry::{is_char_full_width, str_width, Rectangle},
+    pane::{
+        divvy::Divvier, DocLabel, LineWrapping, PaneNotation, PaneSize, PrettyWindow,
+        PrintingOptions,
+    },
     pretty_print, Height, Line, Pos, PrettyDoc, PrintingError, Row, Size, Width,
 };
 use std::error::Error;
+use std::iter;
 
 /// Errors that can occur while displaying a pane.
 ///
@@ -31,7 +35,7 @@ pub fn display_pane<'d, L, D, W>(
     window: &mut W,
     notation: &PaneNotation<L, D::Style>,
     style: &D::Style,
-    get_content: &impl Fn(L) -> Option<(D, PrintingOptions)>,
+    get_content: &impl Fn(L) -> Option<(D, PrintingOptions<D::Style>)>,
 ) -> Result<(), PaneError<W::Error, D::Error>>
 where
     L: DocLabel,
@@ -47,7 +51,7 @@ fn display_pane_rec<'d, L, D, W>(
     window: &mut W,
     notation: &PaneNotation<L, D::Style>,
     style: &D::Style,
-    get_content: &impl Fn(L) -> Option<(D, PrintingOptions)>,
+    get_content: &impl Fn(L) -> Option<(D, PrintingOptions<D::Style>)>,
     rect: Rectangle,
 ) -> Result<(), PaneError<W::Error, D::Error>>
 where
@@ -253,7 +257,7 @@ impl<'d, D: PrettyDoc<'d>> PrintedDoc<'d, D> {
     /// storing it as text in the `PrintedDoc`.
     fn new(
         doc: D,
-        options: &PrintingOptions,
+        options: &PrintingOptions<D::Style>,
         size: Size,
         root_style: &D::Style,
     ) -> Result<Self, PrintingError<D::Error>> {
@@ -263,7 +267,7 @@ impl<'d, D: PrettyDoc<'d>> PrintedDoc<'d, D> {
 
         let printing_width = options.choose_width(size.width);
         let focus_line_row = options.choose_focus_line_row(size.height);
-        let (mut upward_printer, focused_line, mut downward_printer) = pretty_print(
+        let (upward_printer, focused_line, downward_printer) = pretty_print(
             doc,
             printing_width,
             &options.focus_path,
@@ -271,15 +275,33 @@ impl<'d, D: PrettyDoc<'d>> PrintedDoc<'d, D> {
             Some(root_style),
         )?;
 
-        let focus_point = if options.set_focus {
-            Some(Pos {
-                row: focus_line_row,
-                col: focused_line.left_width(),
-            })
-        } else {
-            None
-        };
+        let (focused_line_left, focused_line_right) = focused_line.split_at_focus();
+        let mut upward_printer = LineWrapper::new(
+            iter::once(Ok(focused_line_left)).chain(upward_printer),
+            printing_width,
+            options.line_wrapping.clone(),
+            true,
+        );
 
+        let left_half_of_center_line = upward_printer.next().unwrap_or_else(|| Ok(Line::new()))?;
+        let left_width = left_half_of_center_line.width();
+        let center_line_not_wrapped = Line {
+            segments: [
+                left_half_of_center_line.segments,
+                focused_line_right.segments,
+            ]
+            .concat(),
+        };
+        let mut downward_printer = LineWrapper::new(
+            iter::once(Ok(center_line_not_wrapped)).chain(downward_printer),
+            printing_width,
+            options.line_wrapping.clone(),
+            false,
+        );
+        let center_line = downward_printer.next().unwrap_or_else(|| Ok(Line::new()))?;
+
+        // Take the appropriate number of lines, both up and down. Using iterators ensures we don't
+        // compute lines we don't need.
         let mut lines = Vec::new();
         for _ in 0..focus_line_row {
             if let Some(line) = upward_printer.next() {
@@ -288,19 +310,28 @@ impl<'d, D: PrettyDoc<'d>> PrintedDoc<'d, D> {
         }
         lines.reverse();
         let focus_line_index = lines.len();
-        lines.push(Line::from(focused_line));
+        lines.push(center_line);
         for _ in (focus_line_row + 1)..size.height {
             if let Some(line) = downward_printer.next() {
                 lines.push(line?);
             }
         }
 
+        let focus_point = if options.set_focus {
+            Some(Pos {
+                row: focus_line_row,
+                col: left_width,
+            })
+        } else {
+            None
+        };
+
         Ok(PrintedDoc {
             lines,
             focus_line_index,
             focus_line_row,
             focus_point,
-            blank_style: root_style.clone(),
+            blank_style: root_style.to_owned(),
         })
     }
 
@@ -348,6 +379,79 @@ impl<'d, D: PrettyDoc<'d>> PrintedDoc<'d, D> {
             }
         }
         Ok(())
+    }
+}
+
+struct LineWrapper<'d, D, I>
+where
+    D: PrettyDoc<'d>,
+    I: Iterator<Item = Result<Line<'d, D>, PrintingError<D::Error>>>,
+{
+    iter: I,
+    is_upward: bool,
+    wrapping_width: Width,
+    wrapping: LineWrapping<D::Style>,
+    pending_lines: Vec<Line<'d, D>>,
+}
+
+impl<'d, D, I> LineWrapper<'d, D, I>
+where
+    D: PrettyDoc<'d>,
+    I: Iterator<Item = Result<Line<'d, D>, PrintingError<D::Error>>>,
+{
+    fn new(
+        iter: I,
+        wrapping_width: Width,
+        wrapping: LineWrapping<D::Style>,
+        is_upward: bool,
+    ) -> LineWrapper<'d, D, I> {
+        use LineWrapping::{Clip, Wrap};
+
+        let wrapping = match wrapping {
+            Clip => Clip,
+            Wrap(string, style) => {
+                if wrapping_width < str_width(string) + 2 {
+                    // Can't fit a single full-width character after the marker. Give up and clip.
+                    Clip
+                } else {
+                    Wrap(string, style)
+                }
+            }
+        };
+
+        LineWrapper {
+            iter,
+            wrapping_width,
+            wrapping,
+            is_upward,
+            pending_lines: Vec::new(),
+        }
+    }
+}
+
+impl<'d, D, I> Iterator for LineWrapper<'d, D, I>
+where
+    D: PrettyDoc<'d>,
+    I: Iterator<Item = Result<Line<'d, D>, PrintingError<D::Error>>>,
+{
+    type Item = Result<Line<'d, D>, PrintingError<D::Error>>;
+
+    fn next(&mut self) -> Option<Result<Line<'d, D>, PrintingError<D::Error>>> {
+        if let Some(line) = self.pending_lines.pop() {
+            Some(Ok(line))
+        } else {
+            let long_line: Line<'d, D> = match self.iter.next() {
+                None => return None,
+                Some(Err(err)) => return Some(Err(err)),
+                Some(Ok(long_line)) => long_line,
+            };
+            let mut lines = self.wrapping.wrap_line(long_line, self.wrapping_width);
+            if !self.is_upward {
+                lines.reverse();
+            }
+            self.pending_lines = lines;
+            self.pending_lines.pop().map(Ok)
+        }
     }
 }
 

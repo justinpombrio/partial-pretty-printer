@@ -91,6 +91,11 @@ pub fn str_width(s: &str) -> Width {
     unicode_width::UnicodeWidthStr::width(s) as Width
 }
 
+/// Returns the width of the character in columns (either 1 or 2).
+pub fn char_width(ch: char) -> Width {
+    unicode_width::UnicodeWidthChar::width(ch).unwrap_or(1) as Width
+}
+
 /// Returns true if the char is 2 columns wide and false if its 1 column wide.
 pub fn is_char_full_width(ch: char) -> bool {
     unicode_width::UnicodeWidthChar::width(ch) == Some(2)

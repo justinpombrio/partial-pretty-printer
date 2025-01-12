@@ -5,7 +5,8 @@ use partial_pretty_printer::{
         BasicStyle,
     },
     pane::{
-        display_pane, DocLabel, PaneNotation, PaneSize, PlainText, PrintingOptions, WidthStrategy,
+        display_pane, DocLabel, LineWrapping, PaneNotation, PaneSize, PlainText, PrintingOptions,
+        WidthStrategy,
     },
     FocusTarget, Pos, PrettyDoc, Size, Style,
 };
@@ -16,13 +17,13 @@ type NoStyle = ();
 
 #[derive(Debug, Clone)]
 struct SimpleLabel<'d, D: PrettyDoc<'d> + Clone + Debug>(
-    Option<(D, PrintingOptions)>,
+    Option<(D, PrintingOptions<D::Style>)>,
     PhantomData<&'d D>,
 );
 
 fn get_content<'d, D: PrettyDoc<'d> + Clone + Debug>(
     label: SimpleLabel<'d, D>,
-) -> Option<(D, PrintingOptions)> {
+) -> Option<(D, PrintingOptions<D::Style>)> {
     label.0
 }
 
@@ -231,6 +232,7 @@ fn test_doc_pane() {
         focus_height: 0.0,
         width_strategy: WidthStrategy::Full,
         focus_target: FocusTarget::Start,
+        line_wrapping: LineWrapping::Clip,
         set_focus: false,
     };
     let doc = json_array(vec![json_string("Hello"), json_string("world")]);
@@ -258,6 +260,7 @@ fn test_doc_pane_full_width_cutoff() {
         focus_height: 0.0,
         width_strategy: WidthStrategy::Full,
         focus_target: FocusTarget::Start,
+        line_wrapping: LineWrapping::Clip,
         set_focus: false,
     };
     let doc = json_string("一二三");
@@ -307,6 +310,7 @@ fn test_pane_cursor_heights() {
             focus_height,
             width_strategy: WidthStrategy::Full,
             focus_target: FocusTarget::Start,
+            line_wrapping: LineWrapping::Clip,
             set_focus: false,
         };
         let doc = json_string("Hi");
@@ -339,6 +343,7 @@ fn test_pane_widths() {
             focus_height: 0.0,
             width_strategy,
             focus_target: FocusTarget::Start,
+            line_wrapping: LineWrapping::Clip,
             set_focus: false,
         };
         let doc = json_array(vec![json_string("Hello"), json_string("world")]);
@@ -350,6 +355,17 @@ fn test_pane_widths() {
         "[      ",  // force rustfmt
         "    \"He", // force rustfmt
         "    \"wo", // force rustfmt
+        "]      ",  // force rustfmt
+        "       ",  // force rustfmt
+        "       ",  // force rustfmt
+        "       ",  // force rustfmt
+        "",
+    ]
+    .join("\n");
+    let clipped = [
+        "[      ",  // force rustfmt
+        "    \"  ", // force rustfmt
+        "    \"  ", // force rustfmt
         "]      ",  // force rustfmt
         "       ",  // force rustfmt
         "       ",  // force rustfmt
@@ -373,7 +389,7 @@ fn test_pane_widths() {
     test_with_width(WidthStrategy::Fixed(80), &wide);
     test_with_width(WidthStrategy::Fixed(10), &narrow);
     test_with_width(WidthStrategy::NoMoreThan(80), &narrow);
-    test_with_width(WidthStrategy::NoMoreThan(5), &narrow);
+    test_with_width(WidthStrategy::NoMoreThan(5), &clipped);
 }
 
 fn make_array(start: usize, end: usize) -> Json {
@@ -391,6 +407,7 @@ fn test_seek() {
             focus_path: path.to_owned(),
             focus_height: 0.5,
             width_strategy: WidthStrategy::Full,
+            line_wrapping: LineWrapping::Clip,
             focus_target,
             set_focus: false,
         };
@@ -463,6 +480,7 @@ fn test_dynamic() {
             focus_path: Vec::new(),
             focus_height: 0.0,
             width_strategy: WidthStrategy::Full,
+            line_wrapping: LineWrapping::Clip,
             focus_target: FocusTarget::Start,
             set_focus: false,
         };
@@ -577,6 +595,7 @@ fn test_focus_point() {
         focus_path: vec![2, 0],
         focus_height: 0.5,
         width_strategy: WidthStrategy::Full,
+        line_wrapping: LineWrapping::Clip,
         focus_target: FocusTarget::End,
         set_focus: true,
     };
@@ -597,7 +616,7 @@ fn test_focus_point() {
             (
                 PaneSize::Proportional(1),
                 PaneNotation::Horz(vec![
-                    (PaneSize::Fixed(2), fill('#')),
+                    (PaneSize::Fixed(2), fill('@')),
                     (
                         PaneSize::Proportional(1),
                         PaneNotation::Doc { label: contents },
@@ -607,21 +626,321 @@ fn test_focus_point() {
         ]),
         &[
             // force rustfmt
-            "********************",
-            "********************",
-            "********************",
-            "##                  ",
-            "##[                 ",
-            "##    \"Hello\",      ",
-            "##    \"darkness,\",  ",
-            "##    [\"my\", \"old\"],",
-            "##    \"friend\"      ",
-            "##]                 ",
-            "##                  ",
-            "##                  ",
-            "",
+            r#"********************"#,
+            r#"********************"#,
+            r#"********************"#,
+            r#"@@                  "#,
+            r#"@@[                 "#,
+            r#"@@    "Hello",      "#,
+            r#"@@    "darkness,",  "#,
+            r#"@@    ["my", "old"],"#,
+            r#"@@    "friend"      "#,
+            r#"@@]                 "#,
+            r#"@@                  "#,
+            r#"@@                  "#,
+            r#""#,
         ]
         .join("\n"),
         Pos { col: 11, row: 7 },
+    );
+}
+
+#[test]
+fn test_line_wrapping() {
+    let options = PrintingOptions {
+        focus_path: vec![2, 0],
+        focus_height: 0.5,
+        width_strategy: WidthStrategy::Full,
+        line_wrapping: LineWrapping::Wrap("/", BasicStyle::new()),
+        focus_target: FocusTarget::Start,
+        set_focus: false,
+    };
+    let doc = json_array(vec![
+        json_number(1111111.),
+        json_number(22222222222.),
+        json_array(vec![json_number(3333.), json_number(4.)]),
+        json_number(55555555.),
+        json_number(6666666666666666.),
+    ]);
+    let contents = SimpleLabel(Some((&doc, options)), PhantomData);
+    pane_test_with_size(
+        Size {
+            width: 14,
+            height: 20,
+        },
+        PaneNotation::Vert(vec![
+            (PaneSize::Fixed(3), fill('*')),
+            (
+                PaneSize::Proportional(1),
+                PaneNotation::Horz(vec![
+                    (PaneSize::Fixed(2), fill('@')),
+                    (
+                        PaneSize::Proportional(1),
+                        PaneNotation::Doc { label: contents },
+                    ),
+                    (PaneSize::Fixed(2), fill('@')),
+                ]),
+            ),
+        ]),
+        &[
+            // force rustfmt
+            "**************",
+            "**************",
+            "**************",
+            "@@          @@",
+            "@@          @@",
+            "@@[         @@",
+            "@@    111111@@",
+            "@@/1,       @@",
+            "@@    222222@@",
+            "@@/22222,   @@",
+            "@@    [     @@",
+            "@@        33@@",
+            "@@/33,      @@",
+            "@@        4 @@",
+            "@@    ],    @@",
+            "@@    555555@@",
+            "@@/55,      @@",
+            "@@    666666@@",
+            "@@/666666666@@",
+            "@@/6        @@",
+            "",
+        ]
+        .join("\n"),
+    );
+}
+
+#[test]
+fn test_line_wrapping_with_wide_chars() {
+    let options = PrintingOptions {
+        focus_path: Vec::new(),
+        focus_height: 0.0,
+        width_strategy: WidthStrategy::Full,
+        line_wrapping: LineWrapping::Wrap("ooo", BasicStyle::new()),
+        focus_target: FocusTarget::Start,
+        set_focus: false,
+    };
+    let doc = json_string("一二三");
+    let contents = SimpleLabel(Some((&doc, options)), PhantomData);
+    let note = PaneNotation::Doc { label: contents };
+
+    pane_test_with_size(
+        Size {
+            width: 8,
+            height: 3,
+        },
+        note.clone(),
+        &[
+            // force rustfmt
+            r#""一二三""#,
+            r#"        "#,
+            r#"        "#,
+            r#""#,
+        ]
+        .join("\n"),
+    );
+
+    pane_test_with_size(
+        Size {
+            width: 7,
+            height: 3,
+        },
+        note.clone(),
+        &[
+            // force rustfmt
+            r#""一二三"#,
+            r#"ooo"   "#,
+            r#"       "#,
+            r#""#,
+        ]
+        .join("\n"),
+    );
+
+    pane_test_with_size(
+        Size {
+            width: 6,
+            height: 3,
+        },
+        note.clone(),
+        &[
+            // force rustfmt
+            r#""一二 "#,
+            r#"ooo三""#,
+            r#"      "#,
+            r#""#,
+        ]
+        .join("\n"),
+    );
+
+    pane_test_with_size(
+        Size {
+            width: 5,
+            height: 3,
+        },
+        note.clone(),
+        &[
+            // force rustfmt
+            r#""一二"#,
+            r#"ooo三"#,
+            r#"ooo" "#,
+            r#""#,
+        ]
+        .join("\n"),
+    );
+
+    pane_test_with_size(
+        Size {
+            width: 4,
+            height: 3,
+        },
+        note.clone(),
+        "\"一 \n    \n    \n",
+    );
+
+    pane_test_with_size(
+        Size {
+            width: 3,
+            height: 3,
+        },
+        note.clone(),
+        "\"一\n   \n   \n",
+    );
+
+    pane_test_with_size(
+        Size {
+            width: 2,
+            height: 3,
+        },
+        note.clone(),
+        "\" \n  \n  \n",
+    );
+
+    pane_test_with_size(
+        Size {
+            width: 1,
+            height: 3,
+        },
+        note.clone(),
+        "\"\n \n \n",
+    );
+
+    pane_test_with_size(
+        Size {
+            width: 0,
+            height: 3,
+        },
+        note.clone(),
+        "",
+    );
+}
+
+#[test]
+fn test_segment_split_at() {
+    use partial_pretty_printer::{Segment, Width};
+
+    fn split(
+        seg: &Segment<'static, &'static SimpleDoc>,
+        width: Width,
+    ) -> ((&'static str, Width), (&'static str, Width)) {
+        let (seg_1, seg_2) = seg.clone().split_at(width);
+        ((seg_1.str, seg_1.width), (seg_2.str, seg_2.width))
+    }
+
+    let seg = Segment {
+        str: "x字",
+        width: 3,
+        style: (),
+    };
+
+    assert_eq!(split(&seg, 0), (("", 0), ("x字", 3)));
+    assert_eq!(split(&seg, 1), (("x", 1), ("字", 2)));
+    assert_eq!(split(&seg, 2), (("x", 1), ("字", 2)));
+    assert_eq!(split(&seg, 3), (("x字", 3), ("", 0)));
+}
+
+#[test]
+fn test_line_split_at() {
+    use partial_pretty_printer::{Line, Segment, Width};
+
+    type SegParts = (&'static str, Width);
+
+    fn split(
+        line: Line<'static, &'static SimpleDoc>,
+        width: Width,
+    ) -> (Vec<SegParts>, Vec<SegParts>) {
+        let (line_1, line_2) = line.split_at(width);
+        (
+            line_1
+                .segments
+                .into_iter()
+                .map(|seg| (seg.str, seg.width))
+                .collect(),
+            line_2
+                .segments
+                .into_iter()
+                .map(|seg| (seg.str, seg.width))
+                .collect(),
+        )
+    }
+
+    fn make_line() -> Line<'static, &'static SimpleDoc> {
+        Line {
+            segments: vec![
+                Segment {
+                    str: "xx",
+                    width: 2,
+                    style: (),
+                },
+                Segment {
+                    str: "字",
+                    width: 2,
+                    style: (),
+                },
+            ],
+        }
+    }
+
+    assert_eq!(split(make_line(), 0), (vec![], vec![("xx", 2), ("字", 2)]));
+    assert_eq!(
+        split(make_line(), 1),
+        (vec![("x", 1)], vec![("x", 1), ("字", 2)])
+    );
+    assert_eq!(split(make_line(), 2), (vec![("xx", 2)], vec![("字", 2)]));
+    assert_eq!(split(make_line(), 3), (vec![("xx", 2)], vec![("字", 2)]));
+    assert_eq!(split(make_line(), 4), (vec![("xx", 2), ("字", 2)], vec![]));
+
+    fn make_line_2() -> Line<'static, &'static SimpleDoc> {
+        Line {
+            segments: vec![
+                Segment {
+                    str: "字",
+                    width: 2,
+                    style: (),
+                },
+                Segment {
+                    str: "xx",
+                    width: 2,
+                    style: (),
+                },
+            ],
+        }
+    }
+
+    assert_eq!(
+        split(make_line_2(), 0),
+        (vec![], vec![("字", 2), ("xx", 2)])
+    );
+    assert_eq!(
+        split(make_line_2(), 1),
+        (vec![], vec![("字", 2), ("xx", 2)])
+    );
+    assert_eq!(split(make_line_2(), 2), (vec![("字", 2)], vec![("xx", 2)]));
+    assert_eq!(
+        split(make_line_2(), 3),
+        (vec![("字", 2), ("x", 1)], vec![("x", 1)])
+    );
+    assert_eq!(
+        split(make_line_2(), 4),
+        (vec![("字", 2), ("xx", 2)], vec![])
     );
 }

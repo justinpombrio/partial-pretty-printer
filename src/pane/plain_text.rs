@@ -50,7 +50,7 @@ impl<S: Style> PlainText<S> {
 
     /// Construct a window with the given width and unbounded height.
     pub fn new_unbounded_height(width: Width) -> PlainText<S> {
-        PlainText::<S>::new(width, Height::max_value())
+        PlainText::<S>::new(width, Height::MAX)
     }
 
     pub fn focus_points(&self) -> &[Pos] {

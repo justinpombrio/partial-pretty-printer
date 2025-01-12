@@ -1,8 +1,9 @@
 //! Walk along the notation tree, skipping the boring parts.
 
 use crate::{
-    geometry::str_width, notation::normalize_child_index, CheckPos, Notation, PrettyDoc, Style,
-    Width,
+    geometry::{char_width, str_width},
+    notation::normalize_child_index,
+    CheckPos, Notation, PrettyDoc, Style, Width,
 };
 use std::fmt;
 use std::rc::Rc;
@@ -105,11 +106,11 @@ struct JoinPos<'d, D: PrettyDoc<'d>> {
 impl<'d, D: PrettyDoc<'d>> Textual<'d, D> {
     /// Split this text in two, at the given position between `char`s. If it's too large, split at
     /// the end.
-    pub fn split_at(self, char_pos: usize) -> (Textual<'d, D>, Textual<'d, D>) {
+    pub fn split_at(self, char_pos: Width) -> (Textual<'d, D>, Textual<'d, D>) {
         let byte_pos = self
             .str
             .char_indices()
-            .nth(char_pos)
+            .nth(char_pos as usize)
             .map(|(byte_pos, _)| byte_pos)
             .unwrap_or(self.str.len());
         let (left_str, right_str) = self.str.split_at(byte_pos);
@@ -147,6 +148,33 @@ impl<'d, D: PrettyDoc<'d>> Clone for Segment<'d, D> {
             width: self.width,
             style: self.style.clone(),
         }
+    }
+}
+
+impl<'d, D: PrettyDoc<'d>> Segment<'d, D> {
+    #[doc(hidden)]
+    pub fn split_at(self, width: Width) -> (Segment<'d, D>, Segment<'d, D>) {
+        let mut byte_index = 0;
+        let mut first_seg_width = 0;
+        for ch in self.str.chars() {
+            if first_seg_width + char_width(ch) > width {
+                break;
+            }
+            byte_index += ch.len_utf8();
+            first_seg_width += char_width(ch);
+        }
+        (
+            Segment {
+                str: &self.str[..byte_index],
+                width: first_seg_width,
+                style: self.style.clone(),
+            },
+            Segment {
+                str: &self.str[byte_index..],
+                width: self.width - first_seg_width,
+                style: self.style,
+            },
+        )
     }
 }
 

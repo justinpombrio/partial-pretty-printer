@@ -12,7 +12,7 @@ use crate::Notation; // for links in rustdocs
 // counter across threads would break unit tests that are run in parallel and expect a node to have
 // a particular id.
 thread_local! {
-    static ID_COUNTER: Cell<u32> = Cell::new(0);
+    static ID_COUNTER: Cell<u32> = const { Cell::new(0) };
 }
 
 fn next_id() -> u32 {
