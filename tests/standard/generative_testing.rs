@@ -52,7 +52,7 @@ impl<G: Generator> Iterator for GenRandom<G> {
     fn next(&mut self) -> Option<Self::Item> {
         struct PickRandom<'a>(&'a mut StdRng);
 
-        impl<'a> Picker for PickRandom<'a> {
+        impl Picker for PickRandom<'_> {
             fn pick_int(&mut self, max: u32) -> u32 {
                 self.0.gen_range(0..max)
             }
@@ -125,7 +125,7 @@ impl<G: Generator> Iterator for GenAll<G> {
             index: &'a mut usize,
         }
 
-        impl<'a> Picker for PickNext<'a> {
+        impl Picker for PickNext<'_> {
             fn pick_int(&mut self, max: u32) -> u32 {
                 if let Some((n, _)) = self.stack.get(*self.index) {
                     *self.index += 1;

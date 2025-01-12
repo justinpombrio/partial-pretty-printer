@@ -6,6 +6,7 @@ use crate::{
     PrettyDoc, PrintingError, Segment, Width,
 };
 use std::convert::From;
+use std::fmt;
 use std::iter::Iterator;
 use std::mem;
 use std::rc::Rc;
@@ -231,27 +232,25 @@ impl<'d, D: PrettyDoc<'d>> From<FocusedLine<'d, D>> for Line<'d, D> {
     }
 }
 
-impl<'d, D: PrettyDoc<'d>> ToString for Line<'d, D> {
-    fn to_string(&self) -> String {
-        span!("Line::to_string");
+impl<'d, D: PrettyDoc<'d>> fmt::Display for Line<'d, D> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        span!("Line::Display");
 
-        let mut string = String::new();
         for segment in &self.segments {
-            string.push_str(segment.str);
+            write!(f, "{}", segment.str)?;
         }
-        string
+        Ok(())
     }
 }
 
-impl<'d, D: PrettyDoc<'d>> ToString for FocusedLine<'d, D> {
-    fn to_string(&self) -> String {
-        span!("FocusedLine::to_string");
+impl<'d, D: PrettyDoc<'d>> fmt::Display for FocusedLine<'d, D> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        span!("Line::Display");
 
-        let mut string = String::new();
         for segment in self.left_segments.iter().chain(self.right_segments.iter()) {
-            string.push_str(segment.str);
+            write!(f, "{}", segment.str)?;
         }
-        string
+        Ok(())
     }
 }
 

@@ -413,7 +413,7 @@ fn test_seek() {
         };
 
         PaneNotation::Doc {
-            label: SimpleLabel(Some((&doc, options)), PhantomData),
+            label: SimpleLabel(Some((doc, options)), PhantomData),
         }
     }
     let doc10 = make_array(0, 8);
@@ -486,7 +486,7 @@ fn test_dynamic() {
         };
 
         PaneNotation::Doc {
-            label: SimpleLabel(Some((&doc, options)), PhantomData),
+            label: SimpleLabel(Some((doc, options)), PhantomData),
         }
     }
 
