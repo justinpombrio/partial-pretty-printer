@@ -1,7 +1,7 @@
 use crate::{
     geometry::{is_char_full_width, str_width, Rectangle},
     pane::{
-        divvy::Divvier, DocLabel, LineWrapping, PaneNotation, PaneSize, PrettyWindow,
+        divvy::Divvier, DocLabel, OverflowBehavior, PaneNotation, PaneSize, PrettyWindow,
         PrintingOptions,
     },
     pretty_print, Height, Line, Pos, PrettyDoc, PrintingError, Row, Size, Width,
@@ -29,13 +29,13 @@ pub enum PaneError<W: Error + 'static, E: Error + 'static> {
 /// Display a [`PaneNotation`] to a [`PrettyWindow`].
 ///
 /// `style` is the initial style to use on the entire pane. `get_content` is a function to look up
-/// a document by [`DocLabel`]. It returns both the document and [extra
-/// information](PrintingOptions) about how to print it.
+/// a document by [`DocLabel`]. It's also given the available pane width. It must return both the
+/// document and [extra information](PrintingOptions) about how to print it.
 pub fn display_pane<'d, L, D, W>(
     window: &mut W,
     notation: &PaneNotation<L, D::Style>,
     style: &D::Style,
-    get_content: &impl Fn(L) -> Option<(D, PrintingOptions<D::Style>)>,
+    get_content: &impl Fn(L, Width) -> Option<(D, PrintingOptions<D::Style>)>,
 ) -> Result<(), PaneError<W::Error, D::Error>>
 where
     L: DocLabel,
@@ -51,7 +51,7 @@ fn display_pane_rec<'d, L, D, W>(
     window: &mut W,
     notation: &PaneNotation<L, D::Style>,
     style: &D::Style,
-    get_content: &impl Fn(L) -> Option<(D, PrintingOptions<D::Style>)>,
+    get_content: &impl Fn(L, Width) -> Option<(D, PrintingOptions<D::Style>)>,
     rect: Rectangle,
 ) -> Result<(), PaneError<W::Error, D::Error>>
 where
@@ -82,7 +82,7 @@ where
             }
         }
         PaneNotation::Doc { label } => {
-            if let Some((doc, options)) = get_content(label.clone()) {
+            if let Some((doc, options)) = get_content(label.clone(), rect.width()) {
                 let printed_doc = PrintedDoc::new(doc, &options, rect.size(), style)?;
                 printed_doc.display(window, rect)?;
             }
@@ -112,7 +112,9 @@ where
                 }
 
                 let (label, doc_style) = extract_doc::<L, D, W>(child_note, style.clone())?;
-                let printed_doc = if let Some((doc, options)) = get_content(label.clone()) {
+                let printed_doc = if let Some((doc, options)) =
+                    get_content(label.clone(), available_size.width)
+                {
                     PrintedDoc::new(doc, &options, available_size, &doc_style)?
                 } else {
                     PrintedDoc::new_empty(&doc_style)
@@ -164,7 +166,9 @@ where
                 }
 
                 let (label, doc_style) = extract_doc::<L, D, W>(child_note, style.clone())?;
-                let printed_doc = if let Some((doc, options)) = get_content(label.clone()) {
+                let printed_doc = if let Some((doc, options)) =
+                    get_content(label.clone(), available_size.width)
+                {
                     PrintedDoc::new(doc, &options, available_size, &doc_style)?
                 } else {
                     PrintedDoc::new_empty(&doc_style)
@@ -265,26 +269,29 @@ impl<'d, D: PrettyDoc<'d>> PrintedDoc<'d, D> {
             return Ok(PrintedDoc::new_empty(root_style));
         }
 
-        let printing_width = options.choose_width(size.width);
         let focus_line_row = options.choose_focus_line_row(size.height);
         let (upward_printer, focused_line, downward_printer) = pretty_print(
             doc,
-            printing_width,
+            options.printing_width,
             &options.focus_path,
             options.focus_target,
             Some(root_style),
         )?;
 
+        let focused_line_width = focused_line.width();
         let (focused_line_left, focused_line_right) = focused_line.split_at_focus();
+        let left_width = focused_line_left.width();
+        let focus_is_shown = options
+            .overflow_behavior
+            .is_shown(left_width, focused_line_width);
         let mut upward_printer = LineWrapper::new(
             iter::once(Ok(focused_line_left)).chain(upward_printer),
-            printing_width,
-            options.line_wrapping.clone(),
+            options.printing_width,
+            options.overflow_behavior.clone(),
             true,
         );
 
         let left_half_of_center_line = upward_printer.next().unwrap_or_else(|| Ok(Line::new()))?;
-        let left_width = left_half_of_center_line.width();
         let center_line_not_wrapped = Line {
             segments: [
                 left_half_of_center_line.segments,
@@ -294,8 +301,8 @@ impl<'d, D: PrettyDoc<'d>> PrintedDoc<'d, D> {
         };
         let mut downward_printer = LineWrapper::new(
             iter::once(Ok(center_line_not_wrapped)).chain(downward_printer),
-            printing_width,
-            options.line_wrapping.clone(),
+            options.printing_width,
+            options.overflow_behavior.clone(),
             false,
         );
         let center_line = downward_printer.next().unwrap_or_else(|| Ok(Line::new()))?;
@@ -317,7 +324,7 @@ impl<'d, D: PrettyDoc<'d>> PrintedDoc<'d, D> {
             }
         }
 
-        let focus_point = if options.set_focus {
+        let focus_point = if options.set_focus && focus_is_shown {
             Some(Pos {
                 row: focus_line_row,
                 col: left_width,
@@ -389,8 +396,7 @@ where
 {
     iter: I,
     is_upward: bool,
-    wrapping_width: Width,
-    wrapping: LineWrapping<D::Style>,
+    overflow_behavior: OverflowBehavior<D::Style>,
     pending_lines: Vec<Line<'d, D>>,
 }
 
@@ -401,28 +407,38 @@ where
 {
     fn new(
         iter: I,
-        wrapping_width: Width,
-        wrapping: LineWrapping<D::Style>,
+        pane_width: Width,
+        overflow_behavior: OverflowBehavior<D::Style>,
         is_upward: bool,
     ) -> LineWrapper<'d, D, I> {
-        use LineWrapping::{Clip, Wrap};
+        use OverflowBehavior::{Clip, Wrap};
 
-        let wrapping = match wrapping {
-            Clip => Clip,
-            Wrap(string, style) => {
-                if wrapping_width < str_width(string) + 2 {
-                    // Can't fit a single full-width character after the marker. Give up and clip.
-                    Clip
+        // Never print outside of the pane.
+        let overflow_behavior = match overflow_behavior {
+            Clip(string, style, width) => {
+                let width = width.min(pane_width);
+                if width < str_width(string) + 2 {
+                    // Can't fit a single full-width character before the marker. Give up and clip
+                    // without a marker.
+                    Clip("", style, width)
                 } else {
-                    Wrap(string, style)
+                    Clip(string, style, width)
+                }
+            }
+            Wrap(string, style, width) => {
+                let width = width.min(pane_width);
+                if width < str_width(string) + 2 {
+                    // Can't fit a single full-width character after the marker. Give up and clip.
+                    Clip("", style, width)
+                } else {
+                    Wrap(string, style, width)
                 }
             }
         };
 
         LineWrapper {
             iter,
-            wrapping_width,
-            wrapping,
+            overflow_behavior,
             is_upward,
             pending_lines: Vec::new(),
         }
@@ -445,7 +461,7 @@ where
                 Some(Err(err)) => return Some(Err(err)),
                 Some(Ok(long_line)) => long_line,
             };
-            let mut lines = self.wrapping.wrap_line(long_line, self.wrapping_width);
+            let mut lines = self.overflow_behavior.wrap_line(long_line);
             if !self.is_upward {
                 lines.reverse();
             }
@@ -513,6 +529,7 @@ where
             let is_full_width = is_char_full_width(ch);
             let char_width = if is_full_width { 2 } else { 1 };
             if pos.col + char_width > rect.max_col {
+                // This should never happen, but clip just in case.
                 break 'segments_loop;
             }
             window

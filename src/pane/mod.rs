@@ -24,4 +24,4 @@ pub use display_pane::{display_pane, PaneError};
 pub use pane_notation::{DocLabel, PaneNotation, PaneSize};
 pub use plain_text::PlainText;
 pub use pretty_window::PrettyWindow;
-pub use printing_options::{LineWrapping, PrintingOptions, WidthStrategy};
+pub use printing_options::{OverflowBehavior, PrintingOptions};

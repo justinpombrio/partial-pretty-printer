@@ -14,34 +14,24 @@ pub struct PrintingOptions<Style> {
     /// Position the document such that the focus is at this height, where 0.0 is the top line of
     /// the pane and 1.0 is the bottom line.
     pub focus_height: f32,
-    /// How to choose the document width.
-    pub width_strategy: WidthStrategy,
-    /// How to wrap lines that overflow the document width.
-    pub line_wrapping: LineWrapping<Style>,
     /// Whether to invoke [`PrettyWindow::set_focus`] with the focus point of this document.
     pub set_focus: bool,
+    /// The width to print the document at (Choices in the Notation will be picked so as to not
+    /// exceed this width, if at all possible.)
+    pub printing_width: Width,
+    /// What to do with lines that exceed the printing width, despite our best attempts.
+    pub overflow_behavior: OverflowBehavior<Style>,
 }
 
-/// How to choose the document width, after learning the how much width is available.
-#[derive(Debug, Clone, Copy)]
-pub enum WidthStrategy {
-    /// Use all available width in the pane.
-    Full,
-    /// Use the given width. If the pane is too narrow, the document will be printed with the given
-    /// width but then truncated to fit in the pane.
-    Fixed(Width),
-    /// Use either the given width or the available pane width, whichever is smaller.
-    NoMoreThan(Width),
-}
-
-/// How to wrap lines that exceed the available width (despite all attempts to print the document
-/// within the available width).
+/// How to display lines that exceed the printing width (despite all attempts to print the
+/// document within the printing width).
 #[derive(Debug, Clone)]
-pub enum LineWrapping<Style> {
-    /// Don't show the end of the line.
-    Clip,
-    /// Wrap the end of the line. Show `str` in `Style` at the beginning of any wrapped lines.
-    Wrap(&'static str, Style),
+pub enum OverflowBehavior<Style> {
+    /// Clip lines longer than this. Show `str` in `Style` at the end of clipped lines.
+    Clip(&'static str, Style, Width),
+    /// Wrap the end of the line at this width. Show `str` in `Style` at the beginning of the next
+    /// line.
+    Wrap(&'static str, Style, Width),
 }
 
 impl<Style> PrintingOptions<Style> {
@@ -51,32 +41,40 @@ impl<Style> PrintingOptions<Style> {
         assert!(self.focus_height <= 1.0);
         f32::round((pane_height - 1) as f32 * self.focus_height) as Row
     }
-
-    /// Choose what width to use when pretty-printing the document.
-    pub(crate) fn choose_width(&self, available_width: Width) -> Width {
-        match self.width_strategy {
-            WidthStrategy::Full => available_width,
-            WidthStrategy::Fixed(width) => width,
-            WidthStrategy::NoMoreThan(width) => width.min(available_width),
-        }
-    }
 }
 
-impl<Style: Clone> LineWrapping<Style> {
+impl<Style: Clone> OverflowBehavior<Style> {
     pub(crate) fn wrap_line<'d, D: PrettyDoc<'d, Style = Style>>(
         &self,
         mut long_line: Line<'d, D>,
-        width: Width,
     ) -> Vec<Line<'d, D>> {
         use crate::geometry::str_width;
         use crate::Segment;
 
         match self {
-            LineWrapping::Clip => {
-                let (first_line, _) = long_line.split_at(width);
-                vec![first_line]
+            OverflowBehavior::Clip(marker_str, marker_style, width) => {
+                if long_line.width() <= *width {
+                    vec![long_line]
+                } else {
+                    let marker_width = str_width(marker_str);
+                    let clipped_width = *width - marker_width;
+                    let (mut first_line, _) = long_line.split_at(clipped_width);
+                    if first_line.width() + 1 == clipped_width {
+                        first_line.segments.push(Segment {
+                            str: " ",
+                            style: marker_style.clone(),
+                            width: 1,
+                        });
+                    }
+                    first_line.segments.push(Segment {
+                        str: marker_str,
+                        style: marker_style.clone(),
+                        width: marker_width,
+                    });
+                    vec![first_line]
+                }
             }
-            LineWrapping::Wrap(marker_str, marker_style) => {
+            OverflowBehavior::Wrap(marker_str, marker_style, width) => {
                 let marker_segment = Segment {
                     str: marker_str,
                     style: marker_style.clone(),
@@ -94,6 +92,21 @@ impl<Style: Clone> LineWrapping<Style> {
                     long_line = rest;
                 }
                 lines
+            }
+        }
+    }
+
+    pub(crate) fn is_shown(&self, pos: Width, line_width: Width) -> bool {
+        use crate::geometry::str_width;
+
+        if pos > line_width {
+            return false;
+        }
+
+        match self {
+            OverflowBehavior::Wrap(_, _, _) => true,
+            OverflowBehavior::Clip(marker_str, _, clip_width) => {
+                line_width <= *clip_width || pos + str_width(marker_str) <= *clip_width
             }
         }
     }
