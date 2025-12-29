@@ -38,7 +38,7 @@ enum Contents<'d> {
 }
 
 impl Ruby {
-    fn contents(&self) -> Contents {
+    fn contents(&self) -> Contents<'_> {
         use Contents::{Children, Text};
         use RubyData::*;
 

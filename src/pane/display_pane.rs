@@ -280,6 +280,9 @@ impl<'d, D: PrettyDoc<'d>> PrintedDoc<'d, D> {
 
         let focused_line_width = focused_line.width();
         let (focused_line_left, focused_line_right) = focused_line.split_at_focus();
+        let focus_is_shown = options
+            .overflow_behavior
+            .is_shown(focused_line_left.width(), focused_line_width);
         let mut upward_printer = LineWrapper::new(
             iter::once(Ok(focused_line_left)).chain(upward_printer),
             options.printing_width,
@@ -289,9 +292,6 @@ impl<'d, D: PrettyDoc<'d>> PrintedDoc<'d, D> {
 
         let left_half_of_center_line = upward_printer.next().unwrap_or_else(|| Ok(Line::new()))?;
         let left_width = left_half_of_center_line.width();
-        let focus_is_shown = options
-            .overflow_behavior
-            .is_shown(left_width, focused_line_width);
 
         let center_line_not_wrapped = Line {
             segments: [

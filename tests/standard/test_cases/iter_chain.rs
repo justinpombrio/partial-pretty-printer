@@ -55,7 +55,7 @@ enum Contents<'d> {
 }
 
 impl IterChain {
-    fn contents(&self) -> Contents {
+    fn contents(&self) -> Contents<'_> {
         use Contents::{Children, Text};
         use IterChainData::*;
 

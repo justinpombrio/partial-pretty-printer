@@ -46,7 +46,7 @@ enum Contents<'d> {
 }
 
 impl FlowWrap {
-    fn contents(&self) -> Contents {
+    fn contents(&self) -> Contents<'_> {
         use FlowWrapData::*;
 
         match &self.data {

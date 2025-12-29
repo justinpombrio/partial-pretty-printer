@@ -39,7 +39,7 @@ fn json_to_doc(json: serde_json::Value) -> Json {
     }
 }
 
-fn pretty_print_json(doc: &Json, width: Width) -> Vec<Line<&Json>> {
+fn pretty_print_json<'a>(doc: &'a Json, width: Width) -> Vec<Line<'a, &'a Json>> {
     let mut lines = Vec::new();
     let (_prev_lines, focused_line, next_lines) =
         unwrap(pretty_print(doc, width, &[], FocusTarget::Start, None));
